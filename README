@@ -1,0 +1,276 @@
+-------------------------------------------------
+Qrouter version 1.4
+Detail netlist router for ASICs
+(c) 2017 by Tim Edwards
+Released under Gnu Public License
+----------------------------------------------
+
+----------------------------------------------
+Release notes:
+----------------------------------------------
+
+Version 1.4
+------------
+Branch created April 25, 2017 mainly for
+the purpose of making the existing version 1.3
+the stable branch, particularly as version 1.3
+is required for qflow.
+
+Version 1.3
+------------
+Branch created September 16, 2014 and slowly
+developed for more robust and DRC-clean output,
+along with numerous bugfixes.  The underlying
+algorithm is essentially unchanged from version
+1.2.
+
+Version 1.2
+------------
+Branch of 1.1 that puts qrouter in a Tcl/Tk
+environment and includes routines to generate
+and draw into a graphics window.  Code
+reorganized into three main sections that are
+called from the Tcl command line as "stage1",
+"stage2", and "write_def".  The front-end
+process of reading in the LEF and DEF files
+and configuring the routing environment will
+be added to the command set, eventually.
+
+Based on analysis from the visualization of
+the router, the code has been rewritten to
+speed up the routing during multi-tap (more
+than 2 connections) nets, so that previous
+search results remain in place after each
+route, avoiding redundant searching.  This
+speeds up qrouter by a factor of about 2x.
+A masking function that limits routes
+to a specific defined portion of the layout
+speeds up qrouter by a factor of about 30x.
+
+Version 1.1
+------------
+Second major release.  Revised the "proute"
+structure so that its position information
+refers to the position of the structure itself
+and not of the predecessor.  This requires
+setting up proute structures for every point on
+the source net, but makes it possible to specify
+one or more alternate predecessors for each
+potential route position.
+
+Added handling of routes with larger size and
+pitch on the higher layers.  Added handling
+of technologies that do not allow contacts
+to be stacked arbitrarily.  Some preliminary
+work in search optimization.  Finding a viable
+route (any viable route) quickly is the key to 
+setting a bound on cost early and prevent
+multiple passes over many points.
+
+Added code for detailed analysis of port
+geometry and taking steps necessary to avoid
+generating DRC errors.
+
+Redesigned internal structures so that nodes
+are not in an independent list, but only listed
+under their assigned net.  Routes are assigned
+to nets, not to nodes.  Added the ability to read
+in existing route geometry and add it to the
+database.
+
+Version 1.0
+------------
+First release.  This is work in progess on a
+professional-grade multi-layer maze router.
+First release implements the standard Lee
+algorithm.  However, a modified Lee algorithm
+is used that presents all nodes of the network
+(other than the source node) as targets.  As
+each target node is reached, in order of lowest
+cost, the target node and its route to the
+source are added to the source node, and the
+process repeated until there are no more target
+nodes.
+
+The implementation is geometry-aware, to the
+extent that all node and obstruction geometry
+is present in the LEF file used to define the
+standard cell macros.
+
+The implementation uses the open standard
+LEF and DEF formats.  Standard cell definitions
+and routing layer definitions are read in from
+the LEF file, and cell placement information
+and an unrouted network are read from the DEF
+file.  Output is a copy of the original input
+DEF file, annotated with the physical routes.
+
+----------------------------------------------
+Compilation & installation:
+----------------------------------------------
+
+The system runs under autoconf, and so has
+the standard compile and install sequence:
+
+	./configure
+	make
+	make install
+
+Options to configure:
+
+	--with-prefix=<prefix>
+		overrides the standard install
+		location of /usr/local
+
+	--with-libdir=<path>
+		overrides the standard search
+		location for configuration
+		files, /usr/local/share/qrouter
+
+	--with-tcl=<path>
+		path to tclConfig.sh file.
+
+	--with-tk=<path>
+		path to tkConfig.sh file.
+
+----------------------------------------------
+Usage:
+----------------------------------------------
+
+   qrouter [-noc] [-s <script_name>]
+
+     This is the normal invocation, where a
+     Tcl-script specified by <script_name>
+     contains all of the configuration information,
+     specifies where to read LEF and DEF files,
+     how to perform the routing, and where to
+     write the output DEF file.  All commands
+     in the script can alternatively be entered
+     on the Tcl command line after starting
+     qrouter.  The "-noc" option does not invoke
+     the Tk console on startup, which is best
+     for batch operation, as text output to the
+     console can slow down the routing process.
+
+   qrouter [-c <config_name>] [options] <basename>
+
+     where <basename> is without an extension.
+     File <basename>.def is assumed to exist
+     and to define cell placement and netlist
+     information.  File <config_name> is
+     assumed to exist and contains basic
+     routing parameters, or points to a LEF
+     file containing detailed routing parameters.
+     If this option is not specified, then the
+     default configuration file name of "route.cfg"
+     is used.
+
+----------------------------------------------
+Completed development tasks:
+----------------------------------------------
+
+1. New algorithm for routing nodes of a network,
+   in which route_segs calculates costs out from
+   source to any node in the network, settling
+   on the minimum, and this continues until there
+   are no nodes left to route.
+
+2. Need to compute obstruction areas around nodes
+   and mark them (e.g., with a flag) so that they
+   can interpreted as obstructions when routing a
+   different net, and available space when routing
+   the node's net.
+
+3. Rework the crossover cost method.  Currently
+   it does not account for the vertical layer, and
+   so gives a high crossover cost to layers that
+   are more than one route level above a node and
+   would not block it.
+
+4. Stub routing to nodes from unobstructed positions
+   smaller than the route pitch but outside of the
+   tap geometry.
+
+5. Crossover costing removed for all terminals on
+   completed routes.
+
+6. Replace linked list code with simpler linked
+   lists, no dependency on non-open-source
+   linked-list code.
+
+7. Added the ability to specify additional
+   obstruction areas in the route.cfg file.
+
+8. Increased the route width to the width of a
+   via where the distance between a via and a
+   terminal is less than the route metal's
+   spacing rule.  This cannot be done with
+   normal routes in a DEF file, so it is added
+   on as a "specialnets" section.
+
+9. Collect all unroutable nets and route them
+   with other nets marked as high-cost instead
+   of obstructions.  Analyze all the resultant
+   collisions between nets, and proceed with an
+   iterative rip-up and reroute algorithm.
+
+10. When a net is ripped up to remove it from
+   the path of a net being routed in the 2nd
+   stage, the ripped-up net is added to a list
+   in the routed net so that it will not be
+   ripped up to make way for that net again.
+   This prevents infinite looping in the 2nd
+   stage.
+
+11. Clean up the DEF file reader with a proper
+   parser ported from magic, like the LEF file
+   reader was.
+
+12. Add a Tcl/Tk command-line interface for
+   interactive routing and display.
+
+13. Recast the config file as a set of Tcl
+   command-line commands to execute.  All
+   original setup options have corresponding
+   commands in the Tcl interpreter.  The
+   config file and its parsing is retained
+   for backwards compatibility.
+
+14. Vias can be larger than metal routes.  Need
+   to identify positions as obstructions to
+   vias only.
+
+15. Make Euclidean geometry checks instead of
+   Manhattan geometry checks.
+
+----------------------------------------------
+Development to do:
+----------------------------------------------
+
+1. Handle nets in the input DEF file that are
+   already routed by adding them as obstructions
+   to the route grid.
+
+2. Final stage should rip up and reroute each
+   network in turn, with all crossover costing
+   removed, so that each route will be cleaner
+   (to be done by Tcl commands acting on
+   individual routes.  Can be run as a simple
+   Tcl script).
+
+3. Need to normalize the segment and jog costs to
+   the track pitch, so that costs do not give
+   preference to the route layers with the widest
+   track pitch.
+
+4. Need a command-line switch (and/or Tcl
+   command) to disable the specialnets section.
+
+5. Sort trunk lines so no trunk lines overlap
+   prior to routing.
+
+6. Apply costing to terminals, giving higher cost
+   to terminals with offsets and the lowest cost
+   to simple on-grid contacts.
+
+-------------------------------------------------

@@ -1,0 +1,4 @@
+QROUTER_1.2 {
+   global: Qrouter_Init;
+   local: *;
+};

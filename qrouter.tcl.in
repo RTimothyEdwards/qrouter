@@ -1,0 +1,186 @@
+#------------------------------------------------------
+# Tcl startup script for qrouter
+#------------------------------------------------------
+namespace path {::tcl::mathop ::tcl::mathfunc}
+
+set tcllibdir [array get env "QROUTER_LIB_DIR"]
+if {$tcllibdir == {}} {
+   set QROUTER_LIB_DIR LIBDIR
+} else {
+   set QROUTER_LIB_DIR [lindex $tcllibdir 1]
+}
+unset tcllibdir
+
+if {[string compare $tcl_platform(platform) "windows"] == 0} {
+   set libext .dll
+} else {
+   set libext .so
+}
+
+load ${QROUTER_LIB_DIR}/qrouter$libext
+package require Qrouter
+
+proc pushnamespace { name } {
+
+   set y [namespace eval ${name} info commands ::${name}::*]
+   set z [info commands]
+
+   foreach v $y {
+      regsub -all {\*} $v {\\*} i
+      set x [namespace tail $i]
+      if {[lsearch $z $x] < 0} {
+         namespace import $i
+      } else {
+         puts "Warning: ${name} command '$x' use fully-qualified name '$v'"
+      }
+   }
+}
+
+proc popnamespace { name } {
+   set z [info commands]
+   set l [expr [string length ${name}] + 5]
+
+   while {[set v [lsearch $z ${name}_tcl_*]] >= 0} {
+      set y [lindex $z $v]
+      set w [string range $y $l end]
+      interp alias {} ::$w {}
+      rename ::$y ::$w
+      puts "Info: replacing ::$w with ::$y"
+   }
+   namespace forget ::${name}::*
+}
+
+set auto_noexec 1       ;# don't EVER call UNIX commands w/o "shell" in front
+
+#---------------------------------------------------------
+# Internally-defined procedures (equivalent to commands)
+#---------------------------------------------------------
+
+#---------------------------------------------------------
+# Write the result of the "congested" command out to a
+# file, with "<instance_name> <congestion_value>" per
+# line of output, one for each instance, ordered.
+#---------------------------------------------------------
+
+proc qrouter::write_congested {filename} {
+   puts stdout "Writing congestion information into $filename"
+   if {![catch {open $filename w} fcon]} {
+      puts $fcon "Qrouter congestion summary"
+      puts $fcon "--------------------------"
+      set flist [failing summary]
+      set failures [lindex $flist 0]
+      set numnets [lindex $flist 1]
+      puts $fcon "Failures: $failures $numnets"
+      puts $fcon "--------------------------"
+      set clist [congested]
+      foreach cpair $clist {
+	 set inst [lindex $cpair 0]
+	 set value [lindex $cpair 1]
+	 puts $fcon "$inst $value"
+      }
+      close $fcon
+   } else {
+      puts stderr "Error:  can't open file $filename for output"
+   }
+}
+
+#---------------------------------------------------------
+# Standard sequence of events (subject to change):
+# Upon first success, write the DEF file output and quit.
+# If "stage2 mask none" leaves failing routes, then write
+# the routes done so far to the DEF file output and remain
+# in the interpreter.  If "stage2 mask none" leaves fewer
+# than five routes (a very ad hoc number), give it a
+# second try.
+#---------------------------------------------------------
+
+proc qrouter::standard_route {} {
+   if {![stage1]} {write_def; quit}
+   if {![stage2]} {write_def; quit}
+   set result [stage2 mask none]
+   if {$result < 5} {set result [stage2 mask none]}
+   write_def
+   if {$result == 0} {quit}
+}
+
+#------------------------------------------------------
+# First alternative routing script.  Do the quickest
+# (default) stage1 and stage2 routes.  If stage2
+# leaves route failures, then write out the list of
+# instances with congestion information, so that this
+# information can be fed back to the placement tool
+# in hopes of producing a routable layout on the next
+# iteration.  Rather than returning to the interpreter
+# on route failure, it always quits.
+#------------------------------------------------------
+
+proc qrouter::congestion_route {filename} {
+   if {![stage1]} {write_def; quit}
+   set result [stage2 mask none]
+   if {$result < 5} {set result [stage2 mask none]}
+   if {$result != 0} {
+      qrouter::write_congested $filename
+   }
+   write_def
+   quit
+}
+
+#------------------------------------------------------
+
+pushnamespace qrouter
+
+#------------------------------------------------------
+# GUI setup
+#------------------------------------------------------
+
+set appname .qrouter
+set appframe ${appname}.dframe
+set drawwindow ${appframe}.drawing
+
+if {![catch {toplevel ${appname}}]} {
+   frame ${appframe}
+
+   pack ${appframe} -side left -expand true -fill both
+   simple ${drawwindow} -width 1000 -height 800
+   pack ${drawwindow} -expand true -fill both
+
+   bind ${appframe} <Expose> redraw
+   bind ${appframe} <Visibility> redraw
+   bind ${appframe} <Configure> redraw
+
+   wm withdraw .
+}
+
+proc qrouter::lowerconsole {} {
+    consoledown
+}
+
+puts stdout "Qrouter detail maze router version VERSION.REVISION.T"
+
+set autoquit 0
+set autoroute 0
+set argafter {start}
+for {set i 0} {$i < $argc} {incr i 1} {
+    set x [lindex $argv $i]
+    switch $x {
+	"-i" -
+	"-h" {set autoquit 1}
+	"-c" {set autoroute 1}
+    }
+    lappend argafter $x
+}
+eval $argafter
+
+# NOTE: Having a file "route.cfg" in the current directory is
+# equivalent to specifying "-c <file>", so autoroute should be set
+
+if {$autoroute == 0} {
+   if [file exists route.cfg] {
+      set autoroute 1
+   }
+}
+
+if {$autoquit} quit 
+if {$autoroute} {
+   qrouter::standard_route
+}

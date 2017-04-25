@@ -1,0 +1,77 @@
+#!/bin/sh
+#
+# For installation, put this file (qrouter.sh) in a standard executable path.
+# Put startup script "qrouter.tcl" and shared library "qrouter.so"
+# in ${QROUTER_LIB_DIR}.
+#
+# This script starts qrouter under the Tcl interpreter,
+# reading commands from script qrouter.tcl which launches qrouter
+# and retains the Tcl interactive interpreter.
+
+# Parse for the argument "-noc[onsole]".  If it exists, run qrouter
+# without the TkCon console.  Strip this argument from the argument list.
+
+loclibdir=${QROUTER_LIB_DIR:=LIBDIR}
+export QROUTER_LIB_DIR
+QROUTER_WISH=WISH_EXE
+export QROUTER_WISH
+
+# Hacks for Cygwin
+if [ ${TERM:=""} = "cygwin" ]; then
+   export PATH="$PATH:$loclibdir"
+   export DISPLAY=${DISPLAY:=":0"}
+fi
+
+# Don't use the console if "-noc[onsole]" was specified.
+# Also, if "-i", "-h", or "-c" is specified, then this is
+# a batch-mode operation and the console should be ignored.
+TKCON=true
+NULLG=
+ARGS=""
+for i in $@ ; do
+   case $i in
+      -noc*)
+	TKCON=
+	;;
+      -nog*)
+	NULLG=true
+	TKCON=
+	;;
+      -c*)
+	TKCON=
+	ARGS="$ARGS $i"
+	;;
+      -i* | -h*)
+	NULLG=true
+	TKCON=
+	ARGS="$ARGS $i"
+	;;
+      *)
+	ARGS="$ARGS $i"
+	;;
+   esac
+done
+
+set -- junk $ARGS
+shift
+
+if [ $TKCON ]; then
+
+   exec ${loclibdir}/tkcon.tcl \
+	-eval "source ${loclibdir}/console.tcl" \
+	-slave "package require Tk; set argc $#; set argv [list $*]; \
+	source ${loclibdir}/qrouter.tcl"
+else
+
+#
+# Run the stand-in for wish (qrouterexec), which acts exactly like "wish"
+# except that it replaces ~/.wishrc with qrouter.tcl.  This executable is
+# *only* needed when running without the console; the console itself is
+# capable of sourcing the startup script.
+#
+   if [ $NULLG ]; then
+      exec ${loclibdir}/qrouternullg -- $@
+   else
+      exec ${loclibdir}/qrouterexec -- $@
+   fi
+fi
