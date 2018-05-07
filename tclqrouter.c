@@ -32,6 +32,7 @@ Tcl_Interp *qrouterinterp;
 Tcl_Interp *consoleinterp;
 
 int stepnet = -1;
+int batchmode = 0;
 
 /* Command structure */
 
@@ -511,9 +512,10 @@ int
 Qrouter_Init(Tcl_Interp *interp)
 {
    int cmdidx;
-   Tk_Window tktop;
    char command[256];
    char version_string[20];
+   Tk_Window tktop;
+   char *nullgvar;
 
    /* Interpreter sanity checks */
    if (interp == NULL) return TCL_ERROR;
@@ -521,13 +523,25 @@ Qrouter_Init(Tcl_Interp *interp)
    /* Remember the interpreter */
    qrouterinterp = interp;
 
-   if (Tcl_InitStubs(interp, "8.1", 0) == NULL) return TCL_ERROR;
+   if (Tcl_InitStubs(interp, "8.5", 0) == NULL) return TCL_ERROR;
 
    strcpy(command, "qrouter::");
    
-   /* Create the start command */
+   /* NOTE:  Qrouter makes calls to Tk routines that may or may not	*/
+   /* exist, depending on whether qrouter was called with or without	*/
+   /* graphics.  We depend on the Tcl/Tk stubs methods to allow 	*/
+   /* qrouter to run without linking to Tk libraries.			*/
 
-   tktop = Tk_MainWindow(interp);
+   nullgvar = (char *)Tcl_GetVar(interp, "no_graphics_mode", TCL_GLOBAL_ONLY);
+   if ((nullgvar == NULL) || !strcasecmp(nullgvar, "false")) {
+      if (Tk_InitStubs(interp, "8.5", 0) == NULL) return TCL_ERROR;
+      tktop = Tk_MainWindow(interp);
+      batchmode = 0;
+   }
+   else {
+      tktop = NULL;
+      batchmode = 1;
+   }
 
    /* Create all of the commands (except "simple") */
 
@@ -538,11 +552,11 @@ Qrouter_Init(Tcl_Interp *interp)
 		(ClientData)tktop, (Tcl_CmdDeleteProc *) NULL);
    }
 
-   /* Command which creates a "simple" window.		*/
-
-   Tcl_CreateObjCommand(interp, "simple",
+   if (tktop != NULL) {
+      Tcl_CreateObjCommand(interp, "simple",
 		(Tcl_ObjCmdProc *)Tk_SimpleObjCmd,
 		(ClientData)tktop, (Tcl_CmdDeleteProc *) NULL);
+   }
 
    Tcl_Eval(interp, "lappend auto_path .");
 
@@ -577,7 +591,7 @@ qrouter_start(ClientData clientData, Tcl_Interp *interp,
     char **argv;
 
     /* For compatibility with the original C code, convert Tcl	*/
-    /* object arguments to strings.  Break out "-s <name>",	*/
+    /* object arguments to strings.  Handle "-s <name>",	*/
     /* which is not handled by runqrouter(), and source the	*/
     /* script <name> between runqrouter() and read_def().	*/
 
@@ -585,22 +599,45 @@ qrouter_start(ClientData clientData, Tcl_Interp *interp,
     argc = 0;
     for (i = 1; i < objc; i++) {
 	if (!strcmp(Tcl_GetString(objv[i]), "-s"))
-	    scriptfile = strdup(Tcl_GetString(objv[++i]));
-	else
-	    argv[argc++] = strdup(Tcl_GetString(objv[i]));
+	    scriptfile = strdup(Tcl_GetString(objv[i + 1]));
+	argv[argc++] = strdup(Tcl_GetString(objv[i]));
     }
 
     result = runqrouter(argc, argv);
-    if (result == 0) GUI_init(interp);
+    if ((result == 0) && (batchmode == 0)) GUI_init(interp);
 
     for (i = 0; i < argc; i++)
         free(argv[i]);
     free(argv);
 
     if (scriptfile != NULL) {
-	result = Tcl_EvalFile(interp, scriptfile);
+
+	/* First check that the script file exists.  If not,	*/
+	/* then generate an error here.				*/
+
+	FILE *scriptf = fopen(scriptfile, "r");
+	if (scriptf == NULL) {
+	    Fprintf(stderr, "Script file \"%s\" unavaliable or unreadable.\n",
+			scriptfile);
+	    Tcl_SetResult(interp, "Script file unavailable or unreadable.", NULL);
+	    result = TCL_ERROR;
+	}
+	else {
+	    fclose(scriptf);
+	    result = Tcl_EvalFile(interp, scriptfile);
+	}
 	free(scriptfile);
-	if (result != TCL_OK) return result;
+
+	/* The script file should determine whether or not to	*/
+	/* exit by including the "quit" command.  But if there	*/
+	/* is an error in the script, then always quit.		*/
+
+	if (result != TCL_OK) {
+	    /* Make sure Tcl has generated all output */
+	    while (Tcl_DoOneEvent(TCL_DONT_WAIT) != 0);
+	    /* And exit gracefully */
+	    qrouter_quit(clientData, interp, 1, objv);
+	}
     }
 
     if ((DEFfilename != NULL) && (Nlgates == NULL)) {
@@ -800,8 +837,6 @@ GATE LookupGate(char *gatename)
 /*  stage1 route <net>	Route net named <net> only.	*/
 /*							*/
 /*  stage1 force	Force a terminal to be routable	*/
-/*  stage1 overhead	Use more better routing method	*/
-/*			with high memory overhead.	*/
 /*------------------------------------------------------*/
 
 static int
@@ -815,10 +850,10 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
     NET net = NULL;
 
     static char *subCmds[] = {
-	"debug", "mask", "route", "force", "step", "overhead", NULL
+	"debug", "mask", "route", "force", "step", NULL
     };
     enum SubIdx {
-	DebugIdx, MaskIdx, RouteIdx, ForceIdx, StepIdx, OverHeadIdx
+	DebugIdx, MaskIdx, RouteIdx, ForceIdx, StepIdx
     };
    
     static char *maskSubCmds[] = {
@@ -836,7 +871,6 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 
     // Save these global defaults in case they are locally changed
     saveForce = forceRoutable;
-    saveOverhead = highOverhead;
 
     if (objc >= 2) {
 	for (i = 1; i < objc; i++) {
@@ -859,10 +893,6 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 		    forceRoutable = TRUE;
 		    break;
 
-		case OverHeadIdx:
-		    highOverhead = TRUE;
-		    break;
-	
 		case RouteIdx:
 		    if (i >= objc - 1) {
 			Tcl_WrongNumArgs(interp, 0, objv, "route ?net?");
@@ -947,7 +977,6 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 
     // Restore global defaults in case they were locally changed
     forceRoutable = saveForce;
-    highOverhead = saveOverhead;
 
     return QrouterTagCallback(interp, objc, objv);
 }
@@ -980,28 +1009,29 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 /*  stage2 route <net>	Route net named <net> only.	*/
 /*							*/
 /*  stage2 force	Force a terminal to be routable	*/
-/*  stage2 tries <n>	Keep trying n additional times	*/
-/*  stage2 overhead	Use more better routing method	*/
-/*			with high memory overhead.	*/
+/*  stage2 break	Only rip up colliding segment	*/
+/*  stage2 effort <n>	Level of effort (default 100)	*/
 /*------------------------------------------------------*/
 
 static int
 qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
                int objc, Tcl_Obj *CONST objv[])
 {
+    u_int  effort;
     u_char dodebug;
     u_char dostep;
+    u_char onlybreak;
     u_char saveForce, saveOverhead;
     int i, idx, idx2, val, result, failcount;
     NET net = NULL;
 
     static char *subCmds[] = {
 	"debug", "mask", "limit", "route", "force", "tries", "step",
-	"overhead", NULL
+	"break", "effort", NULL
     };
     enum SubIdx {
 	DebugIdx, MaskIdx, LimitIdx, RouteIdx, ForceIdx, TriesIdx, StepIdx,
-	OverHeadIdx
+	BreakIdx, EffortIdx
     };
    
     static char *maskSubCmds[] = {
@@ -1015,11 +1045,12 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 
     dodebug = FALSE;
     dostep = FALSE;
+    onlybreak = FALSE;
     maskMode = MASK_AUTO;	// Mask mode is auto unless specified
     // Save these global defaults in case they are locally changed
     saveForce = forceRoutable;
-    saveOverhead = highOverhead;
     ripLimit = 10;		// Rip limit is 10 unless specified
+    effort = 100;		// Moderate to high effort
 
     if (objc >= 2) {
 	for (i = 1; i < objc; i++) {
@@ -1037,13 +1068,24 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 		case StepIdx:
 		    dostep = TRUE;
 		    break;
+
+		case BreakIdx:
+		    onlybreak = TRUE;
+		    break;
 	
 		case ForceIdx:
 		    forceRoutable = TRUE;
 		    break;
 
-		case OverHeadIdx:
-		    highOverhead = TRUE;
+		case EffortIdx:
+		    if (i >= objc - 1) {
+			Tcl_WrongNumArgs(interp, 0, objv, "effort ?num?");
+			return TCL_ERROR;
+		    }
+		    i++;
+		    result = Tcl_GetIntFromObj(interp, objv[i], &val);
+		    if (result != TCL_OK) return result;
+		    effort = (u_int)val;
 		    break;
 
 		case TriesIdx:
@@ -1054,7 +1096,9 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 		    i++;
 		    result = Tcl_GetIntFromObj(interp, objv[i], &val);
 		    if (result != TCL_OK) return result;
-		    keepTrying = (u_char)val;
+		    Tcl_SetResult(interp, "\"tries\" deprecated, "
+				"use \"effort\" instead.", NULL);
+		    effort = (u_char)val * 100;
 		    break;
 	
 		case RouteIdx:
@@ -1118,16 +1162,15 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
     }
 
     if (net == NULL)
-	failcount = dosecondstage(dodebug, dostep);
+	failcount = dosecondstage(dodebug, dostep, onlybreak, effort);
     else
-	failcount = route_net_ripup(net, dodebug);
+	failcount = route_net_ripup(net, dodebug, onlybreak);
     Tcl_SetObjResult(interp, Tcl_NewIntObj(failcount));
 
     draw_layout();
 
     // Restore global defaults in case they were locally changed
     forceRoutable = saveForce;
-    highOverhead = saveOverhead;
 
     return QrouterTagCallback(interp, objc, objv);
 }
@@ -1157,14 +1200,14 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 /*  stage3 route <net>	Route net named <net> only.	*/
 /*							*/
 /*  stage3 force	Force a terminal to be routable	*/
-/*  stage3 overhead	Use more better routing method	*/
-/*			with high memory overhead.	*/
+/*  stage3 effort	Level of effort (default 100)	*/
 /*------------------------------------------------------*/
 
 static int
 qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
                int objc, Tcl_Obj *CONST objv[])
 {
+    u_int effort;
     u_char dodebug;
     u_char dostep;
     u_char saveForce, saveOverhead;
@@ -1172,10 +1215,10 @@ qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
     NET net = NULL;
 
     static char *subCmds[] = {
-	"debug", "mask", "route", "force", "step", "overhead", NULL
+	"debug", "mask", "route", "force", "step", "effort", NULL
     };
     enum SubIdx {
-	DebugIdx, MaskIdx, RouteIdx, ForceIdx, StepIdx, OverHeadIdx
+	DebugIdx, MaskIdx, RouteIdx, ForceIdx, StepIdx, EffortIdx
     };
    
     static char *maskSubCmds[] = {
@@ -1190,9 +1233,10 @@ qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
     dodebug = FALSE;
     dostep = FALSE;
     maskMode = MASK_AUTO;	// Mask mode is auto unless specified
+    effort = 100;		// Moderate to high effort
+
     // Save these global defaults in case they are locally changed
     saveForce = forceRoutable;
-    saveOverhead = highOverhead;
 
     if (objc >= 2) {
 	for (i = 1; i < objc; i++) {
@@ -1215,10 +1259,17 @@ qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
 		    forceRoutable = TRUE;
 		    break;
 
-		case OverHeadIdx:
-		    highOverhead = TRUE;
+		case EffortIdx:
+		    if (i >= objc - 1) {
+			Tcl_WrongNumArgs(interp, 0, objv, "effort ?num?");
+			return TCL_ERROR;
+		    }
+		    i++;
+		    result = Tcl_GetIntFromObj(interp, objv[i], &val);
+		    if (result != TCL_OK) return result;
+		    effort = (u_int)val;
 		    break;
-	
+
 		case RouteIdx:
 		    if (i >= objc - 1) {
 			Tcl_WrongNumArgs(interp, 0, objv, "route ?net?");
@@ -1272,8 +1323,12 @@ qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
     else stepnet++;
 
     if (net == NULL)
-	failcount = dothirdstage(dodebug, stepnet);
+	failcount = dothirdstage(dodebug, stepnet, effort);
     else {
+        /* To do:  Duplicate behavior of dothirdstage(), which	*/
+	/* is to retain the original route solution and restore	*/
+	/* it in case the routing fails.			*/
+
 	if ((net != NULL) && (net->netnodes != NULL)) {
 	    result = doroute(net, (u_char)0, dodebug);
 	    failcount = (result == 0) ? 0 : 1;
@@ -1303,7 +1358,6 @@ qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
 
     // Restore global defaults in case they were locally changed
     forceRoutable = saveForce;
-    highOverhead = saveOverhead;
 
     return QrouterTagCallback(interp, objc, objv);
 }
@@ -1350,7 +1404,7 @@ qrouter_remove(ClientData clientData, Tcl_Interp *interp,
 	    case AllIdx:
 		for (i = 0; i < Numnets; i++) {
 		   net = Nlnets[i];
-		   ripup_net(net, (u_char)1);
+		   ripup_net(net, (u_char)1, (u_char)1, (u_char)0);
 		}
 		draw_layout();
 		break;
@@ -1358,7 +1412,7 @@ qrouter_remove(ClientData clientData, Tcl_Interp *interp,
 		for (i = 2; i < objc; i++) {
 		    net = LookupNet(Tcl_GetString(objv[i]));
 		    if (net != NULL)
-			ripup_net(net, (u_char)1);
+			ripup_net(net, (u_char)1, (u_char)1, (u_char)0);
 		}
 		draw_layout();
 		break;
@@ -1378,6 +1432,7 @@ qrouter_remove(ClientData clientData, Tcl_Interp *interp,
 /*			ordered by the standard metric	*/
 /*   failing unordered	Move all nets to FailedNets,	*/
 /*			as originally ordered		*/
+/*   failing summary	List of failed and total nets	*/
 /*------------------------------------------------------*/
 
 static int
@@ -1945,23 +2000,31 @@ qrouter_layerinfo(ClientData clientData, Tcl_Interp *interp,
 /*	  the rotation is swapped relative to the grid	*/
 /*	  positions used in the non-inverted case.	*/
 /*							*/
+/* use: List of names of vias to use.  If any via not	*/
+/*	in this list is found when reading a .lef file	*/
+/*	it will be ignored.				*/
+/*							*/
 /* Options:						*/
 /*							*/
 /*	via stack [none|all|<value>]			*/
 /*	via pattern [normal|inverted]			*/
+/*	via use <via_name> [<via_name> ...]		*/
 /*------------------------------------------------------*/
 
 static int
 qrouter_via(ClientData clientData, Tcl_Interp *interp,
             int objc, Tcl_Obj *CONST objv[])
 {
-    int idx, idx2, result, value;
+    int idx, idx2, result, value, i;
+    char *vname;
+    Tcl_Obj *lobj;
+    LinkedStringPtr viaName, newVia;
 
     static char *subCmds[] = {
-	"stack", "pattern", NULL
+	"stack", "pattern", "use", NULL
     };
     enum SubIdx {
-	StackIdx, PatternIdx
+	StackIdx, PatternIdx, UseIdx
     };
    
     static char *stackSubCmds[] = {
@@ -1972,7 +2035,7 @@ qrouter_via(ClientData clientData, Tcl_Interp *interp,
     };
 
     static char *patternSubCmds[] = {
-	"none", "normal", "invert", NULL
+	"none", "normal", "inverted", NULL
     };
     enum patternSubIdx {
 	PatNoneIdx, PatNormalIdx, PatInvertIdx
@@ -1993,6 +2056,15 @@ qrouter_via(ClientData clientData, Tcl_Interp *interp,
 		    Tcl_SetObjResult(interp,
 				Tcl_NewStringObj(
 				patternSubCmds[ViaPattern + 1], -1));
+		    break;
+		case UseIdx:
+		    /* Return list of vias to use */
+		    lobj = Tcl_NewListObj(0, NULL);
+		    for (viaName = AllowedVias; viaName; viaName = viaName->next) {
+			Tcl_ListObjAppendElement(interp, lobj,
+				Tcl_NewStringObj(viaName->name, -1));
+		    }
+		    Tcl_SetObjResult(interp, lobj);
 		    break;
 	    }
 	}
@@ -2026,6 +2098,24 @@ qrouter_via(ClientData clientData, Tcl_Interp *interp,
 				0, &idx2)) != TCL_OK)
 			return result;
 		    ViaPattern = idx2 - 1;
+		    break;
+		case UseIdx:
+		    /* Create list of vias to use */
+		    for (i = 2; i < objc; i++) {
+			vname = Tcl_GetString(objv[i]);
+			/* First check if name is in list already */
+			for (viaName = AllowedVias; viaName; viaName = viaName->next) {
+			    if (!strcmp(vname, viaName->name))
+				break;
+			}	
+			if (viaName != NULL) continue;
+			newVia = (LinkedStringPtr)malloc(sizeof(LinkedString));
+			newVia->name = strdup(vname);
+			newVia->next = AllowedVias;
+			AllowedVias = newVia;
+		    }
+		    /* Regenerate the ViaX and ViaY lists */
+		    LefAssignLayerVias();
 		    break;
 	    }
 	}

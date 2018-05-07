@@ -37,10 +37,13 @@
 /* ---------------------------------------------------------------------*/
 
 /* Current line number for reading */
-int lefCurrentLine;
+int lefCurrentLine = 0;
 
 /* Information about routing layers */
-LefList LefInfo;
+LefList LefInfo = NULL;
+
+/* Information about what vias to use */
+LinkedStringPtr AllowedVias = NULL;
 
 /* Gate information is in the linked list GateInfo, imported */
 
@@ -693,14 +696,49 @@ double
 LefGetRouteOffset(int layer)
 {
     LefList lefl;
+    u_char o;
 
     lefl = LefFindLayerByNum(layer);
     if (lefl) {
 	if (lefl->lefClass == CLASS_ROUTE) {
-	    return lefl->info.route.offset;
+	    o = lefl->info.route.hdirection;
+            if (o == TRUE)
+	        return lefl->info.route.offsety;
+	    else
+	        return lefl->info.route.offsetx;
 	}
     }
     return MIN(PitchX[layer], PitchY[layer]) / 2.0;
+}
+
+double
+LefGetRouteOffsetX(int layer)
+{
+    LefList lefl;
+    u_char o;
+
+    lefl = LefFindLayerByNum(layer);
+    if (lefl) {
+	if (lefl->lefClass == CLASS_ROUTE) {
+	    return lefl->info.route.offsetx;
+	}
+    }
+    return PitchX[layer] / 2.0;
+}
+
+double
+LefGetRouteOffsetY(int layer)
+{
+    LefList lefl;
+    u_char o;
+
+    lefl = LefFindLayerByNum(layer);
+    if (lefl) {
+	if (lefl->lefClass == CLASS_ROUTE) {
+	    return lefl->info.route.offsety;
+	}
+    }
+    return PitchY[layer] / 2.0;
 }
 
 /*
@@ -835,23 +873,68 @@ LefGetRouteWideSpacing(int layer, double width)
 }
 
 /*
- *------------------------------------------------------------
- * Get the route pitch for a given layer
- *------------------------------------------------------------
+ *-----------------------------------------------------------------
+ * Get the route pitch in the preferred direction for a given layer
+ *-----------------------------------------------------------------
  */
 
 double
 LefGetRoutePitch(int layer)
 {
     LefList lefl;
+    u_char o;
 
     lefl = LefFindLayerByNum(layer);
     if (lefl) {
 	if (lefl->lefClass == CLASS_ROUTE) {
-	    return lefl->info.route.pitch;
+	    o = lefl->info.route.hdirection;
+            if (o == TRUE)
+		return lefl->info.route.pitchy;
+	    else
+		return lefl->info.route.pitchx;
 	}
     }
     return MIN(PitchX[layer], PitchY[layer]);
+}
+
+/*
+ *------------------------------------------------------------
+ * Get the route pitch in X for a given layer
+ *------------------------------------------------------------
+ */
+
+double
+LefGetRoutePitchX(int layer)
+{
+    LefList lefl;
+
+    lefl = LefFindLayerByNum(layer);
+    if (lefl) {
+	if (lefl->lefClass == CLASS_ROUTE) {
+	    return lefl->info.route.pitchx;
+	}
+    }
+    return PitchX[layer];
+}
+
+/*
+ *------------------------------------------------------------
+ * Get the route pitch in Y for a given layer
+ *------------------------------------------------------------
+ */
+
+double
+LefGetRoutePitchY(int layer)
+{
+    LefList lefl;
+
+    lefl = LefFindLayerByNum(layer);
+    if (lefl) {
+	if (lefl->lefClass == CLASS_ROUTE) {
+	    return lefl->info.route.pitchy;
+	}
+    }
+    return PitchY[layer];
 }
 
 /*
@@ -1010,7 +1093,11 @@ LefReadLayers(f, obstruct, lreturn)
 	}
 	if ((curlayer < 0) && ((!lefl) || (lefl->lefClass != CLASS_IGNORE)))
 	{
-	    LefError("Don't know how to parse layer \"%s\"\n", token);
+	    /* CLASS_VIA in lefl record is a cut, and the layer */
+	    /* geometry is ignored for the purpose of routing.	*/
+
+	    if (lefl->lefClass != CLASS_VIA)
+		LefError("Don't know how to parse layer \"%s\"\n", token);
 	}
     }
     return curlayer;
@@ -1461,7 +1548,8 @@ LefReadPolygon(FILE *f, int curlayer, float oscale)
  */
 
 enum lef_geometry_keys {LEF_LAYER = 0, LEF_WIDTH, LEF_PATH,
-	LEF_RECT, LEF_POLYGON, LEF_VIA, LEF_GEOMETRY_END};
+	LEF_RECT, LEF_POLYGON, LEF_VIA, LEF_PORT_CLASS,
+	LEF_GEOMETRY_END};
 
 DSEG
 LefReadGeometry(GATE lefMacro, FILE *f, float oscale)
@@ -1481,6 +1569,7 @@ LefReadGeometry(GATE lefMacro, FILE *f, float oscale)
 	"RECT",
 	"POLYGON",
 	"VIA",
+	"CLASS",
 	"END",
 	NULL
     };
@@ -1523,6 +1612,9 @@ LefReadGeometry(GATE lefMacro, FILE *f, float oscale)
 		LefPolygonToRects(&rectList, pointlist);
 		break;
 	    case LEF_VIA:
+		LefEndStatement(f);
+		break;
+	    case LEF_PORT_CLASS:
 		LefEndStatement(f);
 		break;
 	    case LEF_GEOMETRY_END:
@@ -1624,7 +1716,9 @@ LefReadPort(lefMacro, f, pinName, pinNum, pinDir, pinUse, oscale)
  */
 
 enum lef_pin_keys {LEF_DIRECTION = 0, LEF_USE, LEF_PORT, LEF_CAPACITANCE,
-        LEF_PIN_END};
+	LEF_ANTENNADIFF, LEF_ANTENNAGATE, LEF_ANTENNAMOD,
+	LEF_ANTENNAPAR, LEF_ANTENNAPARSIDE, LEF_ANTENNAMAX, LEF_ANTENNAMAXSIDE,
+	LEF_SHAPE, LEF_NETEXPR, LEF_PIN_END};
 
 void
 LefReadPin(lefMacro, f, pinname, pinNum, oscale)
@@ -1644,6 +1738,15 @@ LefReadPin(lefMacro, f, pinname, pinNum, oscale)
 	"USE",
 	"PORT",
 	"CAPACITANCE",
+	"ANTENNADIFFAREA",
+	"ANTENNAGATEAREA",
+	"ANTENNAMODEL",
+	"ANTENNAPARTIALMETALAREA",
+	"ANTENNAPARTIALMETALSIDEAREA",
+	"ANTENNAMAXAREACAR",
+	"ANTENNAMAXSIDEAREACAR",
+	"SHAPE",
+	"NETEXPR",
 	"END",
 	NULL
     };
@@ -1723,6 +1826,15 @@ LefReadPin(lefMacro, f, pinname, pinNum, oscale)
 		LefReadPort(lefMacro, f, pinname, pinNum, pinDir, pinUse, oscale);
 		break;
 	    case LEF_CAPACITANCE:
+	    case LEF_ANTENNADIFF:
+	    case LEF_ANTENNAGATE:
+	    case LEF_ANTENNAMOD:
+	    case LEF_ANTENNAPAR:
+	    case LEF_ANTENNAPARSIDE:
+	    case LEF_ANTENNAMAX:
+	    case LEF_ANTENNAMAXSIDE:
+	    case LEF_NETEXPR:
+	    case LEF_SHAPE:
 		LefEndStatement(f);	/* Ignore. . . */
 		break;
 	    case LEF_PIN_END:
@@ -2065,11 +2177,19 @@ LefAddViaGeometry(FILE *f, LefList lefl, int curlayer, float oscale)
  */
 
 enum lef_layer_keys {LEF_LAYER_TYPE=0, LEF_LAYER_WIDTH,
+	LEF_LAYER_MAXWIDTH, LEF_LAYER_AREA,
 	LEF_LAYER_SPACING, LEF_LAYER_SPACINGTABLE,
 	LEF_LAYER_PITCH, LEF_LAYER_DIRECTION, LEF_LAYER_OFFSET,
+	LEF_LAYER_WIREEXT,
 	LEF_LAYER_RES, LEF_LAYER_CAP, LEF_LAYER_EDGECAP,
+	LEF_LAYER_THICKNESS, LEF_LAYER_HEIGHT,
+	LEF_LAYER_MINDENSITY, LEF_LAYER_ANTENNADIFF,
+	LEF_LAYER_ANTENNASIDE,
 	LEF_VIA_DEFAULT, LEF_VIA_LAYER, LEF_VIA_RECT,
-	LEF_VIARULE_VIA, LEF_LAYER_END};
+	LEF_VIA_ENCLOSURE, LEF_VIA_PREFERENCLOSURE,
+	LEF_VIARULE_OVERHANG,
+	LEF_VIARULE_METALOVERHANG, LEF_VIARULE_VIA,
+	LEF_VIARULE_GENERATE, LEF_LAYER_END};
 
 enum lef_spacing_keys {LEF_SPACING_RANGE=0, LEF_END_LAYER_SPACING};
 
@@ -2099,18 +2219,31 @@ LefReadLayerSection(f, lname, mode, lefl)
     static char *layer_keys[] = {
 	"TYPE",
 	"WIDTH",
+	"MAXWIDTH",
+	"AREA",
 	"SPACING",
 	"SPACINGTABLE",
 	"PITCH",
 	"DIRECTION",
 	"OFFSET",
+	"WIREEXTENSION",
 	"RESISTANCE",
 	"CAPACITANCE",
 	"EDGECAPACITANCE",
+	"THICKNESS",
+	"HEIGHT",
+	"MINIMUMDENSITY",
+	"ANTENNADIFFAREARATIO",
+	"ANTENNASIDEAREARATIO",
 	"DEFAULT",
 	"LAYER",
 	"RECT",
+	"ENCLOSURE",
+	"PREFERENCLOSURE",
+	"OVERHANG",
+	"METALOVERHANG",
 	"VIA",
+	"GENERATE",
 	"END",
 	NULL
     };
@@ -2156,10 +2289,12 @@ LefReadLayerSection(f, lname, mode, lefl)
 
 			lefl->info.route.width = 0.0;
 			lefl->info.route.spacing = NULL;
-			lefl->info.route.pitch = 0.0;
+			lefl->info.route.pitchx = 0.0;
+			lefl->info.route.pitchy = 0.0;
 			// Use -1.0 as an indication that offset has not
 			// been specified and needs to be set to default.
-			lefl->info.route.offset = -1.0;
+			lefl->info.route.offsetx = -1.0;
+			lefl->info.route.offsety = -1.0;
 			lefl->info.route.hdirection = (u_char)0;
 
 			/* A routing type has been declared.  Assume	*/
@@ -2210,6 +2345,14 @@ LefReadLayerSection(f, lname, mode, lefl)
 		token = LefNextToken(f, TRUE);
 		sscanf(token, "%lg", &dvalue);
 		lefl->info.route.width = dvalue / (double)oscale;
+		LefEndStatement(f);
+		break;
+	    case LEF_LAYER_MAXWIDTH:
+		// Not handled.
+		LefEndStatement(f);
+		break;
+	    case LEF_LAYER_AREA:
+		// Not handled, but needed!
 		LefEndStatement(f);
 		break;
 	    case LEF_LAYER_SPACING:
@@ -2302,14 +2445,25 @@ LefReadLayerSection(f, lname, mode, lefl)
 	    case LEF_LAYER_PITCH:
 		token = LefNextToken(f, TRUE);
 		sscanf(token, "%lg", &dvalue);
-		lefl->info.route.pitch = dvalue / (double)oscale;
+		lefl->info.route.pitchx = dvalue / (double)oscale;
+
+		token = LefNextToken(f, TRUE);
+		if (token && (*token != ';')) {
+		    sscanf(token, "%lg", &dvalue);
+		    lefl->info.route.pitchy = dvalue / (double)oscale;
+		    LefEndStatement(f);
+		}
+		else {
+		    lefl->info.route.pitchy = lefl->info.route.pitchx;
+		}
 
 		/* Offset default is 1/2 the pitch.  Offset is		*/
 		/* intialized to -1 to tell whether or not the value	*/
 		/* has been set by an OFFSET statement.			*/
-		if (lefl->info.route.offset < 0.0)
-		    lefl->info.route.offset = lefl->info.route.pitch / 2.0;
-		LefEndStatement(f);
+		if (lefl->info.route.offsetx < 0.0)
+		    lefl->info.route.offsetx = lefl->info.route.pitchx / 2.0;
+		if (lefl->info.route.offsety < 0.0)
+		    lefl->info.route.offsety = lefl->info.route.pitchy / 2.0;
 		break;
 	    case LEF_LAYER_DIRECTION:
 		token = LefNextToken(f, TRUE);
@@ -2320,8 +2474,17 @@ LefReadLayerSection(f, lname, mode, lefl)
 	    case LEF_LAYER_OFFSET:
 		token = LefNextToken(f, TRUE);
 		sscanf(token, "%lg", &dvalue);
-		lefl->info.route.offset = dvalue / (double)oscale;
-		LefEndStatement(f);
+		lefl->info.route.offsetx = dvalue / (double)oscale;
+
+		token = LefNextToken(f, TRUE);
+		if (token && (*token != ';')) {
+		    sscanf(token, "%lg", &dvalue);
+		    lefl->info.route.offsety = dvalue / (double)oscale;
+		    LefEndStatement(f);
+		}
+		else {
+		    lefl->info.route.offsety = lefl->info.route.offsetx;
+		}
 		break;
 	    case LEF_LAYER_RES:
 		token = LefNextToken(f, TRUE);
@@ -2361,7 +2524,17 @@ LefReadLayerSection(f, lname, mode, lefl)
 		}
 		LefEndStatement(f);
 		break;
+	    case LEF_LAYER_THICKNESS:
+	    case LEF_LAYER_HEIGHT:
+	    case LEF_LAYER_MINDENSITY:
+	    case LEF_LAYER_ANTENNADIFF:
+	    case LEF_LAYER_ANTENNASIDE:
+	    case LEF_LAYER_WIREEXT:
+		/* Not specifically handling these */
+		LefEndStatement(f);
+		break;
 	    case LEF_VIA_DEFAULT:
+	    case LEF_VIARULE_GENERATE:
 		/* Do nothing; especially, don't look for end-of-statement! */
 		break;
 	    case LEF_VIA_LAYER:
@@ -2369,7 +2542,15 @@ LefReadLayerSection(f, lname, mode, lefl)
 		LefEndStatement(f);
 		break;
 	    case LEF_VIA_RECT:
-		LefAddViaGeometry(f, lefl, curlayer, oscale);
+		if (curlayer >= 0)
+		    LefAddViaGeometry(f, lefl, curlayer, oscale);
+		LefEndStatement(f);
+		break;
+	    case LEF_VIA_ENCLOSURE:
+	    case LEF_VIA_PREFERENCLOSURE:
+	    case LEF_VIARULE_OVERHANG:
+	    case LEF_VIARULE_METALOVERHANG:
+		/* Ignoring this:  Need to handle via generates */
 		LefEndStatement(f);
 		break;
 	    case LEF_VIARULE_VIA:
@@ -2384,6 +2565,95 @@ LefReadLayerSection(f, lname, mode, lefl)
 		break;
 	}
 	if (keyword == LEF_LAYER_END) break;
+    }
+}
+
+/*----------------------------------------------------------------*/
+/* This routine runs through all the defined vias, from last to	  */
+/* first defined.  Check the X vs. Y dimension of the base layer. */
+/* If X is longer, save as ViaX.  If Y is longer, save as ViaY.   */
+/* If there is an AllowedVias list, then only assign vias that	  */
+/* are in the list.						  */
+/*----------------------------------------------------------------*/
+
+void
+LefAssignLayerVias()
+{
+    LefList lefl;
+    int layer;
+    double xydiff;
+    DSEG grect;
+    LinkedStringPtr viaName;
+    char *newViaX[MAX_LAYERS];
+    char *newViaY[MAX_LAYERS];
+
+    for (layer = 0; layer < MAX_LAYERS; layer++) {
+	newViaX[layer] = newViaY[layer] = NULL;
+    }
+
+    for (lefl = LefInfo; lefl; lefl = lefl->next) {
+	if (lefl->lefClass == CLASS_VIA) {
+	    if (lefl->info.via.lr) {
+		layer = MAX_LAYERS;
+		if (lefl->info.via.area.layer >= 0) {
+		   layer = lefl->info.via.area.layer;
+		   xydiff = (lefl->info.via.area.x2 - lefl->info.via.area.x1) -
+			(lefl->info.via.area.y2 - lefl->info.via.area.y1);
+		}
+
+		for (grect = lefl->info.via.lr; grect; grect = grect->next) {
+		    if (grect->layer >= 0 && grect->layer < layer) {
+			layer = grect->layer;
+			xydiff = (grect->x2 - grect->x1) - (grect->y2 - grect->y1);
+		    }
+		}
+		if (layer < MAX_LAYERS) {
+		    /* Assign only to layers in AllowedVias, if it is non-NULL */
+		    if (AllowedVias != NULL) {
+			for (viaName = AllowedVias; viaName; viaName = viaName->next) {
+			    if (!strcmp(viaName->name, lefl->lefName))
+				break;
+			}
+			if (viaName == NULL) continue;
+		    }
+		    if (xydiff > -EPS) {
+			if (newViaX[layer] != NULL) free(newViaX[layer]);
+			newViaX[layer] = strdup(lefl->lefName);      
+		    }
+		    else {
+			if (newViaY[layer] != NULL) free(newViaY[layer]);
+			newViaY[layer] = strdup(lefl->lefName);
+		    }
+		}
+	    }
+	}
+    }
+
+    /* Copy newViaX and newViaY back into viaX and viaY, making */
+    /* sure that at least one entry exists for each layer.	*/
+
+    /* At this time, only ViaX[] reports values back in		*/
+    /* LefGetViaWidth(), so make sure that if there is only one	*/
+    /* allowed via for a layer, it is copied into the ViaX	*/
+    /* array, regardless of its orientation.			*/
+
+    for (layer = 0; layer < MAX_LAYERS; layer++) {
+	if ((newViaX[layer] == NULL) && (newViaY[layer] == NULL))
+	    continue;
+	if (ViaX[layer] != NULL) free(ViaX[layer]);
+	if (ViaY[layer] != NULL) free(ViaY[layer]);
+
+	if (newViaX[layer] != NULL)
+	    ViaX[layer] = strdup(newViaX[layer]);
+	else
+	    ViaX[layer] = strdup(newViaY[layer]);
+	if (newViaY[layer] != NULL)
+	    ViaY[layer] = strdup(newViaY[layer]);
+    }
+
+    for (layer = 0; layer < MAX_LAYERS; layer++) {
+	if (newViaX[layer] != NULL) free(newViaX[layer]);
+	if (newViaY[layer] != NULL) free(newViaY[layer]);
     }
 }
 
@@ -2515,6 +2785,7 @@ LefRead(inName)
 	    case LEF_SECTION_VIARULE:
 		token = LefNextToken(f, TRUE);
 		sprintf(tsave, "%.127s", token);
+
 		lefl = LefFindLayer(token);
 		if (lefl == NULL)
 		{
@@ -2677,41 +2948,12 @@ LefRead(inName)
     /* the strings used for route output, overriding any information	*/
     /* that may have been in the route.cfg file.			*/
 
-    /* Note that this runs through all the defined vias, from last to	*/
-    /* first defined.  Check the X vs. Y dimension of the base layer.	*/
-    /* If X is longer, save as ViaX.  If Y is longer, save as ViaY.	*/
-
     for (lefl = LefInfo; lefl; lefl = lefl->next) {
 	if (lefl->lefClass == CLASS_ROUTE) {
 	    strcpy(CIFLayer[lefl->type], lefl->lefName);
 	}
-	else if (lefl->lefClass == CLASS_VIA) {
-	    if (lefl->info.via.lr) {
-		layer = MAX_LAYERS;
-		if (lefl->info.via.area.layer >= 0) {
-		   layer = lefl->info.via.area.layer;
-		   xydiff = (lefl->info.via.area.x2 - lefl->info.via.area.x1) -
-			(lefl->info.via.area.y2 - lefl->info.via.area.y1);
-		}
-
-		for (grect = lefl->info.via.lr; grect; grect = grect->next) {
-		    if (grect->layer >= 0 && grect->layer < layer) {
-			layer = grect->layer;
-			xydiff = (grect->x2 - grect->x1) - (grect->y2 - grect->y1);
-		    }
-		}
-		if (layer < MAX_LAYERS) {
-		    if (xydiff > -EPS) {
-			free(ViaX[layer]);
-			ViaX[layer] = strdup(lefl->lefName);      
-		    }
-		    else {
-			if (ViaY[layer] != NULL) free(ViaY[layer]);
-			ViaY[layer] = strdup(lefl->lefName);
-		    }
-		}
-	    }
-	}
     }
+    LefAssignLayerVias();
+
     return oprecis;
 }

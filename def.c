@@ -13,9 +13,8 @@
  * layer information is already known.  The DEF file should have information
  * primarily on die are, track placement, pins, components, and nets.
  *
- * To-do: Routed nets should have their routes dropped into track obstructions,
- * and the nets should be ignored.  Currently, routed nets are parsed and the
- * routes are ignored.
+ * Routed nets have their routes dropped into track obstructions, and the
+ * nets are ignored.
  */
 
 #include <stdio.h>
@@ -32,6 +31,8 @@
 #include "maze.h"
 #include "lef.h"
 #include "def.h"
+
+int numSpecial = 0;		/* Tracks number of specialnets */
 
 #ifndef TCL_QROUTER
 
@@ -146,7 +147,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
     char valid = FALSE;		/* is there a valid reference point? */
     char initial = TRUE;
     struct dseg_ locarea;
-    double x, y, lx, ly, w;
+    double x, y, lx, ly, w, hw, s;
     int routeLayer = -1, paintLayer;
     LefList lefl;
     ROUTE routednet = NULL;
@@ -174,6 +175,12 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    if (routeLayer < 0)
 	    {
 		LefError("Unknown layer type \"%s\" for NEW route\n", token); 
+		continue;
+	    }
+            else if (routeLayer >= Num_layers)
+	    {
+		LefError("DEF file contains layer \"%s\" which is not allowed "
+			"by the layer limit setting of %d\n", token, Num_layers);
 		continue;
 	    }
 	    paintLayer = routeLayer;
@@ -205,6 +212,8 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	       routednet->netnum = net->netnum;
 	       routednet->segments = NULL;
 	       routednet->flags = (u_char)0;
+	       routednet->start.route = NULL;
+	       routednet->end.route = NULL;
 	    }
 	}
 	else if (*token != '(')	/* via name */
@@ -234,28 +243,33 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 			   if (routeLayer < paintLayer) paintLayer = routeLayer;
 			   if ((routeLayer >= 0) && (special == (char)1) &&
 					(valid == TRUE)) {
-			      drect = (DSEG)malloc(sizeof(struct dseg_));
-			      drect->x1 = x + lr->x1;
-			      drect->x2 = x + lr->x2;
-			      drect->y1 = y + lr->y1;
-			      drect->y2 = y + lr->y2;
-			      drect->layer = lr->layer;
-			      drect->next = UserObs;
-			      UserObs = drect;
+				s = LefGetRouteSpacing(routeLayer); 
+				drect = (DSEG)malloc(sizeof(struct dseg_));
+				drect->x1 = x + lr->x1 - s;
+				drect->x2 = x + lr->x2 + s;
+				drect->y1 = y + lr->y1 - s;
+				drect->y2 = y + lr->y2 + s;
+				drect->layer = routeLayer;
+				drect->next = UserObs;
+				UserObs = drect;
 			   }
 			   lr = lr->next;
 			}
 			if (routeLayer == -1) paintLayer = lefl->type;
 		    }
-		    else
+		    else {
 		    	paintLayer = lefl->type;
+			if (special == (char)1)
+			    s = LefGetRouteSpacing(paintLayer); 
+		    }
 		}
 		else
 		{
 		    LefError("Error: Via \"%s\" named but undefined.\n", token);
 		    paintLayer = routeLayer;
 		}
-		if ((special == (char)0) && (paintLayer >= 0)) {
+		if ((special == (char)0) && (paintLayer >= 0) &&
+				(paintLayer < Num_layers)) {
 
 		    newRoute = (SEG)malloc(sizeof(struct seg_));
 		    newRoute->segtype = ST_VIA;
@@ -273,12 +287,18 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 			routednet->netnum = net->netnum;
 			routednet->segments = NULL;
 			routednet->flags = (u_char)0;
+			routednet->start.route = NULL;
+			routednet->end.route = NULL;
 		    }
 		    newRoute->next = routednet->segments;
 		    routednet->segments = newRoute;
 		}
-		else
-		    LefError("Via \"%s\" does not define a metal layer!\n", token);
+		else {
+		    if (paintLayer >= Num_layers)
+		        LefError("Via \"%s\" exceeds layer limit setting!\n", token);
+		    else
+		        LefError("Via \"%s\" does not define a metal layer!\n", token);
+		}
 	    }
 	    else
 		LefError("Via name \"%s\" unknown in route.\n", token);
@@ -359,34 +379,42 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    {
 		locarea.x2 = refp.x1;
 		locarea.y2 = refp.y1;
-		lx = x;
-		ly = y;
 
 		if (special == (char)1) {
 		   if (valid == TRUE) {
+		      s = LefGetRouteSpacing(routeLayer); 
+		      hw = w / 2;
 		      drect = (DSEG)malloc(sizeof(struct dseg_));
 		      if (lx > x) {
-		         drect->x1 = x - w;
-		         drect->x2 = lx + w;
+		         drect->x1 = x - s;
+		         drect->x2 = lx + s;
+		      }
+		      else if (lx < x) {
+		         drect->x1 = lx - s;
+		         drect->x2 = x + s;
 		      }
 		      else {
-		         drect->x1 = x + w;
-		         drect->x2 = lx - w;
+		         drect->x1 = x - hw - s;
+		         drect->x2 = x + hw + s;
 		      }
 		      if (ly > y) {
-		         drect->y1 = y - w;
-		         drect->y2 = ly + w;
+		         drect->y1 = y - s;
+		         drect->y2 = ly + s;
+		      }
+		      else if (ly < y) {
+		         drect->y1 = ly - s;
+		         drect->y2 = y + s;
 		      }
 		      else {
-		         drect->y1 = y + w;
-		         drect->y2 = ly - w;
+		         drect->y1 = y - hw - s;
+		         drect->y2 = y + hw + s;
 		      }
 		      drect->layer = routeLayer;
 		      drect->next = UserObs;
 		      UserObs = drect;
 		   }
 		}
-		else if (paintLayer >= 0) {
+		else if ((paintLayer >= 0) && (paintLayer < Num_layers)) {
 		   newRoute = (SEG)malloc(sizeof(struct seg_));
 		   newRoute->segtype = ST_WIRE;
 		   newRoute->x1 = locarea.x1;
@@ -403,9 +431,14 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 			routednet->netnum = net->netnum;
 			routednet->segments = NULL;
 			routednet->flags = (u_char)0;
+			routednet->start.route = NULL;
+			routednet->end.route = NULL;
 		   }
 		   newRoute->next = routednet->segments;
 		   routednet->segments = newRoute;
+		}
+		else if (paintLayer >= Num_layers) {
+		    LefError("Route layer exceeds layer limit setting!\n");
 		}
 	    }
 
@@ -1983,6 +2016,7 @@ DefRead(char *inName)
 		if (sscanf(token, "%d", &total) != 1) total = 0;
 		LefEndStatement(f);
 		DefReadNets(f, sections[DEF_SPECIALNETS], oscale, TRUE, total);
+		numSpecial = total;
 		break;
 	    case DEF_NETS:
 		token = LefNextToken(f, TRUE);

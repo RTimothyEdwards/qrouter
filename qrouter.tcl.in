@@ -17,7 +17,13 @@ if {[string compare $tcl_platform(platform) "windows"] == 0} {
    set libext .so
 }
 
-load ${QROUTER_LIB_DIR}/qrouter$libext
+if {${tcl_version} >= 8.6} {
+   if {[catch {load ${QROUTER_LIB_DIR}/qrouter$libext}]} {
+      load -lazy ${QROUTER_LIB_DIR}/qrouter$libext
+   }
+} else {
+   load ${QROUTER_LIB_DIR}/qrouter$libext
+}
 package require Qrouter
 
 proc pushnamespace { name } {
@@ -84,8 +90,83 @@ proc qrouter::write_congested {filename} {
    }
 }
 
+#------------------------------------------------------
+# Standard routing script
+#------------------------------------------------------
+
+proc qrouter::standard_route {{filename ""} {doquit true}} {
+    puts stdout "*** Running stage1 routing with defaults"
+    set result [stage1]
+    if {$result > 0} {
+	set msize 10
+	while {$msize <= 100} {
+	    set lastresult $result
+	    puts -nonewline stdout "*** Running stage2 routing"
+	    puts stdout " with options mask $msize, effort 10"
+            set result [stage2 mask $msize effort 10]
+	    if {!$result} {break}
+	    if {$result > $lastresult} {
+		puts -nonewline stdout "*** Running stage2 routing"
+		puts stdout " with options mask none, effort 20"
+		set result [stage2 mask none effort 20]
+		if {!$result} {break}
+		if {$result < 5} {
+		    puts -nonewline stdout "*** Running stage2 routing"
+		    puts stdout " with options mask none, effort 50"
+		    set result [stage2 mask none effort 50]
+		}
+		if {!$result} {break}
+	    }
+	    incr msize 10
+	}
+    }
+    # Attempt a couple of runs at "mask none" if not solved yet
+    if {$result > 0} {
+	puts -nonewline stdout "*** Running stage2 routing"
+	puts stdout " with options mask none, effort 30"
+	set result [stage2 mask none effort 30]
+    }
+    if {$result > 0} {
+	puts -nonewline stdout "*** Running stage2 routing"
+	puts stdout " with options mask none, effort 40"
+	set result [stage2 mask none effort 40]
+    }
+
+    # There is no point in running a cleanup stage if there are lots of
+    # unrouted nets.
+    if {$result < 10} {
+	puts stdout "*** Running stage3 routing with defaults, 1st round"
+	set result [stage3]
+	if {$result > 0} {
+            puts -nonewline stdout "*** Running stage2 routing"
+            puts stdout " with options mask none"
+	    set result [stage2 mask none]
+	}
+	puts stdout "*** Running stage3 routing with defaults, 2nd round"
+	set result [stage3]
+	set i 0
+	while {$result > 0} {
+            puts -nonewline stdout "*** Running stage2 routing"
+            puts stdout " with options mask none"
+	    set result [stage2 mask none]
+	    incr i
+	    if {$i == 5} {
+		break
+	    }
+	}
+    }
+    if {$filename != ""} {
+        puts stdout "*** Writing DEF file $filename"
+	write_def $filename
+    } else {
+        puts stdout "*** Writing DEF file (default)"
+	write_def
+    }
+    if {(!$result) && $doquit} {quit}
+}
+
 #---------------------------------------------------------
-# Standard sequence of events (subject to change):
+# Simple sequence of events (subject to change):
 # Upon first success, write the DEF file output and quit.
 # If "stage2 mask none" leaves failing routes, then write
 # the routes done so far to the DEF file output and remain
@@ -94,7 +175,7 @@ proc qrouter::write_congested {filename} {
 # second try.
 #---------------------------------------------------------
 
-proc qrouter::standard_route {} {
+proc qrouter::simple_route {} {
    if {![stage1]} {write_def; quit}
    if {![stage2]} {write_def; quit}
    set result [stage2 mask none]

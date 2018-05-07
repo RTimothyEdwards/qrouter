@@ -197,7 +197,7 @@ void clear_non_source_targets(NET net, POINT *pushlist)
 	    if (Pr->flags & PR_PROCESSED) {
 	       Pr->flags &= ~PR_PROCESSED;
 	       if (~(Pr->flags & PR_ON_STACK)) {
-		  if (!highOverhead) Pr->flags |= PR_ON_STACK;
+		  Pr->flags |= PR_ON_STACK;
 		  gpoint = allocPOINT();
 		  gpoint->x1 = x;
 		  gpoint->y1 = y;
@@ -219,13 +219,13 @@ void clear_non_source_targets(NET net, POINT *pushlist)
 		if (Pr->flags & PR_PROCESSED) {
 		   Pr->flags &= ~PR_PROCESSED;
 		   if (~(Pr->flags & PR_ON_STACK)) {
-		      if (!highOverhead) Pr->flags |= PR_ON_STACK;
+		      Pr->flags |= PR_ON_STACK;
 		      gpoint = allocPOINT();
 		      gpoint->x1 = x;
 		      gpoint->y1 = y;
 		      gpoint->layer = lay;
-		      gpoint->next = *pushlist;
-		      *pushlist = gpoint;
+		      gpoint->next = pushlist[1];
+		      pushlist[1] = gpoint;
 		   }
 		}
 	    }
@@ -254,7 +254,7 @@ void clear_target_node(NODE node)
        x = ntap->gridx;
        y = ntap->gridy;
        if ((lay < Pinlayers) && (((lnode = NODEIPTR(x, y, lay)) == NULL)
-		|| (lnode->nodeloc == NULL)))
+		|| (lnode->nodesav == NULL)))
 	  continue;
        Pr = &OBS2VAL(x, y, lay);
        Pr->flags = 0;
@@ -326,14 +326,12 @@ count_targets(NET net)
 /* set_node_to_net() ---					*/
 /*								*/
 /* Change the Obs2[][] flag values to "newflags" for all tap	*/
-/* positions of route terminal "node".  Then follow all routes	*/
-/* connected to "node", updating their positions.  Where those	*/
-/* routes connect to other nodes, repeat recursively.		*/
+/* positions of route terminal "node".				*/
 /*								*/
 /* Return value is 1 if at least one terminal of the node	*/
 /* is already marked as PR_SOURCE, indicating that the node	*/
 /* has already been routed.  Otherwise, the return value is	*/
-/* zero of no error occured, and -1 if any point was found to	*/
+/* zero if no error occured, and -1 if any point was found to	*/
 /* be unoccupied by any net, which should not happen.		*/
 /*								*/
 /* If "bbox" is non-null, record the grid extents of the node	*/
@@ -357,11 +355,12 @@ count_targets(NET net)
 /* will be no way to route the net.				*/
 /*--------------------------------------------------------------*/
 
-int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char stage)
+int set_node_to_net(NODE node, int newflags, POINT *pushlist,
+	SEG bbox, u_char stage)
 {
-    int x, y, lay, obsnet = 0;
+    int x, y, lay, rank, base, obsnet = 0;
     int result = 0;
-    u_char found_one = (u_char)0;
+    u_char found_one = FALSE;
     NODEINFO lnode;
     POINT gpoint;
     DPOINT ntap;
@@ -390,7 +389,16 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
        }
 
        if (Pr->flags & PR_SOURCE) {
-	  result = 1;				// Node is already connected!
+	  if (!found_one)
+	     return 1;			// Node is already connected!
+	  else
+	     continue;			// May be duplicate tap position
+       }
+       else if ((Pr->flags & PR_TARGET) && (newflags & PR_TARGET)) {
+	  if (!found_one)
+	     return 1;
+	  else
+	     continue;
        }
        else if (((Pr->prdata.net == node->netnum) || (stage == (u_char)2))
 			&& !(Pr->flags & newflags)) {
@@ -412,20 +420,36 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 
 	  Pr->prdata.cost = (newflags == PR_SOURCE) ? 0 : MAXRT;
 
+	  // Rank the position according to how difficult it is to route to:
+	  //
+	  // 0: no restrictions
+	  // 1: requires a stub route
+	  // 2: inside the halo
+	  // 3: requires an offset
+	  // 4: requires an offset and a stub route
+
+	  rank = 0;
+          if (lay < Pinlayers) {
+	     if (lnode = NODEIPTR(x, y, lay)) {
+		if (lnode->flags & NI_OFFSET_MASK) rank = 2;
+		if (lnode->flags & NI_STUB_MASK) rank++;
+	     }
+          }
+
 	  // push this point on the stack to process
 
 	  if (pushlist != NULL) {
 	     if (~(Pr->flags & PR_ON_STACK)) {
-		if (!highOverhead) Pr->flags |= PR_ON_STACK;
+		Pr->flags |= PR_ON_STACK;
 	        gpoint = allocPOINT();
 	        gpoint->x1 = x;
 	        gpoint->y1 = y;
 	        gpoint->layer = lay;
-	        gpoint->next = *pushlist;
-	        *pushlist = gpoint;
+	        gpoint->next = pushlist[rank];
+		pushlist[rank] = gpoint;
 	     }
 	  }
-	  found_one = (u_char)1;
+	  found_one = TRUE;
 
 	  // record extents
 	  if (bbox) {
@@ -449,15 +473,29 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
        // Don't process extended areas if they coincide with other nodes,
        // or those that are out-of-bounds
 
+       base = 0;
        if (lay < Pinlayers) {
 	  lnode = NODEIPTR(x, y, lay);
 	  if (lnode == NULL) continue;
 	  if (lnode->nodesav != node) continue;
+
+	  // Otherwise, rank according to ease of reaching the tap.
+          if (lnode->flags & NI_OFFSET_MASK) base = 2;
+          if (lnode->flags & NI_STUB_MASK) base++;
        }
 
        Pr = &OBS2VAL(x, y, lay);
        if (Pr->flags & PR_SOURCE) {
-	  result = 1;				// Node is already connected!
+	  if (!found_one)
+	     return 1;			// Node is already connected!
+	  else
+	     continue;			// May be duplicate tap record
+       }
+       else if ((Pr->flags & PR_TARGET) && (newflags & PR_TARGET)) {
+	  if (!found_one)
+	     return 1;
+	  else
+	     continue;
        }
        else if ( !(Pr->flags & newflags) &&
 		((Pr->prdata.net == node->netnum) ||
@@ -472,16 +510,18 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 
 	  if (pushlist != NULL) {
 	     if (~(Pr->flags & PR_ON_STACK)) {
-		if (!highOverhead) Pr->flags |= PR_ON_STACK;
+		Pr->flags |= PR_ON_STACK;
 	        gpoint = allocPOINT();
 	        gpoint->x1 = x;
 	        gpoint->y1 = y;
 	        gpoint->layer = lay;
-	        gpoint->next = *pushlist;
-	        *pushlist = gpoint;
+		rank = (found_one == TRUE) ? 2 + base : base;
+
+	        gpoint->next = pushlist[rank];
+		pushlist[rank] = gpoint;
 	     }
 	  }
-	  found_one = (u_char)1;
+	  found_one = TRUE;
 
 	  // record extents
 	  if (bbox) {
@@ -504,7 +544,7 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
     // reachable from any grid point, in the first stage, so we don't
     // wait until the rip-up and reroute stage to route them.
 
-    if ((result == 0) && (found_one == (u_char)0)) {
+    if ((result == 0) && (!found_one)) {
        if (stage == (u_char)1)
           return set_node_to_net(node, newflags, pushlist, bbox, (u_char)2);
        else if (stage == (u_char)2)
@@ -519,8 +559,8 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 }
 
 /*--------------------------------------------------------------*/
-/* Set all taps of node "node" to MAXNETNUM, so that it will not	*/
-/* be routed to. 						*/
+/* Set all taps of node "node" to MAXNETNUM, so that it will	*/
+/* not be routed to. 						*/
 /*--------------------------------------------------------------*/
 
 int disable_node_nets(NODE node)
@@ -595,7 +635,7 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 
 		if (pushlist != NULL) {
 		   if (~(Pr->flags & PR_ON_STACK)) {
-		      if (!highOverhead) Pr->flags |= PR_ON_STACK;
+		      Pr->flags |= PR_ON_STACK;
 	  	      gpoint = allocPOINT();
 	  	      gpoint->x1 = x;
 	  	      gpoint->y1 = y;
@@ -617,7 +657,7 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 		// then process it, too.
 
 		lnode = (lay >= Pinlayers) ? NULL : NODEIPTR(x, y, lay);
-		n2 = (lnode) ? lnode->nodeloc : NULL;
+		n2 = (lnode) ? lnode->nodesav : NULL;
 		if ((n2 != (NODE)NULL) && (n2 != net->netnodes)) {
 		   if (newflags == PR_SOURCE) clear_target_node(n2);
 		   result = set_node_to_net(n2, newflags, pushlist, bbox, stage);
@@ -644,19 +684,96 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 }
 
 /*--------------------------------------------------------------*/
-/* Process all routes of a net, and set their routed positions	*/
-/* to SOURCE in Obs2[]						*/
+/* Process a route and all routes that connect to it.  Works	*/
+/* like the routine above, but searches the route endpoints for	*/
+/* connecting nodes and routes, and then recursively calls	*/
+/* itself on the connecting routes, and other routes that	*/
+/* connect do the nodes.					*/
 /*--------------------------------------------------------------*/
 
-int set_routes_to_net(NET net, int newflags, POINT *pushlist, SEG bbox,
-		u_char stage)
+int set_route_to_net_recursive(NET net, ROUTE rt, int newflags,
+		POINT *pushlist, SEG bbox, u_char stage)
+{
+    ROUTE route;
+    int result;
+
+    /* If route has been marked, return */
+    if (rt->flags & RT_VISITED) return 0;
+    rt->flags |= RT_VISITED;
+
+    /* First mark this route */
+    result = set_route_to_net(net, rt, newflags, pushlist, bbox, stage);
+    if (result < 0) return result;
+
+    /* Recursively mark the routes connected to the nodes of	*/
+    /* the endpoints or connected directly to the endpoints.	*/
+
+    if (rt->flags & RT_START_NODE) {
+	for (route = net->routes; route; route = route->next) {
+	    if (!(route->flags & RT_START_NODE) && (route->start.route == rt)) {
+		result = set_route_to_net_recursive(net, route, newflags,
+				pushlist, bbox, stage);
+		if (result < 0) return result;
+	    }
+	    if (!(route->flags & RT_END_NODE) && (route->end.route == rt)) {
+		result = set_route_to_net_recursive(net, route, newflags,
+				pushlist, bbox, stage);
+		if (result < 0) return result;
+	    }
+	}
+    }
+    else {
+	result = set_route_to_net_recursive(net, rt->start.route, newflags,
+			pushlist, bbox, stage);
+	if (result < 0) return result;
+    }
+    if (rt->flags & RT_END_NODE) {
+	for (route = net->routes; route; route = route->next) {
+	    if (!(route->flags & RT_START_NODE) && (route->start.route == rt)) {
+		result = set_route_to_net_recursive(net, route, newflags,
+				pushlist, bbox, stage);
+		if (result < 0) return result;
+	    }
+	    if (!(route->flags & RT_END_NODE) && (route->end.route == rt)) {
+		result = set_route_to_net_recursive(net, route, newflags,
+				pushlist, bbox, stage);
+		if (result < 0) return result;
+	    }
+	}
+    }
+    else {
+	result = set_route_to_net_recursive(net, rt->end.route, newflags,
+			pushlist, bbox, stage);
+	if (result < 0) return result;
+    }
+    return result;
+}
+
+/*--------------------------------------------------------------*/
+/* Process all routes of a net that are connected in some way	*/
+/* node "node", and set their routed positions to the value of	*/
+/* "newflags" (PR_SOURCE or PR_DEST) in Obs2[].			*/
+/*--------------------------------------------------------------*/
+
+int set_routes_to_net(NODE node, NET net, int newflags, POINT *pushlist,
+		SEG bbox, u_char stage)
 {
     ROUTE rt;
     int result = 0;
 
-    for (rt = net->routes; rt; rt = rt->next)
-	result = set_route_to_net(net, rt, newflags, pushlist, bbox, stage);
+    /* Clear marks on all routes */
+    for (rt = net->routes; rt; rt = rt->next) rt->flags &= ~RT_VISITED;
 
+    /* Find any route that has node as an endpoint */
+    for (rt = net->routes; rt; rt = rt->next) {
+	if ((rt->flags & RT_START_NODE) && (rt->start.node == node))
+	    result = set_route_to_net_recursive(net, rt, newflags,
+				pushlist, bbox, stage);
+	else if ((rt->flags & RT_END_NODE) && (rt->end.node == node))
+	    result = set_route_to_net_recursive(net, rt, newflags,
+				pushlist, bbox, stage);
+	if (result < 0) return result;
+    }
     return result;
 }
 
@@ -664,14 +781,20 @@ int set_routes_to_net(NET net, int newflags, POINT *pushlist, SEG bbox,
 /* Used by find_colliding() (see below).  Save net "netnum"	*/
 /* to the list of colliding nets if it is not already in the	*/
 /* list.  Return 1 if the list got longer, 0 otherwise.		*/
+/* Find the route of the net that includes the point of		*/
+/* collision, and mark it for rip-up.				*/
 /*--------------------------------------------------------------*/
 
 static int
-addcollidingnet(NETLIST *nlptr, int netnum)
+addcollidingnet(NETLIST *nlptr, int netnum, int x, int y, int lay)
 {
+    ROUTE rt;
     NETLIST cnl;
     NET fnet;
+    SEG seg;
     int i;
+    int sx, sy;
+    u_char found;
 
     for (cnl = *nlptr; cnl; cnl = cnl->next)
 	if (cnl->net->netnum == netnum)
@@ -684,6 +807,42 @@ addcollidingnet(NETLIST *nlptr, int netnum)
 	    cnl->net = fnet;
 	    cnl->next = *nlptr;
 	    *nlptr = cnl;
+
+	    /* If there are no routes then we're done. */
+
+	    if (fnet->routes == NULL) return 0;
+
+	    /* If there is only one route then there is no need */
+	    /* to search or shuffle.				*/
+
+	    if (fnet->routes->next == NULL) {
+		fnet->routes->flags |= RT_RIP;
+		return 1;
+	    }
+
+	    for (rt = fnet->routes; rt; rt = rt->next) {
+		found = 0;
+		for (seg = rt->segments; seg; seg = seg->next) {
+		    if ((seg->layer == lay) || ((seg->segtype & ST_VIA) &&
+				((seg->layer + 1) == lay))) {
+			sx = seg->x1;
+			sy = seg->y1;
+			while (1) {
+			    if ((sx == x) && (sy == y)) {
+				found = 1;
+				break;
+			    }
+			    if ((sx == seg->x2) && (sy == seg->y2)) break;
+			    if (sx < seg->x2) sx++;
+			    else if (sx > seg->x2) sx--;
+			    if (sy < seg->y2) sy++;
+			    else if (sy > seg->y2) sy--;
+			}
+			if (found) break;
+		    }
+		}
+		if (found) rt->flags |= RT_RIP;
+	    }
 	    return 1;
 	}
     }
@@ -731,7 +890,7 @@ NETLIST find_colliding(NET net, int *ripnum)
 		        if (!(orignet & NO_NET)) {
 			   orignet &= NETNUM_MASK;
 			   if ((orignet != 0) && (orignet != net->netnum))
-		 	       rnum += addcollidingnet(&nl, orignet);
+		 	       rnum += addcollidingnet(&nl, orignet, x, y, lay);
 		        }
 		     }
 		     if (x > 0) {
@@ -739,7 +898,7 @@ NETLIST find_colliding(NET net, int *ripnum)
 		        if (!(orignet & NO_NET)) {
 			   orignet &= NETNUM_MASK;
 			   if ((orignet != 0) && (orignet != net->netnum))
-		 	       rnum += addcollidingnet(&nl, orignet);
+		 	       rnum += addcollidingnet(&nl, orignet, x, y, lay);
 		        }
 		     }
 		  }
@@ -749,7 +908,7 @@ NETLIST find_colliding(NET net, int *ripnum)
 		        if (!(orignet & NO_NET)) {
 			   orignet &= NETNUM_MASK;
 			   if ((orignet != 0) && (orignet != net->netnum))
-		 	       rnum += addcollidingnet(&nl, orignet);
+		 	       rnum += addcollidingnet(&nl, orignet, x, y, lay);
 			}
 		     }
 		     if (y > 0) {
@@ -757,13 +916,16 @@ NETLIST find_colliding(NET net, int *ripnum)
 		        if (!(orignet & NO_NET)) {
 			   orignet &= NETNUM_MASK;
 			   if ((orignet != 0) && (orignet != net->netnum))
-		 	       rnum += addcollidingnet(&nl, orignet);
+		 	       rnum += addcollidingnet(&nl, orignet, x, y, lay);
 			}
 		     }
 		  }
 	       }
-	       else if ((orignet & NETNUM_MASK) != net->netnum)
-		  rnum += addcollidingnet(&nl, (orignet & NETNUM_MASK));
+	       else {
+		  orignet &= NETNUM_MASK;
+		  if ((orignet != net->netnum) && (orignet != 0))
+		     rnum += addcollidingnet(&nl, orignet, x, y, lay);
+	       }
 
 	       if ((x == seg->x2) && (y == seg->y2)) break;
 
@@ -779,8 +941,8 @@ NETLIST find_colliding(NET net, int *ripnum)
    /* Diagnostic */
 
    if ((nl != NULL) && (Verbose > 0)) {
-      Fprintf(stdout, "Best route of %s collides with nets: ",
-		net->netname);
+      Fprintf(stdout, "Best route of %s collides with net%s: ",
+		net->netname, (rnum > 1) ? "s" : "");
       for (cnl = nl; cnl; cnl = cnl->next) {
          Fprintf(stdout, "%s ", cnl->net->netname);
       }
@@ -792,6 +954,173 @@ NETLIST find_colliding(NET net, int *ripnum)
 }
 
 /*--------------------------------------------------------------*/
+/* ripup_dependent ---						*/
+/*								*/
+/* If a set of routes is being ripped out of a net (marked by	*/
+/* RT_RIP in the flags), check if any routes below them have	*/
+/* endpoints landing on a ripped-out net.  If so, flag those	*/
+/* nets for being ripped out as well.  Repeat recursively.	*/
+/*--------------------------------------------------------------*/
+
+void ripup_dependent(NET net)
+{
+    ROUTE rt, route;
+    u_char rerun = TRUE;
+
+    while (rerun) {
+	rerun = FALSE;
+	for (rt = net->routes; rt; rt = rt->next) {
+	    if (rt->flags & RT_RIP) continue;
+	    if (!(rt->flags & RT_START_NODE)) {
+		route = rt->start.route;
+		// route should not be NULL here. . .
+		if (route && (route->flags & RT_RIP)) {
+		    rt->flags |= RT_RIP;
+		    rerun = TRUE;
+		}
+	    }
+	    if (!(rt->flags & RT_END_NODE)) {
+		route = rt->end.route;
+		// route should not be NULL here. . .
+		if (route && (route->flags & RT_RIP)) {
+		    rt->flags |= RT_RIP;
+		    rerun = TRUE;
+		}
+	    }
+	}
+    }
+}
+
+/*--------------------------------------------------------------*/
+/* Failure analysis (debug procedure)				*/
+/* Occasionally when ripping up a net or net route, the Obs	*/
+/* array shows a different net in the position that is being	*/
+/* ripped, which should not happen.  This routine does a quick	*/
+/* analysis to determine if the position is orphaned.  If so,	*/
+/* it just returns and ripup_net will overwrite the position.	*/
+/* If it appears to be connected to a valid route, it will find	*/
+/* the net and route segment and run rip-up on it.		*/
+/*--------------------------------------------------------------*/
+
+void analyze_route_overwrite(int x, int y, int lay, int netnum)
+{
+    u_char is_valid = FALSE;
+    int i, sx, sy, l;
+    NET fnet;
+    ROUTE rt;
+    SEG seg;
+
+    /* Check on all sides to see if position is orphaned */
+
+    if ((x < NumChannelsX[0] - 1) && (OBSVAL(x + 1, y, lay) & NETNUM_MASK) == netnum)
+	is_valid = TRUE;
+    else if ((x > 0) && (OBSVAL(x - 1, y, lay) & NETNUM_MASK) == netnum)
+	is_valid = TRUE;
+    else if ((y < NumChannelsY[0] - 1) && (OBSVAL(x, y + 1, lay) & NETNUM_MASK) == netnum)
+	is_valid = TRUE;
+    else if ((y > 0) && (OBSVAL(x, y - 1, lay) & NETNUM_MASK) == netnum)
+	is_valid = TRUE;
+    else if ((lay < Num_layers - 1) && (OBSVAL(x, y, lay + 1) & NETNUM_MASK) == netnum)
+	is_valid = TRUE;
+    else if ((lay > 0) && (OBSVAL(x, y, lay - 1) & NETNUM_MASK) == netnum)
+	is_valid = TRUE;
+
+    if (is_valid == FALSE) {
+	Fprintf(stderr, "Net position %d %d %d appears to be orphaned.\n",
+			x, y, lay);
+	return; 	/* No action, just overwrite */
+    }
+
+    for (i = 0; i < Numnets; i++) {
+	fnet = Nlnets[i];
+	if (fnet->netnum == netnum) {
+	    for (rt = fnet->routes; rt; rt = rt->next) {
+		for (seg = rt->segments; seg; seg = seg->next) {
+		    sx = seg->x1;
+		    sy = seg->y1;
+		    l = seg->layer;
+		    while (1) {
+			if ((sx == x) && (sy == y) && (l == lay)) {
+			    Fprintf(stderr, "Net position %d %d %d appears to "
+					"belong to a valid network route.\n",
+					x, y, lay);
+			    /* Found the route containing this position, */
+			    /* so rip up the net now.			 */
+			    Fprintf(stderr, "Taking evasive action against net "
+					"%d\n", netnum);
+			    ripup_net(fnet, TRUE, FALSE, FALSE);
+			    return;
+			}
+			if ((sx == seg->x2) && (sy == seg->y2)) {
+			    if ((seg->segtype == ST_WIRE) || (l >= (lay + 1))) break;
+			    else l++;
+			}
+			else {
+			    if (seg->x2 > seg->x1) sx++;
+			    else if (seg->x2 < seg->x1) sx--;
+			    if (seg->y2 > seg->y1) sy++;
+			    else if (seg->y2 < seg->y1) sy--;
+			}
+		    }
+		}
+	    }
+	    break;
+	}
+    }
+}
+
+/*--------------------------------------------------------------*/
+/* Remove all route records from a net.				*/
+/*--------------------------------------------------------------*/
+
+void remove_routes(ROUTE netroutes, u_char flagged)
+{
+   ROUTE rt, rsave, rlast;
+   SEG seg;
+
+   /* Remove all flagged routing information from this net	*/
+   /* if "flagged" is true, otherwise remove all routing	*/
+   /* information.						*/
+
+   if (flagged && (netroutes != NULL)) {
+      rlast = NULL;
+      rsave = netroutes;
+      while (rsave) {
+	 if (rsave->flags & RT_RIP) {
+	    rt = rsave;
+	    if (rlast == NULL)
+		netroutes = rsave->next;
+	    else
+		rlast->next = rsave->next;
+	    rsave = rsave->next;
+	    while (rt->segments) {
+	       seg = rt->segments->next;
+	       free(rt->segments);
+	       rt->segments = seg;
+	    }
+	    free(rt);
+	 }
+	 else {
+	    rlast = rsave;
+	    rsave = rsave->next;
+	 }
+      }
+   }
+   else {
+      while (netroutes) {
+         rt = netroutes;
+         netroutes = rt->next;
+         while (rt->segments) {
+	    seg = rt->segments->next;
+	    free(rt->segments);
+	    rt->segments = seg;
+         }
+         free(rt);
+      }
+   }
+}
+
+/*--------------------------------------------------------------*/
 /* ripup_net ---						*/
 /*								*/
 /* Rip up the entire network located at position x, y, lay.	*/
@@ -799,9 +1128,17 @@ NETLIST find_colliding(NET net, int *ripnum)
 /* If argument "restore" is TRUE, then at each node, restore	*/
 /* the crossover cost by attaching the node back to the		*/
 /* Nodeinfo array.						*/
+/*								*/
+/* If argument "flagged" is TRUE, then only remove routes	*/
+/* that have been flagged with RT_RIP.				*/
+/*								*/
+/* If argument "retain" is TRUE, then do not remove the route	*/
+/* records from the net.  This assumes that the calling routine	*/
+/* will retain them for possible replacement in case of route	*/
+/* failure.							*/
 /*--------------------------------------------------------------*/
 
-u_char ripup_net(NET net, u_char restore)
+u_char ripup_net(NET net, u_char restore, u_char flagged, u_char retain)
 {
    int thisnet, oldnet, x, y, lay, dir;
    NODEINFO lnode;
@@ -810,9 +1147,12 @@ u_char ripup_net(NET net, u_char restore)
    SEG seg;
    DPOINT ntap;
 
+   if (flagged) ripup_dependent(net);
+
    thisnet = net->netnum;
 
    for (rt = net->routes; rt; rt = rt->next) {
+      if (flagged && !(rt->flags & RT_RIP)) continue;
       if (rt->segments) {
 	 for (seg = rt->segments; seg; seg = seg->next) {
 	    lay = seg->layer;
@@ -824,7 +1164,12 @@ u_char ripup_net(NET net, u_char restore)
 	          if (oldnet != thisnet) {
 		     Fprintf(stderr, "Error: position %d %d layer %d has net "
 				"%d not %d!\n", x, y, lay, oldnet, thisnet);
-		     return FALSE;	// Something went wrong
+		     // Stop-gap:  Need to analyze the root of this problem.
+		     // However, a reasonable action is to try to find the
+		     // net and route associated with the incorrect net.
+		     analyze_route_overwrite(x, y, lay, oldnet);
+
+		     // return FALSE;	// Something went wrong
 	          }
 
 	          // Reset the net number to zero along this route for
@@ -869,10 +1214,18 @@ u_char ripup_net(NET net, u_char restore)
 		  }
 	       }
 
-	       // This break condition misses via ends, but those are
-	       // terminals and don't get ripped out.
+	       // Check for and handle via end on last route segment.
 
-	       if ((x == seg->x2) && (y == seg->y2)) break;
+	       if ((x == seg->x2) && (y == seg->y2)) {
+		  if (seg->segtype & ST_VIA) {
+		      if (lay == seg->layer)
+			 lay++;
+		      else
+		         break;
+		  }
+		  else
+		     break;
+	       }
 
 	       if (x < seg->x2) x++;
 	       else if (x > seg->x2) x--;
@@ -888,30 +1241,43 @@ u_char ripup_net(NET net, u_char restore)
    // tap.
 
    if (restore != 0) {
-      for (node = net->netnodes; node; node = node->next) {
-	 for (ntap = node->taps; ntap; ntap = ntap->next) {
-	    lay = ntap->layer;
-	    x = ntap->gridx;
-	    y = ntap->gridy;
-	    if (lay < Pinlayers) {
-		lnode = NODEIPTR(x, y, lay);
-		if (lnode) lnode->nodeloc = lnode->nodesav;
+      if (flagged) {
+	 for (rt = net->routes; rt; rt = rt->next) {
+	    if (!(rt->flags & RT_RIP)) continue;
+	    for (seg = rt->segments; seg; seg = seg->next) {
+	       lay = seg->layer;
+	       if (lay >= Pinlayers) continue;
+	       x = seg->x1;
+	       y = seg->y1;
+	       lnode = NODEIPTR(x, y, lay);
+	       if (lnode && lnode->nodesav)
+		   lnode->nodeloc = lnode->nodesav;
+	    }
+	 }
+      }
+      else {
+         for (node = net->netnodes; node; node = node->next) {
+	    for (ntap = node->taps; ntap; ntap = ntap->next) {
+	       lay = ntap->layer;
+	       x = ntap->gridx;
+	       y = ntap->gridy;
+	       if (lay < Pinlayers) {
+		   lnode = NODEIPTR(x, y, lay);
+		   if (lnode) lnode->nodeloc = lnode->nodesav;
+	       }
 	    }
 	 }
       }
    }
 
-   /* Remove all routing information from this net */
+   if (retain == FALSE) {
 
-   while (net->routes) {
-      rt = net->routes;
-      net->routes = rt->next;
-      while (rt->segments) {
-	 seg = rt->segments->next;
-	 free(rt->segments);
-	 rt->segments = seg;
-      }
-      free(rt);
+      remove_routes(net->routes, flagged);
+      net->routes = NULL;
+
+      // If we just ripped out a few of the routes, make sure all the
+      // other net routes have not been overwritten.
+      if (flagged) writeback_all_routes(net);
    }
 
    // If this was a specialnet (numnodes set to 0), then routes are
@@ -1161,7 +1527,7 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 		newpt.x, newpt.y, newpt.lay);
        }
        if (~(Pr->flags & PR_ON_STACK)) {
-	  if (!highOverhead) Pr->flags |= PR_ON_STACK;
+	  Pr->flags |= PR_ON_STACK;
 	  ptret = allocPOINT();
 	  ptret->x1 = newpt.x;
 	  ptret->y1 = newpt.y;
@@ -1207,7 +1573,7 @@ void writeback_segment(SEG seg, int netnum)
    u_int sobs;
    NODEINFO lnode;
 
-   if (seg->segtype == ST_VIA) {
+   if (seg->segtype & ST_VIA) {
       /* Preserve blocking information */
       dir = OBSVAL(seg->x1, seg->y1, seg->layer + 1) & BLOCKED_MASK;
       OBSVAL(seg->x1, seg->y1, seg->layer + 1) = netnum | dir;
@@ -1348,6 +1714,137 @@ void writeback_segment(SEG seg, int netnum)
 	 }
       }
       if (i == seg->y2) break;
+   }
+}
+
+/*--------------------------------------------------------------*/
+/* Set the endpoint information for the route.	Look at the	*/
+/* first and last points of the route, determine if they	*/
+/* connect to a node or another route, and set the "start" and	*/
+/* "end" records of the route, and the flags accordingly.	*/
+/*--------------------------------------------------------------*/
+
+void
+route_set_connections(net, route)
+   NET   net;
+   ROUTE route;
+{
+   SEG      seg, s;
+   ROUTE    nr;
+   NODEINFO lnode;
+   u_char   found, match;
+   int	    x, y;
+
+   /* Does first route segment connect to a node? */
+
+   seg = route->segments;
+   found = FALSE;
+   if (seg->layer < Pinlayers) {
+      lnode = NODEIPTR(seg->x1, seg->y1, seg->layer);
+      if (lnode != NULL) {
+	 route->start.node = lnode->nodesav;
+	 route->flags |= RT_START_NODE;
+	 found = TRUE;
+      }
+   }
+
+   /* Does first route segment connect to a route? */
+
+   if (!found) {
+      for (nr = net->routes; nr; nr = nr->next) {
+         if (nr == route) continue;
+         for (s = nr->segments; s; s = s->next) {
+	    match = FALSE;
+	    if (seg->layer == s->layer) match = TRUE;
+	    else if ((seg->segtype & ST_VIA) && ((seg->layer + 1) == s->layer))
+	       match = TRUE;
+	    else if ((s->segtype & ST_VIA) && ((s->layer + 1) == seg->layer))
+	       match = TRUE;
+	    if (!match) continue;
+	    x = s->x1;
+	    y = s->y1;
+	    if (x == seg->x1 && y == seg->y1) {
+	       found = TRUE;
+	       route->start.route = nr;
+	       break;
+	    }
+	    while (TRUE) {
+	       if (s->x2 != s->x1) x += ((s->x2 > s->x1) ? 1 : -1);
+	       if (s->y2 != s->y1) y += ((s->y2 > s->y1) ? 1 : -1);
+	       if (x == seg->x1 && y == seg->y1) {
+		  found = TRUE;
+		  route->start.route = nr;
+		  break;
+	       }
+	       if (x == s->x2 && y == s->y2) break;
+	    }
+	    if (found) break;
+	 }
+	 if (found) break;
+      }
+   }
+
+   if (!found) {
+      Fprintf(stderr, "Error:  Failure to find route start node/route!\n");
+   }
+
+   /* Does last route segment connect to a node? */
+
+   /* NOTE:  Avoid the case where the route is exactly one via connecting */
+   /* a node to a route directly above, in which case the following code  */
+   /* would flag the node twice, incorrectly.				  */
+
+   found = FALSE;
+   if ((seg->next != NULL) || !(seg->segtype & ST_VIA)) {
+      for (; seg->next; seg = seg->next);
+      if (seg->layer < Pinlayers) {
+         lnode = NODEIPTR(seg->x2, seg->y2, seg->layer);
+         if (lnode != NULL) {
+	    route->end.node = lnode->nodesav;
+	    route->flags |= RT_END_NODE;
+	    found = TRUE;
+	 }
+      }
+   }
+
+   /* Does last route segment connect to a route? */
+
+   if (!found) {
+      for (nr = net->routes; nr; nr = nr->next) {
+         if (nr == route) continue;
+         for (s = nr->segments; s; s = s->next) {
+	    match = FALSE;
+	    if (seg->layer == s->layer) match = TRUE;
+	    else if ((seg->segtype & ST_VIA) && ((seg->layer + 1) == s->layer))
+	       match = TRUE;
+	    else if ((s->segtype & ST_VIA) && ((s->layer + 1) == seg->layer))
+	       match = TRUE;
+	    if (!match) continue;
+	    x = s->x1;
+	    y = s->y1;
+	    if (x == seg->x2 && y == seg->y2 && nr != route->start.route) {
+	       found = TRUE;
+	       route->end.route = nr;
+	       break;
+	    }
+	    while (TRUE) {
+	       if (s->x2 != s->x1) x += ((s->x2 > s->x1) ? 1 : -1);
+	       if (s->y2 != s->y1) y += ((s->y2 > s->y1) ? 1 : -1);
+	       if (x == seg->x2 && y == seg->y2 && nr != route->start.route) {
+		  found = TRUE;
+		  route->end.route = nr;
+		  break;
+	       }
+	       if (x == s->x2 && y == s->y2) break;
+	    }
+	    if (found) break;
+	 }
+	 if (found) break;
+      }
+   }
+
+   if (!found) {
+      Fprintf(stderr, "Error:  Failure to find route end node/route!\n");
    }
 }
 
@@ -1886,7 +2383,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
       // segments produced.  Vias have to be handled one at a time, as we make
       // no assumptions about stacked vias.
 
-      if (seg->segtype == ST_WIRE) {
+      if (seg->segtype & ST_WIRE) {
 	 while ((lrnext = lrprev->next) != NULL) {
 	    lrnext = lrprev->next;
 	    if (((lrnext->x1 - lrprev->x1) == dx) &&
@@ -1906,7 +2403,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
          Fprintf(stdout, "commit: index = %d, net = %d\n",
 		Pr->prdata.net, netnum);
 
-	 if (seg->segtype == ST_WIRE) {
+	 if (seg->segtype & ST_WIRE) {
             Fprintf(stdout, "commit: wire layer %d, (%d,%d) to (%d,%d)\n",
 		seg->layer, seg->x1, seg->y1, seg->x2, seg->y2);
 	 }

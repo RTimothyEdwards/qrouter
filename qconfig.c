@@ -108,7 +108,6 @@ post_config(void)
 		PitchX[i]);
 	  PitchX[v] = PitchX[i];
        }
-       PitchX[i] = PitchX[v];
        if (PitchY[i] != 0.0 && PitchY[i] != PitchY[h]) {
 	  Fprintf(stderr, "Multiple horizontal route layers at different"
 		" pitches.  Using smaller pitch %g, will route on"
@@ -116,7 +115,13 @@ post_config(void)
 		PitchY[i]);
 	  PitchY[h] = PitchY[i];
        }
-       PitchY[i] = PitchY[h];
+    }
+
+    // 2nd pass:  Make sure all layers have a pitch in both X and Y
+    // even if not specified separately in the configuration or def files.
+    for (i = 0; i < Num_layers; i++) {
+       if (PitchX[i] == 0.0) PitchX[i] = PitchX[v];
+       if (PitchY[i] == 0.0) PitchY[i] = PitchY[h];
     }
 
 } /* post_config() */
@@ -173,7 +178,7 @@ int read_config(FILE *fconfig, int is_info)
     lines = 0;
 
     while (!feof(fconfig)) {
-	fgets(line, MAX_LINE_LEN, fconfig);
+	if (fgets(line, MAX_LINE_LEN, fconfig) == NULL) break;
 	lines++;
 	lineptr = line;
 	while (isspace(*lineptr)) lineptr++;

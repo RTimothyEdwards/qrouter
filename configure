@@ -631,9 +631,11 @@ SHLIB_CFLAGS
 WISH_EXE
 TK_LIB_DIR
 TCL_LIB_DIR
+LIB_SPECS_NOSTUB
 LIB_SPECS
 INC_SPECS
 EXTRA_LIB_SPECS
+stub_defs
 SHLIB_LIB_SPECS
 LDDL_FLAGS
 LD
@@ -4088,6 +4090,7 @@ qrouter_with_tcl_libraries=""
 qrouter_with_tk_libraries=""
 
 usingTcl=1
+stub_defs=""
 
 
 # Check whether --with-tcl was given.
@@ -5402,6 +5405,7 @@ if test $usingTcl ; then
   INSTALL_TARGET="install-tcl"
   $as_echo "#define TCL_QROUTER 1" >>confdefs.h
 
+  stub_defs="$stub_defs -DUSE_TCL_STUBS -DUSE_TK_STUBS"
 else
   ALL_TARGET="nointerp"
   INSTALL_TARGET="install-nointerp"
@@ -5454,6 +5458,7 @@ esac
 # -----------------------------------------------------------------------
 
 if test $usingTcl ; then
+   LIB_SPECS_NOSTUB="${LIB_SPECS}"
 
 # -----------------------------------------------------------------------
 #
@@ -5465,9 +5470,11 @@ if test $usingTcl ; then
   fi
   if test "${TK_LIB_DIR}" = "/usr/lib" -o \
         "${TK_LIB_DIR}" = "/usr/lib64" ; then
-    LIB_SPECS="${LIB_SPECS} ${TK_LIB_SPEC}"
+    LIB_SPECS_NOSTUB="${LIB_SPECS_NOSTUB} ${TK_LIB_SPEC}"
+    LIB_SPECS="${LIB_SPECS} ${TK_STUB_LIB_SPEC}"
   else
-    LIB_SPECS="${LIB_SPECS} -L${TK_LIB_DIR} ${TK_LIB_SPEC}"
+    LIB_SPECS_NOSTUB="${LIB_SPECS_NOSTUB} -L${TK_LIB_DIR} ${TK_LIB_SPEC}"
+    LIB_SPECS="${LIB_SPECS} -L${TK_LIB_DIR} ${TK_STUB_LIB_SPEC}"
     if test "x${loader_run_path}" = "x" ; then
       loader_run_path="${TK_LIB_DIR}"
     else
@@ -5491,9 +5498,11 @@ if test $usingTcl ; then
   if test "${TCL_LIB_DIR}" = "/usr/lib" -o \
         "${TCL_LIB_DIR}" = "/usr/lib64" -o \
         "${TCL_LIB_DIR}" = "${TK_LIB_DIR}" ; then
-    LIB_SPECS="${LIB_SPECS} ${TCL_LIB_SPEC}"
+    LIB_SPECS_NOSTUB="${LIB_SPECS_NOSTUB} ${TCL_LIB_SPEC}"
+    LIB_SPECS="${LIB_SPECS} ${TCL_STUB_LIB_SPEC}"
   else
-    LIB_SPECS="${LIB_SPECS} -L${TCL_LIB_DIR} ${TCL_LIB_SPEC}"
+    LIB_SPECS_NOSTUB="${LIB_SPECS_NOSTUB} -L${TCL_LIB_DIR} ${TCL_LIB_SPEC}"
+    LIB_SPECS="${LIB_SPECS} -L${TCL_LIB_DIR} ${TCL_STUB_LIB_SPEC}"
     if test "x${loader_run_path}" = "x" ; then
       loader_run_path="${TCL_LIB_DIR}"
     else
@@ -5599,6 +5608,8 @@ fi
   if test "$with_gnu_ld" = "yes" ; then
     LDDL_FLAGS="${LDDL_FLAGS} -Wl,--version-script=symbol.map"
   fi
+
+
 
 
 

@@ -6,11 +6,13 @@
 CFLAGS += @CFLAGS@
 CPPFLAGS = @CPPFLAGS@
 DEFS = @DEFS@
+STUB_DEFS = @stub_defs@
 LIBS = @LIBS@
 LDFLAGS += @LDFLAGS@
 LDDL_FLAGS = @LDDL_FLAGS@
 LD_RUN_PATH = @LD_RUN_PATH@
 SHLIB_CFLAGS = @SHLIB_CFLAGS@
+LIB_SPECS_NOSTUB = @LIB_SPECS_NOSTUB@
 LIB_SPECS = @LIB_SPECS@
 INC_SPECS = @INC_SPECS@
 TCL_LIB_DIR = @TCL_LIB_DIR@
@@ -31,7 +33,7 @@ prefix = @prefix@
 INSTALL_TARGET := @INSTALL_TARGET@
 ALL_TARGET := @ALL_TARGET@
 
-SOURCES = qrouter.c point.c maze.c node.c qconfig.c lef.c def.c
+SOURCES = qrouter.c point.c maze.c mask.c node.c output.c qconfig.c lef.c def.c
 OBJECTS := $(patsubst %.c,%.o,$(SOURCES))
 
 SOURCES2 = graphics.c tclqrouter.c tkSimple.c delays.c
@@ -76,7 +78,7 @@ qrouter$(EXEEXT): $(OBJECTS) $(OBJECTS5)
 
 qrouter$(SHDLIB_EXT): $(OBJECTS) $(OBJECTS2)
 	$(RM) qrouter$(SHDLIB_EXT)
-	$(CC) ${CFLAGS} ${SHLIB_CFLAGS} -o $@ \
+	$(CC) ${CFLAGS} ${STUB_DEFS} ${SHLIB_CFLAGS} -o $@ \
 		${LDDL_FLAGS} $(OBJECTS) $(OBJECTS2) \
 		${LDFLAGS} -lc ${LIBS} ${X_PRE_LIBS} -lX11 ${X_LIBS} \
 		${X_EXTRA_LIBS} ${LIB_SPECS} ${EXTRA_LIB_SPECS} -lm
@@ -84,14 +86,14 @@ qrouter$(SHDLIB_EXT): $(OBJECTS) $(OBJECTS2)
 qrouterexec$(EXEEXT): $(OBJECTS3)
 	$(RM) qrouterexec$(EXEEXT)
 	$(CC) ${CFLAGS} ${CPPFLAGS} ${DEFS} ${EXTRA_DEFS} \
-		${SOURCES3} ${INC_SPECS} -o $@  ${LIB_SPECS} \
+		${SOURCES3} ${INC_SPECS} -o $@  ${LIB_SPECS_NOSTUB} \
 		${LD_RUN_PATH} ${LDFLAGS} ${X_PRE_LIBS} -lX11 ${X_LIBS} \
 		${X_EXTRA_LIBS} ${LIBS} ${EXTRA_LIB_SPECS} -lm
 
 qrouternullg$(EXEEXT): $(OBJECTS4)
 	$(RM) qrouternullg$(EXEEXT)
 	$(CC) ${CFLAGS} ${CPPFLAGS} ${DEFS} ${EXTRA_DEFS} \
-		${SOURCES4} ${INC_SPECS} -o $@  ${LIB_SPECS} \
+		${SOURCES4} ${INC_SPECS} -o $@  ${LIB_SPECS_NOSTUB} \
 		${LD_RUN_PATH} ${LDFLAGS} ${LIBS} ${EXTRA_LIB_SPECS} -lm
 
 install-nointerp:
@@ -142,5 +144,5 @@ veryclean:
 	$(RM) qrouter.sh
 
 .c.o:
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(SHLIB_CFLAGS) $(DEFS) \
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(SHLIB_CFLAGS) $(DEFS) $(STUB_DEFS) \
 		$(EXTRA_DEFS) $(INC_SPECS) -c $< -o $@

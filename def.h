@@ -1,13 +1,14 @@
 /*
  * def.h --
  *
- * This file include the DEF I/O functions
+ * This file includes the DEF I/O functions
  *
  */
 
 #ifndef _DEFINT_H
 #define _DEFINT_H
 
-float  DefRead(char *inName);
+extern int numSpecial;
+extern float  DefRead(char *inName);
 
 #endif /* _DEFINT_H */

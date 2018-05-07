@@ -13,8 +13,6 @@
 #include <string.h>
 
 #include <tk.h>
-/* TODO: include proper include for TkpUseWindow */
-int TkpUseWindow();
 
 #include "graphics.h"
 
@@ -51,10 +49,6 @@ typedef struct {
 				 * don't request any size. */
     int height;			/* Height to request for window.  <= 0 means
 				 * don't request any size. */
-    char *useThis;		/* If the window is embedded, this points to
-				 * the name of the window in which it is
-				 * embedded (malloc'ed).  For non-embedded
-				 * windows this is NULL. */
     char *exitProc;		/* Callback procedure upon window deletion. */
     char *mydata;		/* This space for hire. */
     int flags;			/* Various flags;  see below for
@@ -74,8 +68,6 @@ static Tk_ConfigSpec configSpecs[] = {
 	"0", Tk_Offset(Simple, height), 0},
     {TK_CONFIG_PIXELS, "-width", "width", "Width",
 	"0", Tk_Offset(Simple, width), 0},
-    {TK_CONFIG_STRING, "-use", "use", "Use",
-	"", Tk_Offset(Simple, useThis), TK_CONFIG_NULL_OK},
     {TK_CONFIG_STRING, "-exitproc", "exitproc", "ExitProc",
 	"", Tk_Offset(Simple, exitProc), TK_CONFIG_NULL_OK},
     {TK_CONFIG_STRING, "-data", "data", "Data",
@@ -129,7 +121,7 @@ Tk_SimpleObjCmd(clientData, interp, objc, objv)
     Tk_Window tkwin = (Tk_Window) clientData;
     Simple *simplePtr;
     Tk_Window new = NULL;
-    char *arg, *useOption;
+    char *arg;
     int i, c;
     size_t length;
     unsigned int mask;
@@ -140,26 +132,22 @@ Tk_SimpleObjCmd(clientData, interp, objc, objv)
     }
 
     /*
-     * Pre-process the argument list.  Scan through it to find any
-     * "-use" option, or the "-main" option.  If the "-main" option
-     * is selected, then the application will exit if this window
-     * is deleted.
+     * Pre-process the argument list.  Scan through it to find
+     * "-main" option.  If the "-main" option is selected, then
+     * the application will exit if this window is deleted.
      */
 
-    useOption = NULL;
     for (i = 2; i < objc; i += 2) {
 	arg = Tcl_GetStringFromObj(objv[i], (int *) &length);
 	if (length < 2) {
 	    continue;
 	}
 	c = arg[1];
-	if ((c == 'u') && (strncmp(arg, "-use", length) == 0)) {
-	    useOption = Tcl_GetString(objv[i+1]);
-	}
+	/* No arguments parsed */
     }
 
     /*
-     * Create the window, and deal with the special option -use.
+     * Create the window
      */
 
     if (tkwin != NULL) {
@@ -170,14 +158,6 @@ Tk_SimpleObjCmd(clientData, interp, objc, objv)
 	goto error;
     }
     Tk_SetClass(new, "Simple");
-    if (useOption == NULL) {
-	useOption = (char *)Tk_GetOption(new, "use", "Use");
-    }
-    if (useOption != NULL) {
-	if (TkpUseWindow(interp, new, useOption) != TCL_OK) {
-	    goto error;
-	}
-    }
 
     /*
      * Create the widget record, process configuration options, and
@@ -195,7 +175,6 @@ Tk_SimpleObjCmd(clientData, interp, objc, objv)
     simplePtr->className = NULL;
     simplePtr->width = 0;
     simplePtr->height = 0;
-    simplePtr->useThis = NULL;
     simplePtr->exitProc = NULL;
     simplePtr->flags = 0;
     simplePtr->mydata = NULL;
@@ -293,12 +272,7 @@ SimpleWidgetObjCmd(clientData, interp, objc, objv)
 		    continue;
 		}
 		c = arg[1];
-		if ((c == 'u') && (strncmp(arg, "-use", length) == 0)) {
-		    Tcl_AppendResult(interp, "can't modify ", arg,
-			    " option after widget is created", (char *) NULL);
-		    result = TCL_ERROR;
-		    goto done;
-		}
+		/* No options parsed */
 	    }
 	    result = ConfigureSimple(interp, simplePtr, objc-2, objv+2,
 		    TK_CONFIG_ARGV_ONLY);

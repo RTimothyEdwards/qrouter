@@ -24,7 +24,9 @@ qrouter_AppInit(interp)
     // Ignore Tk_Init return code---maybe can attempt to run in
     // a non-graphics mode.
 
-    Tk_Init(interp);
+    if (Tk_Init(interp) == TCL_ERROR) {
+	return TCL_ERROR;
+    }
     Tcl_StaticPackage(interp, "Tk", Tk_Init, Tk_SafeInit);
 
     /* This is where we replace the home ".wishrc" file with	*/

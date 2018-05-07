@@ -5,13 +5,15 @@
 # Main compiler arguments
 CFLAGS += -g -O2
 CPPFLAGS =  -m64 -fPIC
-DEFS = -DPACKAGE_NAME=\"\" -DPACKAGE_TARNAME=\"\" -DPACKAGE_VERSION=\"\" -DPACKAGE_STRING=\"\" -DPACKAGE_BUGREPORT=\"\" -DPACKAGE_URL=\"\" -DSTDC_HEADERS=1 -DHAVE_SETENV=1 -DHAVE_PUTENV=1 -DHAVE_VA_COPY=1 -DHAVE___VA_COPY=1 -DHAVE_LIBXT=1 -DHAVE_SYS_TYPES_H=1 -DHAVE_SYS_STAT_H=1 -DHAVE_STDLIB_H=1 -DHAVE_STRING_H=1 -DHAVE_MEMORY_H=1 -DHAVE_STRINGS_H=1 -DHAVE_INTTYPES_H=1 -DHAVE_STDINT_H=1 -DHAVE_UNISTD_H=1 -DHAVE_SYS_MMAN_H=1 -DTCL_QROUTER=1 -DLINUX=1 -DSYSV=1 -DVERSION=\"1.3\" -DREVISION=\"68\"
+DEFS = -DPACKAGE_NAME=\"\" -DPACKAGE_TARNAME=\"\" -DPACKAGE_VERSION=\"\" -DPACKAGE_STRING=\"\" -DPACKAGE_BUGREPORT=\"\" -DPACKAGE_URL=\"\" -DSTDC_HEADERS=1 -DHAVE_SETENV=1 -DHAVE_PUTENV=1 -DHAVE_VA_COPY=1 -DHAVE___VA_COPY=1 -DHAVE_LIBXT=1 -DHAVE_SYS_TYPES_H=1 -DHAVE_SYS_STAT_H=1 -DHAVE_STDLIB_H=1 -DHAVE_STRING_H=1 -DHAVE_MEMORY_H=1 -DHAVE_STRINGS_H=1 -DHAVE_INTTYPES_H=1 -DHAVE_STDINT_H=1 -DHAVE_UNISTD_H=1 -DHAVE_SYS_MMAN_H=1 -DTCL_QROUTER=1 -DLINUX=1 -DSYSV=1 -DVERSION=\"1.4\" -DREVISION=\"0\"
+STUB_DEFS =  -DUSE_TCL_STUBS -DUSE_TK_STUBS
 LIBS = -lXt 
 LDFLAGS += 
 LDDL_FLAGS = -shared -Wl,-soname,$@ -Wl,--version-script=symbol.map
 LD_RUN_PATH = 
 SHLIB_CFLAGS = -fPIC
-LIB_SPECS =  -L/usr/lib64 -ltk8.6 -L/usr/lib64 -ltcl8.6
+LIB_SPECS_NOSTUB =  -L/usr/lib64 -ltk8.6 -L/usr/lib64 -ltcl8.6
+LIB_SPECS =  -L/usr/lib64 -ltkstub8.6 -L/usr/lib64 -ltclstub8.6
 INC_SPECS = 
 TCL_LIB_DIR = /usr/lib64
 TK_LIB_DIR = /usr/lib64
@@ -24,14 +26,14 @@ X_EXTRA_LIBS =
 X_PRE_LIBS =  -lSM -lICE
 QROUTER_LIB_DIR = share/qrouter
 WISH_EXE = /usr/bin/wish
-VERSION = 1.3
-REVISION = 68
+VERSION = 1.4
+REVISION = 0
 prefix = /usr/local
 
 INSTALL_TARGET := install-tcl
 ALL_TARGET := tcl
 
-SOURCES = qrouter.c point.c maze.c node.c qconfig.c lef.c def.c
+SOURCES = qrouter.c point.c maze.c mask.c node.c output.c qconfig.c lef.c def.c
 OBJECTS := $(patsubst %.c,%.o,$(SOURCES))
 
 SOURCES2 = graphics.c tclqrouter.c tkSimple.c delays.c
@@ -76,7 +78,7 @@ qrouter$(EXEEXT): $(OBJECTS) $(OBJECTS5)
 
 qrouter$(SHDLIB_EXT): $(OBJECTS) $(OBJECTS2)
 	$(RM) qrouter$(SHDLIB_EXT)
-	$(CC) ${CFLAGS} ${SHLIB_CFLAGS} -o $@ \
+	$(CC) ${CFLAGS} ${STUB_DEFS} ${SHLIB_CFLAGS} -o $@ \
 		${LDDL_FLAGS} $(OBJECTS) $(OBJECTS2) \
 		${LDFLAGS} -lc ${LIBS} ${X_PRE_LIBS} -lX11 ${X_LIBS} \
 		${X_EXTRA_LIBS} ${LIB_SPECS} ${EXTRA_LIB_SPECS} -lm
@@ -84,14 +86,14 @@ qrouter$(SHDLIB_EXT): $(OBJECTS) $(OBJECTS2)
 qrouterexec$(EXEEXT): $(OBJECTS3)
 	$(RM) qrouterexec$(EXEEXT)
 	$(CC) ${CFLAGS} ${CPPFLAGS} ${DEFS} ${EXTRA_DEFS} \
-		${SOURCES3} ${INC_SPECS} -o $@  ${LIB_SPECS} \
+		${SOURCES3} ${INC_SPECS} -o $@  ${LIB_SPECS_NOSTUB} \
 		${LD_RUN_PATH} ${LDFLAGS} ${X_PRE_LIBS} -lX11 ${X_LIBS} \
 		${X_EXTRA_LIBS} ${LIBS} ${EXTRA_LIB_SPECS} -lm
 
 qrouternullg$(EXEEXT): $(OBJECTS4)
 	$(RM) qrouternullg$(EXEEXT)
 	$(CC) ${CFLAGS} ${CPPFLAGS} ${DEFS} ${EXTRA_DEFS} \
-		${SOURCES4} ${INC_SPECS} -o $@  ${LIB_SPECS} \
+		${SOURCES4} ${INC_SPECS} -o $@  ${LIB_SPECS_NOSTUB} \
 		${LD_RUN_PATH} ${LDFLAGS} ${LIBS} ${EXTRA_LIB_SPECS} -lm
 
 install-nointerp:
@@ -142,5 +144,5 @@ veryclean:
 	$(RM) qrouter.sh
 
 .c.o:
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(SHLIB_CFLAGS) $(DEFS) \
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(SHLIB_CFLAGS) $(DEFS) $(STUB_DEFS) \
 		$(EXTRA_DEFS) $(INC_SPECS) -c $< -o $@

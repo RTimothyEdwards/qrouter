@@ -187,6 +187,7 @@ qrouter_with_tcl_libraries=""
 qrouter_with_tk_libraries=""
 
 usingTcl=1
+stub_defs=""
 
 AC_ARG_WITH(tcl,
 [ --with-tcl=DIR	Find tclConfig.sh in DIR], [
@@ -682,6 +683,7 @@ if test $usingTcl ; then
   ALL_TARGET="tcl"
   INSTALL_TARGET="install-tcl"
   AC_DEFINE(TCL_QROUTER)
+  stub_defs="$stub_defs -DUSE_TCL_STUBS -DUSE_TK_STUBS"
 else
   ALL_TARGET="nointerp"
   INSTALL_TARGET="install-nointerp"
@@ -729,6 +731,7 @@ esac
 # -----------------------------------------------------------------------
 
 if test $usingTcl ; then
+   LIB_SPECS_NOSTUB="${LIB_SPECS}"
 
 # -----------------------------------------------------------------------
 #
@@ -740,9 +743,11 @@ if test $usingTcl ; then
   fi
   if test "${TK_LIB_DIR}" = "/usr/lib" -o \
         "${TK_LIB_DIR}" = "/usr/lib64" ; then
-    LIB_SPECS="${LIB_SPECS} ${TK_LIB_SPEC}"
+    LIB_SPECS_NOSTUB="${LIB_SPECS_NOSTUB} ${TK_LIB_SPEC}"
+    LIB_SPECS="${LIB_SPECS} ${TK_STUB_LIB_SPEC}"
   else
-    LIB_SPECS="${LIB_SPECS} -L${TK_LIB_DIR} ${TK_LIB_SPEC}"
+    LIB_SPECS_NOSTUB="${LIB_SPECS_NOSTUB} -L${TK_LIB_DIR} ${TK_LIB_SPEC}"
+    LIB_SPECS="${LIB_SPECS} -L${TK_LIB_DIR} ${TK_STUB_LIB_SPEC}"
     if test "x${loader_run_path}" = "x" ; then
       loader_run_path="${TK_LIB_DIR}"
     else
@@ -766,9 +771,11 @@ if test $usingTcl ; then
   if test "${TCL_LIB_DIR}" = "/usr/lib" -o \
         "${TCL_LIB_DIR}" = "/usr/lib64" -o \ 
         "${TCL_LIB_DIR}" = "${TK_LIB_DIR}" ; then
-    LIB_SPECS="${LIB_SPECS} ${TCL_LIB_SPEC}"
+    LIB_SPECS_NOSTUB="${LIB_SPECS_NOSTUB} ${TCL_LIB_SPEC}"
+    LIB_SPECS="${LIB_SPECS} ${TCL_STUB_LIB_SPEC}"
   else
-    LIB_SPECS="${LIB_SPECS} -L${TCL_LIB_DIR} ${TCL_LIB_SPEC}"
+    LIB_SPECS_NOSTUB="${LIB_SPECS_NOSTUB} -L${TCL_LIB_DIR} ${TCL_LIB_SPEC}"
+    LIB_SPECS="${LIB_SPECS} -L${TCL_LIB_DIR} ${TCL_STUB_LIB_SPEC}"
     if test "x${loader_run_path}" = "x" ; then
       loader_run_path="${TCL_LIB_DIR}"
     else
@@ -872,11 +879,13 @@ if test $usingTcl ; then
   AC_SUBST(LD)
   AC_SUBST(LDDL_FLAGS)
   AC_SUBST(SHLIB_LIB_SPECS)
+  AC_SUBST(stub_defs)
 
   AC_SUBST(EXTRA_LIB_SPECS)
   AC_SUBST(LDFLAGS)
   AC_SUBST(INC_SPECS)
   AC_SUBST(LIB_SPECS)
+  AC_SUBST(LIB_SPECS_NOSTUB)
   AC_SUBST(TCL_LIB_DIR)
   AC_SUBST(TK_LIB_DIR)
   AC_SUBST(WISH_EXE)

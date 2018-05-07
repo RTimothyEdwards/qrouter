@@ -19,314 +19,6 @@
 #include "lef.h"
 
 /*--------------------------------------------------------------*/
-/* Comparison routine used for qsort.  Sort nets by number of	*/
-/* nodes.							*/
-/*--------------------------------------------------------------*/
-
-int compNets(NET *a, NET *b)
-{
-   NET p = *a;
-   NET q = *b;
-
-   // NULL nets get shoved up front
-   if (p == NULL) return ((q == NULL) ? 0 : -1);
-   if (q == NULL) return 1;
-
-   // Sort critical nets at the front by assigned order
-
-   if (p->flags & NET_CRITICAL) {
-      if (q->flags & NET_CRITICAL) {
-	 return (p->netorder < q->netorder) ? -1 : 1;
-      }
-      else return -1;
-   }
-
-   // Otherwise sort by number of nodes
-
-   if (p->numnodes < q->numnodes)
-      return 1;
-   if (p->numnodes > q->numnodes)
-      return -1;
-   return 0;
-}
-
-/*--------------------------------------------------------------*/
-/* Alternative net comparison used for qsort.  Sort nets by	*/
-/* minimum dimension of the bounding box, and if equal, by the	*/
-/* number of nodes in the net.  Bounding box dimensions are	*/
-/* ordered smallest to largest, and number of nodes are ordered	*/
-/* largest to smallest.						*/
-/*--------------------------------------------------------------*/
-
-int altCompNets(NET *a, NET *b)
-{
-   NET p = *a;
-   NET q = *b;
-
-   int pwidth, qwidth, pheight, qheight, pdim, qdim;
-
-   // Any NULL nets get shoved up front
-   if (p == NULL) return ((q == NULL) ? 0 : -1);
-   if (q == NULL) return 1;
-
-   // Sort critical nets at the front by assigned order
-
-   if (p->flags & NET_CRITICAL) {
-      if (q->flags & NET_CRITICAL) {
-	 return (p->netorder < q->netorder) ? -1 : 1;
-      }
-      else return -1;
-   }
-
-   // Otherwise sort as described above.
-
-   pwidth = p->xmax - p->xmin;
-   pheight = p->ymax - p->ymin;
-   pdim = (pwidth > pheight) ? pheight : pwidth;
-
-   qwidth = q->xmax - q->xmin;
-   qheight = q->ymax - q->ymin;
-   qdim = (qwidth > qheight) ? qheight : qwidth;
-
-   if (pdim < qdim)
-      return (-1);
-   else if (pdim > qdim)
-      return (1);
-   else {
-      if (p->numnodes < q->numnodes)
-         return (1);
-      if (p->numnodes > q->numnodes)
-         return (-1);
-      return (0);
-   }
-}
-
-/*--------------------------------------------------------------*/
-/* create_netorder --- assign indexes to net->netorder    	*/
-/* Re-sort Nlnets according to net order.  Since Nlnets is a	*/
-/* global variable, nothing is returned from this routine.	*/
-/*								*/
-/* method = 0							*/
-/* 	Nets are ordered simply from those with the most nodes	*/
-/*	to those with the fewest.  However, any nets marked	*/
-/* 	critical in the configuration or critical net files	*/
-/*	will be given precedence.				*/
-/*								*/
-/* method = 1							*/
-/*	Nets are ordered by minimum bounding box dimension.	*/
-/*	This is based on the principle that small or narrow	*/
-/*	nets have little room to be moved around without	*/
-/*	greatly increasing the net length.  If these are put	*/
-/*	down first, then remaining nets can route around them.	*/
-/*--------------------------------------------------------------*/
-
-void create_netorder(u_char method)
-{
-  int i, j;
-  NET  net;
-  STRING cn;
-
-  i = 1;
-  for (cn = CriticalNet; cn; cn = cn->next) {
-     if (Verbose > 1)
-	Fprintf(stdout, "critical net %s\n", cn->name);
-     for (j = 0; j < Numnets; j++) {
-	net = Nlnets[j];
-	if (!strcmp(net->netname, (char *)cn->name)) {
-           net->netorder = i++;
-	   net->flags |= NET_CRITICAL;
-	}
-     }
-  }
-
-  switch (method) {
-      case 0:
-	 qsort((char *)Nlnets, Numnets, (int)sizeof(NET),
-			(__compar_fn_t)compNets);
-	 break;
-      case 1:
-	 qsort((char *)Nlnets, Numnets, (int)sizeof(NET),
-			(__compar_fn_t)altCompNets);
-	 break;
-  }
-
-  for (i = 0; i < Numnets; i++) {
-     net = Nlnets[i];
-     net->netorder = i++;
-  }
-
-} /* create_netorder() */
-
-/*--------------------------------------------------------------*/
-/* Measure and record the bounding box of a net.		*/
-/* This is preparatory to generating a mask for the net.	*/
-/* Find the bounding box of each node, and record that		*/
-/* information, at the same time computing the whole net's	*/
-/* bounding box as the area bounding all of the nodes.		*/
-/* Determine if the bounding box is more horizontal or		*/
-/* vertical, and specify a direction for the net's trunk line.	*/
-/* Initialize the trunk line as the midpoint between all of the	*/
-/* nodes, extending the width (or height) of the bounding box.	*/
-/* Initialize the node branch position as the line extending	*/
-/* from the middle of the node's bounding box to the trunk	*/
-/* line.  These positions (trunk and branches) will be sorted	*/
-/* and readjusted by "create_nodeorder()".			*/
-/*--------------------------------------------------------------*/
-
-void find_bounding_box(NET net)
-{
-   NODE n1, n2;
-   DPOINT d1tap, d2tap, dtap, mintap;
-   int mindist, dist, dx, dy;
-
-   if (net->numnodes == 2) {
-
-      n1 = (NODE)net->netnodes;
-      n2 = (NODE)net->netnodes->next;
-
-      // Simple 2-pass---pick up first tap on n1, find closest tap on n2,
-      // then find closest tap on n1.
-
-      d1tap = (n1->taps == NULL) ? n1->extend : n1->taps;
-      if (d1tap == NULL) return;
-      d2tap = (n2->taps == NULL) ? n2->extend : n2->taps;
-      if (d2tap == NULL) return;
-      dx = d2tap->gridx - d1tap->gridx;
-      dy = d2tap->gridy - d1tap->gridy;
-      mindist = dx * dx + dy * dy;
-      mintap = d2tap;
-      for (d2tap = d2tap->next; d2tap != NULL; d2tap = d2tap->next) {
-         dx = d2tap->gridx - d1tap->gridx;
-         dy = d2tap->gridy - d1tap->gridy;
-         dist = dx * dx + dy * dy;
-         if (dist < mindist) {
-            mindist = dist;
-            mintap = d2tap;
-         }
-      }
-      d2tap = mintap;
-      d1tap = (n1->taps == NULL) ? n1->extend : n1->taps;
-      dx = d2tap->gridx - d1tap->gridx;
-      dy = d2tap->gridy - d1tap->gridy;
-      mindist = dx * dx + dy * dy;
-      mintap = d1tap;
-      for (d1tap = d1tap->next; d1tap != NULL; d1tap = d1tap->next) {
-         dx = d2tap->gridx - d1tap->gridx;
-         dy = d2tap->gridy - d1tap->gridy;
-         dist = dx * dx + dy * dy;
-         if (dist < mindist) {
-            mindist = dist;
-            mintap = d1tap;
-         }
-      }
-      d1tap = mintap;
-
-      net->xmin = (d1tap->gridx < d2tap->gridx) ? d1tap->gridx : d2tap->gridx;
-      net->xmax = (d1tap->gridx < d2tap->gridx) ? d2tap->gridx : d1tap->gridx;
-      net->ymin = (d1tap->gridy < d2tap->gridy) ? d1tap->gridy : d2tap->gridy;
-      net->ymax = (d1tap->gridy < d2tap->gridy) ? d2tap->gridy : d1tap->gridy;
-   }
-   else {	// Net with more than 2 nodes
-
-      // Use the first tap point for each node to get a rough bounding box and
-      // centroid of all taps
-      net->xmax = net->ymax = -(MAXRT);
-      net->xmin = net->ymin = MAXRT;
-      for (n1 = net->netnodes; n1 != NULL; n1 = n1->next) {
-         dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
-	 if (dtap) {
-            if (dtap->gridx > net->xmax) net->xmax = dtap->gridx;
-            if (dtap->gridx < net->xmin) net->xmin = dtap->gridx;
-            if (dtap->gridy > net->ymax) net->ymax = dtap->gridy;
-            if (dtap->gridy < net->ymin) net->ymin = dtap->gridy;
-	 }
-      }
-   }
-}
-
-/*--------------------------------------------------------------*/
-/* defineRouteTree() ---					*/
-/*								*/
-/* Define a trunk-and-branches potential best route for a net.	*/
-/*								*/
-/* The net is analyzed for aspect ratio, and is determined if	*/
-/* it will have a horizontal or vertical trunk.  Then, each	*/
-/* node will define a branch line extending from the node	*/
-/* position to the trunk.  Trunk position is recorded in the	*/
-/* net record, and branch positions are recorded in the	node	*/
-/* records.							*/
-/*								*/
-/* To do:							*/
-/* Trunk and branch lines will be analyzed for immediate	*/
-/* collisions and sorted to help ensure a free track exists for	*/
-/* each net's trunk line.					*/
-/*--------------------------------------------------------------*/
-
-void defineRouteTree(NET net)
-{
-    NODE n1;
-    DPOINT dtap;
-    int xcent, ycent, xmin, ymin, xmax, ymax;
-
-    // This is called after create_bounding_box(), so bounds have
-    // been calculated.
-
-    xmin = net->xmin;
-    xmax = net->xmax;
-    ymin = net->ymin;
-    ymax = net->ymax;
-
-    if (net->numnodes == 2) {
-
-	// For 2-node nets, record the initial position as
-	// one horizontal trunk + one branch for one "L" of
-	// the bounding box, and one vertical trunk + one
-	// branch for the other "L" of the bounding box.
-
-	net->trunkx = xmin;
-	net->trunky = ymin;
-    }
-    else if (net->numnodes > 0) {
-
-	// Use the first tap point for each node to get a rough
-	// centroid of all taps
-
-	xcent = ycent = 0;
-	for (n1 = net->netnodes; n1 != NULL; n1 = n1->next) {
-	    dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
-	    if (dtap == NULL) continue;
-	    xcent += dtap->gridx;
-	    ycent += dtap->gridy;
-	}
-	xcent /= net->numnodes;
-	ycent /= net->numnodes;
-
-	// Record the trunk line in the net record
-
-	net->trunkx = xcent;
-	net->trunky = ycent;
-    }
-
-    if (xmax - xmin > ymax - ymin) {
-	// Horizontal trunk preferred
-	net->flags &= ~NET_VERTICAL_TRUNK;
-    }
-    else {
-	// Vertical trunk preferred
-	net->flags |= NET_VERTICAL_TRUNK;
-    }
-
-    // Set the branch line positions to the node tap points
-
-    for (n1 = net->netnodes; n1; n1 = n1->next) {
-	dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
-	if (!dtap) continue;
-	n1->branchx = dtap->gridx;
-	n1->branchy = dtap->gridy;
-    }
-}
-
-/*--------------------------------------------------------------*/
 /* SetNodeinfo --						*/
 /*	Allocate a NODEINFO record and put it in the Nodeinfo	*/
 /*	array at position (gridx, gridy, d->layer).  Return the	*/
@@ -365,94 +57,6 @@ FreeNodeinfo(int gridx, int gridy, int layer)
 }
 
 /*--------------------------------------------------------------*/
-/* print_nodes - show the nodes list				*/
-/*         ARGS: filename to print to
-        RETURNS: nothing
-   SIDE EFFECTS: none
-AUTHOR and DATE: steve beccue      Tue Aug 04  2003
-\*--------------------------------------------------------------*/
-
-void print_nodes(char *filename)
-{
-  FILE *o;
-  int i;
-  NET net;
-  NODE node;
-  DPOINT dp;
-
-    if (!strcmp(filename, "stdout")) {
-	o = stdout;
-    } else {
-	o = fopen(filename, "w");
-    }
-    if (!o) {
-	Fprintf( stderr, "node.c:print_nodes.  Couldn't open output file\n" );
-	return;
-    }
-
-    for (i = 0; i < Numnets; i++) {
-       net = Nlnets[i];
-       for (node = net->netnodes; node; node = node->next) {
-	  dp = (DPOINT)node->taps;
-	  fprintf(o, "%d\t%s\t(%g,%g)(%d,%d) :%d:num=%d netnum=%d\n",
-		node->nodenum, 
-		node->netname,
-		// legacy:  print only the first point
-		dp->x, dp->y, dp->gridx, dp->gridy,
-		node->netnum, node->numnodes, node->netnum );
-		 
-	  /* need to print the routes to this node (deprecated)
-	  for (j = 0 ; j < g->nodes; j++) {
-	      fprintf(o, "%s(%g,%g) ", g->node[j], *(g->x[j]), *(g->y[j]));
-	  }
-	  */
-       }
-    }
-    fclose(o);
-
-} /* void print_nodes() */
-
-/*--------------------------------------------------------------*/
-/*C print_nlnets - show the nets				*/
-/*         ARGS: filename to print to
-        RETURNS: nothing
-   SIDE EFFECTS: none
-AUTHOR and DATE: steve beccue      Tue Aug 04  2003
-\*--------------------------------------------------------------*/
-
-void print_nlnets( char *filename )
-{
-  FILE *o;
-  int i;
-  NODE nd;
-  NET net;
-
-    if (!strcmp(filename, "stdout")) {
-	o = stdout;
-    } else {
-	o = fopen(filename, "w");
-    }
-    if (!o) {
-	Fprintf(stderr, "node.c:print_nlnets.  Couldn't open output file\n");
-	return;
-    }
-
-    for (i = 0; i < Numnets; i++) {
-        net = Nlnets[i];
-	fprintf(o, "%d\t#=%d\t%s   \t\n", net->netnum, 
-		 net->numnodes, net->netname);
-
-	for (nd = net->netnodes; nd; nd = nd->next) {
-	   fprintf(o, "%d ", nd->nodenum);
-	}
-    }
-
-    fprintf(o, "%d nets\n", Numnets);
-    fflush(o);
-
-} /* void print_nlnets() */
-
-/*--------------------------------------------------------------*/
 /* count_reachable_taps()					*/
 /*								*/
 /*  For each grid point in the layout, find if it corresponds	*/
@@ -476,7 +80,7 @@ count_reachable_taps()
     NODEINFO lnode;
     GATE g;
     DSEG ds;
-    int l, i, j;
+    int l, i, j, orient;
     int gridx, gridy;
     double deltax, deltay;
     double dx, dy;
@@ -504,56 +108,69 @@ count_reachable_taps()
 	    if (node == NULL) continue;
 	    if (node->numnodes == 0) continue;	 // e.g., vdd or gnd bus
 	    if (node->numtaps == 0) {
-		Fprintf(stderr, "Error: Node %s of net \"%s\" has no taps!\n",
-			print_node_name(node), node->netname);
 
-		for (ds = g->taps[i]; ds; ds = ds->next) {
-		    deltax = 0.5 * LefGetViaWidth(ds->layer, ds->layer, 0);
-		    deltay = 0.5 * LefGetViaWidth(ds->layer, ds->layer, 1);
+		/* Will try more than one via if available */
+		for (orient = 0; orient < 2; orient++) {
+		    for (ds = g->taps[i]; ds; ds = ds->next) {
+			deltax = 0.5 * LefGetXYViaWidth(ds->layer, ds->layer, 0, orient);
+			deltay = 0.5 * LefGetXYViaWidth(ds->layer, ds->layer, 1, orient);
 
-		    gridx = (int)((ds->x1 - Xlowerbound) / PitchX[ds->layer]) - 1;
-		    while (1) {
-			dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
-			if (dx > ds->x2 || gridx >= NumChannelsX[ds->layer]) break;
+			gridx = (int)((ds->x1 - Xlowerbound) / PitchX[ds->layer]) - 1;
+			while (1) {
+			    dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
+			    if (dx > ds->x2 || gridx >= NumChannelsX[ds->layer]) break;
 
-			if (((dx - ds->x1 + EPS) > deltax) &&
-				((ds->x2 - dx + EPS) > deltax)) {
-			    gridy = (int)((ds->y1 - Ylowerbound)
+			    if (((dx - ds->x1 + EPS) > deltax) &&
+					((ds->x2 - dx + EPS) > deltax)) {
+				gridy = (int)((ds->y1 - Ylowerbound)
 					/ PitchY[ds->layer]) - 1;
-			    while (1) {
-				dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
-				if (dy > ds->y2 || gridy >= NumChannelsY[ds->layer])
-				    break;
+				while (1) {
+				    dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
+				    if (dy > ds->y2 || gridy >= NumChannelsY[ds->layer])
+					break;
 
-				if (((dy - ds->y1 + EPS) > deltay) &&
-					((ds->y2 - dy + EPS) > deltay)) {
+				    if (((dy - ds->y1 + EPS) > deltay) &&
+						((ds->y2 - dy + EPS) > deltay)) {
 
-				    if ((ds->layer == Num_layers - 1) ||
+					if ((ds->layer == Num_layers - 1) ||
 						!(OBSVAL(gridx, gridy, ds->layer + 1)
 						& NO_NET)) {
 
-					// Grid position is clear for placing a via
+					    // Grid position is clear for placing a via
 
-					Fprintf(stderr, "Tap position (%g, %g) appears"
-						" to be technically routable, so it"
-						" is being forced routable.\n",
-						dx, dy);
+					    if (orient == 0)
+						Fprintf(stderr, "Tap position (%g, %g)"
+						    " appears to be technically routable"
+						    " so it is being forced routable.\n",
+						    dx, dy);
+					    else
+						Fprintf(stderr, "Tap position (%g, %g)"
+						    " appears to be technically routable"
+						    " with alternate via, so it is being"
+						    " forced routable.\n", dx, dy);
 
-					OBSVAL(gridx, gridy, ds->layer) =
+					    OBSVAL(gridx, gridy, ds->layer) =
 						(OBSVAL(gridx, gridy, ds->layer)
 						& BLOCKED_MASK)
 						| (u_int)node->netnum;
-					lnode = SetNodeinfo(gridx, gridy, ds->layer);
-					lnode->nodeloc = node;
-					lnode->nodesav = node;
-					node->numtaps++;
+					    lnode = SetNodeinfo(gridx, gridy, ds->layer);
+					    lnode->nodeloc = node;
+					    lnode->nodesav = node;
+
+					    /* If we got to orient = 1, mark NI_NO_VIAX */
+					    if (orient == 1) lnode->flags |= NI_NO_VIAX;
+
+					    node->numtaps++;
+					}
 				    }
+				    gridy++;
 				}
-				gridy++;
 			    }
+			    gridx++;
 			}
-			gridx++;
 		    }
+		    /* If there's a solution, don't go looking at other vias */
+		    if (node->numtaps > 0) break;
 		}
 	    }
 	    if (node->numtaps == 0) {
@@ -564,145 +181,169 @@ count_reachable_taps()
 		double dist, mindist;
 		int dir, mask, tapx, tapy, tapl;
 
-		/* Initialize mindist to a large value */
-		mask = 0;
-		mindist = PitchX[Num_layers - 1] + PitchY[Num_layers - 1];
-		dir = 0;	/* Indicates no solution found */
+		/* Will try more than one via if available */
+		for (orient = 0; orient < 2; orient++) {
 
-		for (ds = g->taps[i]; ds; ds = ds->next) {
-		    deltax = 0.5 * LefGetViaWidth(ds->layer, ds->layer, 0);
-		    deltay = 0.5 * LefGetViaWidth(ds->layer, ds->layer, 1);
+		    /* Initialize mindist to a large value */
+		    mask = 0;
+		    mindist = PitchX[Num_layers - 1] + PitchY[Num_layers - 1];
+		    dir = 0;	/* Indicates no solution found */
 
-		    gridx = (int)((ds->x1 - Xlowerbound) / PitchX[ds->layer]) - 1;
-		    while (1) {
-			dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
-			if (dx > ds->x2 || gridx >= NumChannelsX[ds->layer]) break;
+		    for (ds = g->taps[i]; ds; ds = ds->next) {
+			deltax = 0.5 * LefGetXYViaWidth(ds->layer, ds->layer, 0, orient);
+			deltay = 0.5 * LefGetXYViaWidth(ds->layer, ds->layer, 1, orient);
 
-			if (((dx - ds->x1 + EPS) > -deltax) &&
-				((ds->x2 - dx + EPS) > -deltax)) {
-			    gridy = (int)((ds->y1 - Ylowerbound)
+			gridx = (int)((ds->x1 - Xlowerbound) / PitchX[ds->layer]) - 1;
+			while (1) {
+			    dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
+			    if (dx > ds->x2 || gridx >= NumChannelsX[ds->layer]) break;
+
+			    if (((dx - ds->x1 + EPS) > -deltax) &&
+					((ds->x2 - dx + EPS) > -deltax)) {
+				gridy = (int)((ds->y1 - Ylowerbound)
 					/ PitchY[ds->layer]) - 1;
 
-			    while (1) {
-				dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
-				if (dy > ds->y2 || gridy >= NumChannelsY[ds->layer])
-				    break;
+				while (1) {
+				    dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
+				    if (dy > ds->y2 || gridy >= NumChannelsY[ds->layer])
+					break;
 
-				// Check that the grid position is inside the
-				// tap rectangle.  However, if the point above
-				// the grid is blocked, then a via cannot be
-				// placed here, so skip it.
+				    // Check that the grid position is inside the
+				    // tap rectangle.  However, if the point above
+				    // the grid is blocked, then a via cannot be
+				    // placed here, so skip it.
 
-				if (((ds->layer == Num_layers - 1) ||
-					!(OBSVAL(gridx, gridy, ds->layer + 1)
-					& NO_NET)) &&
-					((dy - ds->y1 + EPS) > -deltay) &&
-					((ds->y2 - dy + EPS) > -deltay)) {
+				    if (((ds->layer == Num_layers - 1) ||
+						!(OBSVAL(gridx, gridy, ds->layer + 1)
+						& NO_NET)) &&
+						((dy - ds->y1 + EPS) > -deltay) &&
+						((ds->y2 - dy + EPS) > -deltay)) {
 
-				    // Grid point is inside tap geometry.
-				    // Since it did not pass the simple insideness
-				    // test previously, it can be assumed that
-				    // one of the edges is closer to the grid point
-				    // than 1/2 via width.  Find that edge and use
-				    // it to determine the offset.
+					// Grid point is inside tap geometry.
+					// Since it did not pass the simple insideness
+					// test previously, it can be assumed that
+					// one of the edges is closer to the grid point
+					// than 1/2 via width.  Find that edge and use
+					// it to determine the offset.
 
-				    // Check right edge
-				    if ((ds->x2 - dx + EPS) < deltax) {
-					dist = deltax - ds->x2 + dx;
-					// Confirm other edges
-					if ((dx - dist - deltax + EPS > ds->x1) &&
-					(dy - deltay + EPS > ds->y1) &&
-					(dy + deltay - EPS < ds->y2)) {
-					    if (dist < fabs(mindist)) {
-						mindist = dist;
-						mask = STUBROUTE;
-						dir = NI_STUB_EW;
-						tapx = gridx;
-						tapy = gridy;
-						tapl = ds->layer;
+					// Check right edge
+					if ((ds->x2 - dx + EPS) < deltax) {
+					    dist = deltax - ds->x2 + dx;
+					    // Confirm other edges
+					    if ((dx - dist - deltax + EPS > ds->x1) &&
+							(dy - deltay + EPS > ds->y1) &&
+							(dy + deltay - EPS < ds->y2)) {
+						if (dist < fabs(mindist)) {
+						    mindist = dist;
+						    mask = STUBROUTE;
+						    dir = NI_STUB_EW;
+						    tapx = gridx;
+						    tapy = gridy;
+						    tapl = ds->layer;
+						}
+					    }
+					}
+					// Check left edge
+					if ((dx - ds->x1 + EPS) < deltax) {
+					    dist = deltax - dx + ds->x1;
+					    // Confirm other edges
+					    if ((dx + dist + deltax - EPS < ds->x2) &&
+							(dy - deltay + EPS > ds->y1) &&
+							(dy + deltay - EPS < ds->y2)) {
+						if (dist < fabs(mindist)) {
+						    mindist = -dist;
+						    mask = STUBROUTE;
+						    dir = NI_STUB_EW;
+						    tapx = gridx;
+						    tapy = gridy;
+						    tapl = ds->layer;
+						}
+					    }
+					}
+					// Check top edge
+					if ((ds->y2 - dy + EPS) < deltay) {
+					    dist = deltay - ds->y2 + dy;
+					    // Confirm other edges
+					    if ((dx - deltax + EPS > ds->x1) &&
+						    (dx + deltax - EPS < ds->x2) &&
+						    (dy - dist - deltay + EPS > ds->y1)) {
+						if (dist < fabs(mindist)) {
+						    mindist = -dist;
+						    mask = STUBROUTE;
+						    dir = NI_STUB_NS;
+						    tapx = gridx;
+						    tapy = gridy;
+						    tapl = ds->layer;
+						}
+					    }
+					}
+					// Check bottom edge
+					if ((dy - ds->y1 + EPS) < deltay) {
+					    dist = deltay - dy + ds->y1;
+					    // Confirm other edges
+					    if ((dx - deltax + EPS > ds->x1) &&
+						    (dx + deltax - EPS < ds->x2) &&
+						    (dy + dist + deltay - EPS < ds->y2)) {
+						if (dist < fabs(mindist)) {
+					 	    mindist = dist;
+						    mask = STUBROUTE;
+						    dir = NI_STUB_NS;
+						    tapx = gridx;
+						    tapy = gridy;
+						    tapl = ds->layer;
+						}
 					    }
 					}
 				    }
-				    // Check left edge
-				    if ((dx - ds->x1 + EPS) < deltax) {
-					dist = deltax - dx + ds->x1;
-					// Confirm other edges
-					if ((dx + dist + deltax - EPS < ds->x2) &&
-					(dy - deltay + EPS > ds->y1) &&
-					(dy + deltay - EPS < ds->y2)) {
-					    if (dist < fabs(mindist)) {
-						mindist = -dist;
-						mask = STUBROUTE;
-						dir = NI_STUB_EW;
-						tapx = gridx;
-						tapy = gridy;
-						tapl = ds->layer;
-					    }
-					}
-				    }
-				    // Check top edge
-				    if ((ds->y2 - dy + EPS) < deltay) {
-					dist = deltay - ds->y2 + dy;
-					// Confirm other edges
-					if ((dx - deltax + EPS > ds->x1) &&
-					(dx + deltax - EPS < ds->x2) &&
-					(dy - dist - deltay + EPS > ds->y1)) {
-					    if (dist < fabs(mindist)) {
-						mindist = -dist;
-						mask = STUBROUTE;
-						dir = NI_STUB_NS;
-						tapx = gridx;
-						tapy = gridy;
-						tapl = ds->layer;
-					    }
-					}
-				    }
-				    // Check bottom edge
-				    if ((dy - ds->y1 + EPS) < deltay) {
-					dist = deltay - dy + ds->y1;
-					// Confirm other edges
-					if ((dx - deltax + EPS > ds->x1) &&
-					(dx + deltax - EPS < ds->x2) &&
-					(dy + dist + deltay - EPS < ds->y2)) {
-					    if (dist < fabs(mindist)) {
-						mindist = dist;
-						mask = STUBROUTE;
-						dir = NI_STUB_NS;
-						tapx = gridx;
-						tapy = gridy;
-						tapl = ds->layer;
-					    }
-					}
-				    }
+				    gridy++;
 				}
-				gridy++;
 			    }
+			    gridx++;
 			}
-			gridx++;
 		    }
-		}
 
-		/* Was a solution found? */
-		if (mask != 0) {
-		    // Grid position is clear for placing a via
+		    /* Was a solution found? */
+		    if (mask != 0) {
+			// Grid position is clear for placing a via
 
-		    Fprintf(stderr, "Tap position (%d, %d) appears to be"
+			Fprintf(stderr, "Tap position (%d, %d) appears to be"
 				" technically routable with an offset, so"
 				" it is being forced routable.\n",
 				tapx, tapy);
 
-		    OBSVAL(tapx, tapy, tapl) =
+			OBSVAL(tapx, tapy, tapl) =
 				(OBSVAL(tapx, tapy, tapl) & BLOCKED_MASK)
 				| mask | (u_int)node->netnum;
-		    lnode = SetNodeinfo(tapx, tapy, tapl);
-		    lnode->nodeloc = node;
-		    lnode->nodesav = node;
-		    lnode->stub = dist;
-		    lnode->flags |= dir;
-		    node->numtaps++;
+			lnode = SetNodeinfo(tapx, tapy, tapl);
+			lnode->nodeloc = node;
+			lnode->nodesav = node;
+			lnode->stub = dist;
+			lnode->flags |= dir;
+
+			/* If we got to orient = 1 then mark NI_NO_VIAX */
+			if (orient == 1) lnode->flags |= NI_NO_VIAX;
+
+			node->numtaps++;
+		    }
+
+		    /* If there's a solution, don't go looking at other vias */
+		    if (node->numtaps > 0) break;
 		}
 	    }
+	}
+    }
+
+    /* Last pass to output error messages for any taps that were not	*/
+    /* handled by the code above.					*/
+
+    for (g = Nlgates; g; g = g->next) {
+	for (i = 0; i < g->nodes; i++) {
+	    node = g->noderec[i];
+	    if (node == NULL) continue;
+	    if (node->numnodes == 0) continue;	 // e.g., vdd or gnd bus
 	    if (node->numtaps == 0) {
+		Fprintf(stderr, "Error: Node %s of net \"%s\" has no taps!\n",
+			print_node_name(node), node->netname);
 		Fprintf(stderr, "Qrouter will not be able to completely"
 			" route this net.\n");
 	    }
@@ -734,14 +375,13 @@ void check_variable_pitch(int l, int *hptr, int *vptr)
    // will either have the same width or a larger width.  
 
    // Note that when "horizontal" (o = 1) is passed to LefGetViaWidth,
-   // it returns the via width side-to-side; but for horizontal routing
-   // the dimension of interest is the height of the via.  Therefore
-   // the direction argument passed to LefGetViaWidth is (1 - o).
+   // it returns the via width top-to-bottom (orient meaning is
+   // reversed for LefGetViaWidth), which is what we want. . .
 
    if (l == 0)
-	 wvia = LefGetViaWidth(l, l, (1 - o));
+	 wvia = LefGetViaWidth(l, l, o);
    else
-	 wvia = LefGetViaWidth(l - 1, l, (1 - o));
+	 wvia = LefGetViaWidth(l - 1, l, o);
 
    if (o == 1) {	// Horizontal route
       vpitch = LefGetRoutePitch(l);
@@ -1130,6 +770,8 @@ void create_obstructions_from_gates(void)
 
 		         // If it clears distance for a route layer but not
 		         // vias, then block vias only.
+			 /* (This is restrictive and unnecessary) */
+			 /*
 		         deltaxy = get_route_clear(ds->layer, ds);
 		         if (((dx - EPS) <= (ds->x1 - deltaxy)) ||
 				((dx + EPS) >= (ds->x2 + deltaxy)) ||
@@ -1139,7 +781,8 @@ void create_obstructions_from_gates(void)
 			    block_route(gridx, gridy, ds->layer, DOWN);
 		         }
 		         else
-			    check_obstruct(gridx, gridy, ds, dx, dy);
+			 */
+			 check_obstruct(gridx, gridy, ds, dx, dy);
 		      }
 		      else {
 			 edist = 0;	// diagnostic break
@@ -1214,6 +857,8 @@ void create_obstructions_from_gates(void)
 
 		               // If it clears distance for a route layer but not
 		               // vias, then block vias only.
+			       /* (This is restrictive and unnecessary) */
+			       /*
 		               deltaxy = get_route_clear(ds->layer, ds);
 		               if (((dx - EPS) < (ds->x1 - deltaxy)) ||
 					((dx + EPS) > (ds->x2 + deltaxy)) ||
@@ -1223,7 +868,8 @@ void create_obstructions_from_gates(void)
 			          block_route(gridx, gridy, ds->layer, DOWN);
 		               }
 		               else
-			          check_obstruct(gridx, gridy, ds, dx, dy);
+			       */
+			       check_obstruct(gridx, gridy, ds, dx, dy);
 			    }
 			 }
 		         gridy++;
@@ -2204,13 +1850,13 @@ void create_obstructions_outside_nodes(void)
                                 }
 
 				lnode = SetNodeinfo(gridx, gridy, ds->layer);
+				lnode->nodeloc = node;
+				lnode->nodesav = node;
 
 				if ((k < Numnets) && (dir != NI_STUB_MASK)) {
 				   OBSVAL(gridx, gridy, ds->layer)
 				   	= (OBSVAL(gridx, gridy, ds->layer)
 					  & BLOCKED_MASK) | (u_int)g->netnum[i] | mask; 
-				   lnode->nodeloc = node;
-				   lnode->nodesav = node;
 				   lnode->flags |= dir;
 				}
 				else if ((OBSVAL(gridx, gridy, ds->layer)

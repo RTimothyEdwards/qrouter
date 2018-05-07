@@ -43,7 +43,7 @@ FindGateNode(Tcl_HashTable *NodeTable, NODE node, int *ridx)
     GATE g;
     Tcl_HashEntry *entry;
 
-    entry = Tcl_FindHashEntry(NodeTable, node);
+    entry = Tcl_FindHashEntry(NodeTable, (char *)node);
     if (entry) {
 	gn = (GATENODE)Tcl_GetHashValue(entry);
 	*ridx = gn->idx;
@@ -59,6 +59,7 @@ FindGateNode(Tcl_HashTable *NodeTable, NODE node, int *ridx)
 typedef struct _endpointinfo {
     u_char flags;		/* flag bits (see below) */
     ROUTE route;		/* pointer to routed segments */
+    ROUTE orig;			/* original pointer to routed segments */
     int startx;			/* values at segment start */
     int starty;
     int startl;
@@ -123,11 +124,13 @@ add_route_to_endpoint(endpointinfo *eptinfo, int eidx, int didx)
 /*--------------------------------------------------------------*/
 /* Check for a route segment that is downstream of the current	*/
 /* segment (walkseg), and if found, process it.			*/
+/* "end" is 0 if checking downstream of the driver node.  Every	*/
+/* other check is from the end node of a route, and "end" is 1.	*/
 /*--------------------------------------------------------------*/
 
 void
 check_downstream(SEG walkseg, endpointinfo *eptinfo, int eidx,
-	int numroutes, lefrcinfo *lefrcvalues)
+	int numroutes, lefrcinfo *lefrcvalues, u_char end)
 {
     int i;
     int startcompat, endcompat;
@@ -186,16 +189,22 @@ check_downstream(SEG walkseg, endpointinfo *eptinfo, int eidx,
 		if (eptinfo[i].endl > eptinfo[i].startl)
 		    reverse = 1;
 
+	    /* Diagnostic */
+	    /*
 	    Fprintf(stdout, "Connects to %d, %d, %d\n",
 			eptinfo[i].startx, eptinfo[i].starty, eptinfo[i].startl);
+	    */
 	    /* Recursive walk */
 	    walk_route(i, reverse, eptinfo, numroutes, lefrcvalues);
 	    add_route_to_endpoint(eptinfo, eidx, i);
 	}
 	else if ((walkseg->x2 == eptinfo[i].endx) &&
 		(walkseg->y2 == eptinfo[i].endy) && endcompat) {
+	    /* Diagnostic */
+	    /*
 	    Fprintf(stdout, "Connects to %d, %d, %d\n",
 			eptinfo[i].endx, eptinfo[i].endy, eptinfo[i].endl);
+	    */
 	    /* If this is a node, output it now */
 	    /* Recursive walk */
 	    walk_route(i, 1, eptinfo, numroutes, lefrcvalues);
@@ -208,8 +217,7 @@ check_downstream(SEG walkseg, endpointinfo *eptinfo, int eidx,
     /* which a two paths may connect to a node at two different		*/
     /* locations.							*/
 
-    nodeptr = (walkseg == eptinfo[eidx].route->segments) ?
-		eptinfo[eidx].startnode : eptinfo[eidx].endnode;
+    nodeptr = (end == 0) ? eptinfo[eidx].startnode : eptinfo[eidx].endnode;
 
     if (nodeptr != NULL) {
 	for (i = 0; i < numroutes; i++) {
@@ -316,7 +324,7 @@ walk_route(int eidx, int driverend, endpointinfo *eptinfo,
     /* if it is the driver.						*/
 
     if (eptinfo[eidx].flags & EPT_DRIVER)
-	check_downstream(firstseg, eptinfo, eidx, numroutes, lefrcvalues);
+	check_downstream(firstseg, eptinfo, eidx, numroutes, lefrcvalues, (u_char)0);
 
     /* Walk the route segment and accumulate R and C */
 
@@ -350,7 +358,7 @@ walk_route(int eidx, int driverend, endpointinfo *eptinfo,
     }
 
     /* Check for downstream nodes from the last route point */
-    check_downstream(lastseg, eptinfo, eidx, numroutes, lefrcvalues);
+    check_downstream(lastseg, eptinfo, eidx, numroutes, lefrcvalues, (u_char)1);
 }
 
 /*--------------------------------------------------------------*/
@@ -423,7 +431,7 @@ int write_delays(char *filename)
     NODEINFO nodeptr;
     SEG seg, newseg, lastseg, nxseg;
     GATE g, drivergate;
-    int i, n, new, driverend;
+    int i, j, n, new, driverend;
     int drivernodeidx, driveridx;
     int nroute, numroutes;
     endpointinfo *eptinfo;
@@ -455,7 +463,7 @@ int write_delays(char *filename)
 	    gn = (GATENODE)malloc(sizeof(struct gatenode_));
 	    gn->idx = i;
 	    gn->gate = g;
-	    entry = Tcl_CreateHashEntry(&NodeTable, *(g->noderec + i), &new);
+	    entry = Tcl_CreateHashEntry(&NodeTable, (char *)(*(g->noderec + i)), &new);
 	    Tcl_SetHashValue(entry, gn);
 	}
     }
@@ -490,6 +498,11 @@ int write_delays(char *filename)
 
 	if ((net->netnum == VDD_NET) || (net->netnum == GND_NET)) continue;
 
+	/* Count number of net routes */
+	numroutes = 0;
+	for (rt = net->routes; rt; rt = rt->next) numroutes++;
+	if (numroutes == 0) continue;	/* Ignore nets with no routes */
+
 	/* Marked as one driver node.  Not handling more than one driver yet. */
         fprintf(delayFile, "%s 1", net->netname);
 
@@ -498,10 +511,6 @@ int write_delays(char *filename)
 	/* (For now, if a net has multiple tristate drivers, just use	*/
 	/* the first one and treat the rest as receivers.)		*/
 
-	/* Count number of net routes */
-	numroutes = 0;
-	for (rt = net->routes; rt; rt = rt->next) numroutes++;
-
 	/* Allocate space for endpoint info */
 	eptinfo = (endpointinfo *)malloc(numroutes * sizeof(endpointinfo));
 	
@@ -509,26 +518,31 @@ int write_delays(char *filename)
 	nroute = 0;
 	for (rt = net->routes; rt; rt = rt->next) {
 	    eptinfo[nroute].route = rt;
+	    eptinfo[nroute].orig = rt;
 	    eptinfo[nroute].flags = (u_char)0;
+	    eptinfo[nroute].branching = NULL;
+	    eptinfo[nroute].startnode = NULL;
+	    eptinfo[nroute].endnode = NULL;
+
 	    /* Segment start */
 	    seg = rt->segments;
-	    eptinfo[nroute].startx = seg->x1;
-	    eptinfo[nroute].starty = seg->y1;
-	    eptinfo[nroute].startl = seg->layer;
-	    eptinfo[nroute].starttype = seg->segtype;
-	    eptinfo[nroute].startnode = NULL;
-	    eptinfo[nroute].branching = NULL;
-	    eptinfo[nroute].res = 0.0;
-	    eptinfo[nroute].cap = 0.0;
+            if (seg != NULL) {
+		eptinfo[nroute].startx = seg->x1;
+		eptinfo[nroute].starty = seg->y1;
+		eptinfo[nroute].startl = seg->layer;
+		eptinfo[nroute].starttype = seg->segtype;
+		eptinfo[nroute].res = 0.0;
+		eptinfo[nroute].cap = 0.0;
+	    }
 
 	    /* Segment end */
 	    for (seg = rt->segments; seg && seg->next; seg = seg->next);
-	    eptinfo[nroute].endx = seg->x2;
-	    eptinfo[nroute].endy = seg->y2;
-	    eptinfo[nroute].endl = seg->layer;
-	    eptinfo[nroute].endtype = seg->segtype;
-	    eptinfo[nroute].endnode = NULL;
-
+	    if (seg != NULL) {
+		eptinfo[nroute].endx = seg->x2;
+		eptinfo[nroute].endy = seg->y2;
+		eptinfo[nroute].endl = seg->layer;
+		eptinfo[nroute].endtype = seg->segtype;
+	    }
 	    nroute++;
 	}
 
@@ -545,6 +559,9 @@ int write_delays(char *filename)
 	    else
 		lastroute->next = newroute; 
 	    lastroute = newroute;
+	    newroute->segments = NULL;
+	    newroute->start.route = NULL;
+	    newroute->end.route = NULL;
 	    newroute->flags = (u_char)0;
 	    newroute->netnum = rt->netnum;
 	    eptinfo[i].route = newroute;
@@ -572,11 +589,12 @@ int write_delays(char *filename)
 	/* other routes, and break routes at connection points, so that	*/
 	/* each route is an independent segment for calculating R, C.	*/
 
+	j = 0;
 	for (rt = droutes; rt; rt = rt->next) {
 	    ROUTE testroute;
 	    int startx, starty, startl, starttype;
 	    int endx, endy, endl, endtype;
-	    int brkx, brky, startcompat, endcompat;
+	    int brkx, brky, brki, startcompat, endcompat;
 	    int initial, final;
 	    int x1, y1, x2, y2;
 
@@ -631,8 +649,22 @@ int write_delays(char *filename)
 		}
 
 		/* Compare against endpoints of all other routes */
+		brki = -1;
 		for (i = 0; i < numroutes; i++) {
 		    if (eptinfo[i].route == rt) continue;
+		    if (eptinfo[i].endl == -2) continue;
+
+		    testroute = eptinfo[i].orig;
+		    if ((!(testroute->flags & RT_START_NODE)) &&
+				(testroute->start.route == eptinfo[j].orig)) {
+			/* Nothing */
+		    }
+		    else if ((!(testroute->flags & RT_END_NODE)) &&
+				(testroute->end.route == eptinfo[j].orig)) {
+			/* Nothing */
+		    }
+		    else
+			continue;	/* Not a connected route */
 
 		    /* Check for start/end points connecting on same layer */
 		    startx = eptinfo[i].startx;
@@ -683,9 +715,8 @@ int write_delays(char *filename)
 					starty <= y1) {
 				    brkx = startx;
 				    brky = starty;
-				    /* Disable this endpoint */
-				    eptinfo[i].startl = -2;
-				    break;
+				    y2 = brky;
+				    brki = i;
 				}
 			    }
 			    else {
@@ -693,9 +724,8 @@ int write_delays(char *filename)
 					starty <= y2) {
 				    brkx = startx;
 				    brky = starty;
-				    /* Disable this endpoint */
-				    eptinfo[i].startl = -2;
-				    break;
+				    y2 = brky;
+				    brki = i;
 				}
 			    }
 			}
@@ -705,9 +735,8 @@ int write_delays(char *filename)
 					endy <= y1) {
 				    brkx = endx;
 				    brky = endy;
-				    /* Disable this endpoint */
-				    eptinfo[i].endl = -2;
-				    break;
+				    y2 = brky;
+				    brki = i;
 				}
 			    }
 			    else {
@@ -715,9 +744,8 @@ int write_delays(char *filename)
 					endy <= y2) {
 				    brkx = endx;
 				    brky = endy;
-				    /* Disable this endpoint */
-				    eptinfo[i].endl = -2;
-				    break;
+				    y2 = brky;
+				    brki = i;
 				}
 			    }
 			}
@@ -729,9 +757,8 @@ int write_delays(char *filename)
 					startx <= x1) {
 				    brkx = startx;
 				    brky = starty;
-				    /* Disable this endpoint */
-				    eptinfo[i].startl = -2;
-				    break;
+				    x2 = brkx;
+				    brki = i;
 				}
 			    }
 			    else {
@@ -739,9 +766,8 @@ int write_delays(char *filename)
 					startx <= x2) {
 				    brkx = startx;
 				    brky = starty;
-				    /* Disable this endpoint */
-				    eptinfo[i].startl = -2;
-				    break;
+				    x2 = brkx;
+				    brki = i;
 				}
 			    }
 			}
@@ -751,9 +777,8 @@ int write_delays(char *filename)
 					endx <= x1) {
 				    brkx = endx;
 				    brky = endy;
-				    /* Disable this endpoint */
-				    eptinfo[i].endl = -2;
-				    break;
+				    x2 = brkx;
+				    brki = i;
 				}
 			    }
 			    else {
@@ -761,16 +786,17 @@ int write_delays(char *filename)
 					endx <= x2) {
 				    brkx = endx;
 				    brky = endy;
-				    /* Disable this endpoint */
-				    eptinfo[i].endl = -2;
-				    break;
+				    x2 = brkx;
+				    brki = i;
 				}
 			    }
 			}
 		    }
 		}
+		if ((brki >= 0) && (eptinfo[brki].endl != -2)) {
+		    /* Disable this endpoint so it is not checked again */
+		    eptinfo[brki].endl = -2;
 
-		if (i < numroutes) {
 		    /* Break route at this point */
 		    /* Make a copy of the segment where the break occurs */
 		    newroute = (ROUTE)malloc(sizeof(struct route_));
@@ -793,15 +819,20 @@ int write_delays(char *filename)
 		    newroute->next = rt->next;
 		    rt->next = newroute;
 
-		    /* Update eptinfo[i].route to point to new split */
-		    for (i = 0; i < numroutes; i++) {
-			if (eptinfo[i].route == rt) {
-			    eptinfo[i].route = newroute;
-			    break;
-			}
-		    }
+		    newroute->start.route = NULL;
+		    newroute->end.route = NULL;
+
+		    /* Update eptinfo[j].route to point to new route */
+		    eptinfo[j].route = newroute;
+
+		    /* Next loop ends list of segs and moves to next route */
+		    /* which is still the same original route, so adjust j */
+		    /* index so that it still refers to the correct	   */
+		    /* eptinfo entry.					   */
+		    j--;
 		}
 	    }
+	    j++;
 	}
 
 	/* Regenerate endpoint information */
@@ -820,6 +851,14 @@ int write_delays(char *filename)
 	    eptinfo[nroute].flags = (u_char)0;
 	    /* Segment start */
 	    seg = rt->segments;
+	    if (seg == NULL) {
+		eptinfo[nroute].route = NULL;
+		eptinfo[nroute].startnode = NULL;
+		eptinfo[nroute].endnode = NULL;
+		eptinfo[nroute].branching = NULL;
+		nroute++;
+		continue;
+	    }
 	    eptinfo[nroute].startx = seg->x1;
 	    eptinfo[nroute].starty = seg->y1;
 	    eptinfo[nroute].startl = seg->layer;
@@ -910,13 +949,16 @@ int write_delays(char *filename)
 
 	    eptinfo[driveridx].flags |= EPT_DRIVER;
 
+	    /* Diagnostic, for debugging */
+	    /*
 	    Fprintf(stdout, "Walking net %s.\n", net->netname);
 	    Fprintf(stdout, "Has %d nodes.\n", net->numnodes);
 	    Fprintf(stdout, "After segmenting, has %d routes.\n", numroutes);
 	    Fprintf(stdout, "Driver node %s/%s\n",
 			drivergate->gatename,
 			drivergate->gatetype->node[drivernodeidx]);
-	    if (!strcmp(g->gatetype->node[i], "pin"))
+	    */
+	    if (!strcmp(drivergate->gatetype->node[drivernodeidx], "pin"))
 		fprintf(delayFile, " PIN/%s %d ",
 			drivergate->gatename, net->numnodes - 1);
 	    else
@@ -961,7 +1003,9 @@ int write_delays(char *filename)
 	    free(rt);
 	    rt = nxroute;
 	}
-	for (i = 0; i < nroute; i++) free(eptinfo[i].branching);
+	for (i = 0; i < nroute; i++)
+	    if (eptinfo[i].branching != NULL)
+		free(eptinfo[i].branching);
 	free(eptinfo);
     }
     fclose(delayFile);

@@ -32,7 +32,7 @@ static void createGC(Window, GC *, XFontStruct *);
 
 XFontStruct *font_info;
 Pixmap buffer = (Pixmap)0;
-Display *dpy;
+Display *dpy = NULL;
 Window win;
 Colormap cmap;
 GC gc;
@@ -44,6 +44,7 @@ Dimension width, height;
 int spacing;
 int bluepix, greenpix, redpix, cyanpix, orangepix, goldpix;
 int blackpix, whitepix, graypix, ltgraypix, yellowpix;
+int tealpix, mauvepix, tanpix;
 int magentapix, purplepix, greenyellowpix;
 int brownvector[SHORTSPAN];
 int bluevector[LONGSPAN];
@@ -57,6 +58,8 @@ void highlight(int x, int y) {
 
     int i, xspc, yspc, hspc;
     PROUTE *Pr;
+
+    if (dpy == NULL) return;
 
     // If Obs2[] at x, y is a source or dest, don't highlight
     // Do this only for layer 0;  it doesn't have to be rigorous. 
@@ -85,6 +88,8 @@ void highlight_source() {
     int xspc, yspc, hspc;
     int i, x, y;
     PROUTE *Pr;
+
+    if (dpy == NULL) return;
 
     if (Obs2[0] == NULL) return;
 
@@ -122,6 +127,8 @@ void highlight_dest() {
     int i, x, y;
     PROUTE *Pr;
 
+    if (dpy == NULL) return;
+
     if (Obs2[0] == NULL) return;
 
     // Determine the number of routes per width and height, if
@@ -157,6 +164,8 @@ void highlight_starts(POINT glist) {
     int xspc, yspc, hspc;
     POINT gpoint;
 
+    if (dpy == NULL) return;
+
     // Determine the number of routes per width and height, if
     // it has not yet been computed
 
@@ -185,6 +194,8 @@ void highlight_mask(void) {
     // Determine the number of routes per width and height, if
     // it has not yet been computed
 
+    if (dpy == NULL) return;
+
     hspc = spacing >> 1;
 
     // Draw destination pins as tan squares
@@ -208,6 +219,8 @@ map_obstruction()
 {
     int xspc, yspc, hspc;
     int i, x, y;
+
+    if (dpy == NULL) return;
 
     hspc = spacing >> 1;
 
@@ -253,6 +266,8 @@ map_congestion()
     int i, x, y, n, norm;
     u_char *Congestion;
     u_char value, maxval;
+
+    if (dpy == NULL) return;
 
     hspc = spacing >> 1;
 
@@ -308,6 +323,8 @@ map_estimate()
     int xspc, yspc, hspc;
     int i, x, y, nwidth, nheight, area, length, value;
     float density, *Congestion, norm, maxval;
+
+    if (dpy == NULL) return;
 
     hspc = spacing >> 1;
 
@@ -395,6 +412,18 @@ void draw_net(NET net, u_char single, int *lastlayer) {
 		    case 3:
 			XSetForeground(dpy, gc, goldpix);
 			break;
+		    case 4:
+			XSetForeground(dpy, gc, orangepix);
+			break;
+		    case 5:
+			XSetForeground(dpy, gc, tealpix);
+			break;
+		    case 6:
+			XSetForeground(dpy, gc, mauvepix);
+			break;
+		    case 7:
+			XSetForeground(dpy, gc, tanpix);
+			break;
 		    default:
 			XSetForeground(dpy, gc, greenpix);
 			break;
@@ -430,6 +459,8 @@ draw_net_nodes(NET net) {
     SEG lastbbox, bboxit;
     DPOINT tap;
     int first, w, h, n;
+
+    if (dpy == NULL) return;
 
     /* Compute bbox for each node and draw it */
     for (node = net->netnodes, n = 0; node != NULL; node = node->next, n++) {
@@ -579,7 +610,7 @@ int GUI_init(Tcl_Interp *interp)
 {
    Tk_Window tkwind, tktop;
    static char *qrouterdrawdefault = ".qrouter";
-   char *qrouterdrawwin;
+   char *qrouterdrawwin, *waitcmd;
    XColor cvcolor, cvexact;
    int i;
    float frac;
@@ -638,6 +669,13 @@ int GUI_init(Tcl_Interp *interp)
    magentapix = cvcolor.pixel;
    XAllocNamedColor(dpy, cmap, "GreenYellow", &cvcolor, &cvexact);
    greenyellowpix = cvcolor.pixel;
+   XAllocNamedColor(dpy, cmap, "teal", &cvcolor, &cvexact);
+   tealpix = cvcolor.pixel;
+   XAllocNamedColor(dpy, cmap, "MediumVioletRed", &cvcolor, &cvexact);
+   mauvepix = cvcolor.pixel;
+   XAllocNamedColor(dpy, cmap, "tan1", &cvcolor, &cvexact);
+   tanpix = cvcolor.pixel;
+
    blackpix = BlackPixel(dpy,DefaultScreen(dpy));
    whitepix = WhitePixel(dpy,DefaultScreen(dpy));
 
@@ -666,6 +704,13 @@ int GUI_init(Tcl_Interp *interp)
       XAllocColor(dpy, cmap, &cvcolor);
       bluevector[i] = cvcolor.pixel;
    }
+
+   /* Wait on window to be created */
+   waitcmd = (char *)malloc(strlen(qrouterdrawwin) + 20);
+   sprintf(waitcmd, "tkwait visibility %s", qrouterdrawwin);
+   Tcl_Eval(interp, waitcmd);
+   free(waitcmd);
+
    return TCL_OK;	/* proceed to interpreter */
 }
 
