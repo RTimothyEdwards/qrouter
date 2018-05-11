@@ -28,10 +28,13 @@
 #include "node.h"
 #include "lef.h"
 #include "def.h"
+#include "point.h"
 
 /* Node Hash Table routines taken from delay.c */
 extern GATE FindGateNode(Tcl_HashTable *, NODE, int *);
 extern void FreeNodeTable(Tcl_HashTable *);
+
+extern int TotalRoutes;
 
 /* Structure to hold information about an antenna error. */
 
@@ -41,6 +44,7 @@ struct antennainfo_ {
    ANTENNAINFO next;	/* Next antenna violation in the list.	*/
    NET net;		/* The net violating an antenna rule	*/
    NODE node;		/* A gate-end node that is in violation */
+   ROUTE route;		/* A route that is part of the antenna	*/
    int layer;		/* Uppermost metal layer of the antenna */
 };
 
@@ -57,8 +61,44 @@ ANTENNAINFO AntennaList;
 /* layout.							*/
 /*--------------------------------------------------------------*/
 
-int
+void
 find_free_antenna_taps(char *antennacell)
+{
+    int numtaps;
+    GATE ginst;
+    GATE gateginfo;
+    NODE noderec;
+    int netnum, i;
+
+    if (antennacell == NULL) {
+	Fprintf(stderr, "No antenna cell defined!\n");
+	return;
+    }
+    numtaps = 0;
+    for (ginst = Nlgates; ginst; ginst = ginst->next) {
+	gateginfo = ginst->gatetype;
+	if (!strcasecmp(gateginfo->gatename, antennacell)) {
+	    /* Find an unassigned node.  If there is not one,	*/
+	    /* this is probably a routed (not free) cell.	*/
+	    for (i = 0; i < ginst->nodes; i++) {
+		netnum = ginst->netnum[i];
+		noderec = ginst->noderec[i];
+		if ((netnum == 0) && (noderec == NULL)) {
+		    ginst->netnum[i] = ANTENNA_NET;
+		    ginst->noderec[i] = (NODE)calloc(1, sizeof(struct node_));
+		    ginst->noderec[i]->netnum = ANTENNA_NET;
+		}
+	    }
+	}
+    }
+}
+
+/*--------------------------------------------------------------*/
+/* Similar to the routine above, but just count the free taps.	*/
+/*--------------------------------------------------------------*/
+
+int
+count_free_antenna_taps(char *antennacell)
 {
     int numtaps;
     GATE ginst;
@@ -73,14 +113,39 @@ find_free_antenna_taps(char *antennacell)
 	    /* this is probably a routed (not free) cell.	*/
 	    for (i = 0; i < ginst->nodes; i++) {
 		netnum = ginst->netnum[i];
-		if (netnum == 0) {
-		    ginst->netnum[i] = ANTENNA_NET;
+		if (netnum == ANTENNA_NET) 
 		    numtaps++;
-		}		
 	    }
 	}
     }
     return numtaps;
+}
+
+/*--------------------------------------------------------------*/
+/* After routing, the free antenna taps are all marked with the	*/
+/* net number of the net just routed.  To make them free again,	*/
+/* change all but the one that was routed back to ANTENNA_NET.	*/
+/* Identify the unused taps by finding the OBSVAL record with	*/
+/* net set to netnum but with the cost still at MAXRT.		*/
+/*--------------------------------------------------------------*/
+
+void revert_antenna_taps(netnum)
+{
+    int x, y, lay;
+    PROUTE *Pr;
+
+    for (lay = 0; lay < Num_layers; lay++)
+	for (x = 0; x < NumChannelsX[lay]; x++)
+	    for (y = 0; y < NumChannelsY[lay]; y++)
+		if ((OBSVAL(x, y, lay) & NETNUM_MASK) == netnum) {
+		    Pr = &OBS2VAL(x, y, lay);
+		    if (Pr->flags & PR_TARGET) {
+			if (Pr->prdata.cost == MAXRT) {
+			    OBSVAL(x, y, lay) &= ~NETNUM_MASK;
+			    OBSVAL(x, y, lay) |= ANTENNA_NET;
+			}
+		    }
+		}
 }
 
 /*--------------------------------------------------------------*/
@@ -95,10 +160,12 @@ find_free_antenna_taps(char *antennacell)
 enum visit_states {NOT_VISITED = 0, VISITED, PROCESSED, ANCHOR};
 
 /* Forward declarations */
-float get_route_area_reverse(NET, ROUTE, int, u_char *, u_char, Tcl_HashTable *);
-float get_route_area_forward(NET, ROUTE, int, u_char *, u_char, Tcl_HashTable *);
+float get_route_area_reverse(NET, ROUTE, int, u_char *, u_char,
+		Tcl_HashTable *, struct routeinfo_ *);
+float get_route_area_forward(NET, ROUTE, int, u_char *, u_char,
+		Tcl_HashTable *, struct routeinfo_ *);
 float get_route_area_reverse_fromseg(NET, ROUTE, SEG, int, u_char *, u_char,
-		Tcl_HashTable *);
+		Tcl_HashTable *, struct routeinfo_ *);
 
 /*--------------------------------------------------------------*/
 /* Determine the amount of metal in the route, starting at the	*/
@@ -112,7 +179,8 @@ float get_route_area_reverse_fromseg(NET, ROUTE, SEG, int, u_char *, u_char,
 
 float
 get_route_area_forward_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
-		u_char *visited, u_char method, Tcl_HashTable *NodeTable)
+		u_char *visited, u_char method, Tcl_HashTable *NodeTable,
+		struct routeinfo_ *iroute)
 {
     float area, length, width, thick;
     int x, y, l, compat;
@@ -135,15 +203,20 @@ get_route_area_forward_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
 	    int i;
 
 	    node = rt->start.node;
-	    g = FindGateNode(NodeTable, node, &i);
-	    if (g->area[i] == 0.0) {
-		/* There's a diffusion diode here! */
-		visited[node->nodenum] = ANCHOR;
-		return 0.0;
-	    } else {
-		/* Add this node to the list of nodes with gates	*/
-		/* attached to this antenna area.			*/
-		visited[node->nodenum] = VISITED;
+	    if (visited) {
+		g = FindGateNode(NodeTable, node, &i);
+		if (g->area[i] == 0.0) {
+		    /* There's a diffusion diode here! */
+		    visited[node->nodenum] = ANCHOR;
+		    return 0.0;
+		} else {
+		    /* Add this node to the list of nodes with gates	*/
+		    /* attached to this antenna area.			*/
+		    visited[node->nodenum] = VISITED;
+		}
+	    }
+	    else if ((method == ANTENNA_ROUTE) && (iroute != NULL)) {
+		set_node_to_net(node, PR_SOURCE, iroute->glist[0], iroute->bbox, 0);
 	    }
 	}
     }
@@ -154,7 +227,8 @@ get_route_area_forward_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
     for (; seg; seg = seg->next) {
 
 	/* Once the layer goes above the current check layer, the search stops. */
-	if (seg->layer > layer) break;
+	if (method != ANTENNA_DISABLE)
+	    if (seg->layer > layer) break;
 
 	/* Vias don't contribute to area, at least for now. */
 	if (seg->segtype & ST_VIA) continue;
@@ -166,27 +240,89 @@ get_route_area_forward_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
 	    if (seg->layer != layer)
 		continue;
 
-	/* Note that one of x or y is zero, depending on segment orientation */
-	x = (seg->x2 - seg->x1);
-	y = (seg->y2 - seg->y1);
-	if (x < 0) x = -x;
-	if (y < 0) y = -y;
+	/* method ANTENNA_ROUTE indicates that this routine was	*/
+	/* called as part of antenna routing.  So set up this	*/
+	/* part of the route in a manner similar to the		*/
+	/* set_route_to_net() routine.				*/
 
-	/* Note that "l" is a unitless grid dimension */
-	if (x == 0)
-	    length = (float)y * (float)PitchY[layer];
-	else
-	    length = (float)x * (float)PitchX[layer];
+	if ((method == ANTENNA_ROUTE) && (iroute != NULL)) {
+	    PROUTE *Pr;
+	    POINT gpoint;
 
-	/* area is either the total top surface of the metal,	*/
-	/* or the total side surface of the metal (in um^2)	*/
+	    l = seg->layer;
+	    x = seg->x1;
+	    y = seg->y1;
+	    while (1) {
+		Pr = &OBS2VAL(x, y, l);
+		Pr->flags = PR_SOURCE;
+		Pr->prdata.cost = 0;
 
-	width = LefGetRouteWidth(seg->layer);
-	if ((method == CALC_AREA) || (method == CALC_AGG_AREA))
-	    area += (float)(length * width);
-	else if ((method == CALC_SIDEAREA) || (method == CALC_AGG_SIDEAREA)) {
-	    thick = LefGetRouteThickness(seg->layer);
-	    area += thick * 2.0 * (length + width);
+		if (~(Pr->flags & PR_ON_STACK)) {
+		    Pr->flags |= PR_ON_STACK;
+		    gpoint = allocPOINT();
+		    gpoint->x1 = x;
+		    gpoint->y1 = y;
+		    gpoint->layer = l;
+		    gpoint->next = iroute->glist[0];
+		    iroute->glist[0] = gpoint;
+		}
+
+		if (x < iroute->bbox.x1) iroute->bbox.x1 = x;
+		if (x > iroute->bbox.x2) iroute->bbox.x2 = x;
+		if (y < iroute->bbox.y1) iroute->bbox.y1 = y;
+		if (y > iroute->bbox.y2) iroute->bbox.y2 = y;
+
+		// Move to next grid position in the segment
+		if (x == seg->x2 && y == seg->y2) break;
+		if (seg->x2 > seg->x1) x++;
+		else if (seg->x2 < seg->x1) x--;
+		if (seg->y2 > seg->y1) y++;
+		else if (seg->y2 < seg->y1) y--;
+	    }
+	}
+	else if (method == ANTENNA_DISABLE) {
+	    PROUTE *Pr;
+
+	    l = seg->layer;
+	    x = seg->x1;
+	    y = seg->y1;
+	    while (1) {
+		Pr = &OBS2VAL(x, y, l);
+		Pr->prdata.net = MAXNETNUM;
+		Pr->flags &= ~(PR_SOURCE | PR_TARGET | PR_COST);
+
+		// Move to next grid position in the segment
+		if (x == seg->x2 && y == seg->y2) break;
+		if (seg->x2 > seg->x1) x++;
+		else if (seg->x2 < seg->x1) x--;
+		if (seg->y2 > seg->y1) y++;
+		else if (seg->y2 < seg->y1) y--;
+	    }
+	}
+	if ((method != ANTENNA_ROUTE) && (method != ANTENNA_DISABLE)) {
+
+	    /* Note that one of x or y is zero, depending on segment orientation */
+	    x = (seg->x2 - seg->x1);
+	    y = (seg->y2 - seg->y1);
+	    if (x < 0) x = -x;
+	    if (y < 0) y = -y;
+
+	    /* Note that "l" is a unitless grid dimension */
+	    if (x == 0)
+		length = (float)y * (float)PitchY[layer];
+	    else
+		length = (float)x * (float)PitchX[layer];
+
+	    /* area is either the total top surface of the metal, */
+	    /* or the total side surface of the metal (in um^2)	  */
+
+	    width = LefGetRouteWidth(seg->layer);
+	    if ((method == CALC_AREA) || (method == CALC_AGG_AREA))
+		area += (float)(length * width);
+	    else if ((method == CALC_SIDEAREA) || (method == CALC_AGG_SIDEAREA)) {
+		thick = LefGetRouteThickness(seg->layer);
+		area += thick * 2.0 * (length + width);
+	    }
 	}
     }
 
@@ -278,10 +414,10 @@ get_route_area_forward_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
 	if (found == (u_char)1) {
 	    if (rt2->start.route == rt)
 		area += get_route_area_forward(net, rt2, layer, visited,
-				method, NodeTable);
+				method, NodeTable, iroute);
 	    else
 		area += get_route_area_reverse(net, rt2, layer, visited,
-				method, NodeTable);
+				method, NodeTable, iroute);
 	}
     }
 
@@ -298,12 +434,15 @@ get_route_area_forward_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
 	    g = FindGateNode(NodeTable, node, &i);
 	    if (g->area[i] == 0.0) {
 		/* There's a diffusion diode here! */
-		visited[node->nodenum] = ANCHOR;
+		if (visited) visited[node->nodenum] = ANCHOR;
 		return 0.0;
 	    } else {
 		/* Add this node to the list of nodes with gates	*/
 		/* attached to this antenna area.			*/
-		visited[node->nodenum] = VISITED;
+		if (visited) visited[node->nodenum] = VISITED;
+	    }
+	    if ((method == ANTENNA_ROUTE) && (iroute != NULL)) {
+		set_node_to_net(node, PR_SOURCE, iroute->glist[0], iroute->bbox, 0);
 	    }
 	}
 	else {
@@ -373,22 +512,26 @@ get_route_area_forward_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
 
 	    if (rseg->next != NULL)
 	        area += get_route_area_forward_fromseg(net, rt2, rseg->next,
-			layer, visited, method, NodeTable);
+			layer, visited, method, NodeTable, iroute);
 	    area += get_route_area_reverse_fromseg(net, rt2, rseg, layer,
-			visited, method, NodeTable);
+			visited, method, NodeTable, iroute);
 	}
     }
     return area;
 }
 
+/*--------------------------------------------------------------*/
+/* Check route antenna forward from the beginning of the route.	*/
+/*--------------------------------------------------------------*/
+
 float
 get_route_area_forward(NET net, ROUTE rt, int layer, u_char *visited,
-	u_char method, Tcl_HashTable *NodeTable)
+	u_char method, Tcl_HashTable *NodeTable, struct routeinfo_ *iroute)
 {
     float area;
 
     area = get_route_area_forward_fromseg(net, rt, NULL, layer, visited,
-		method, NodeTable);
+		method, NodeTable, iroute);
     return area;
 }
 
@@ -400,7 +543,8 @@ get_route_area_forward(NET net, ROUTE rt, int layer, u_char *visited,
 
 float
 get_route_area_reverse_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
-	u_char *visited, u_char method, Tcl_HashTable *NodeTable)
+	u_char *visited, u_char method, Tcl_HashTable *NodeTable,
+	struct routeinfo_ *iroute)
 {
     SEG seg, dseg, newseg, firstseg, saveseg;
     NODE savestartnode, saveendnode;
@@ -440,7 +584,7 @@ get_route_area_reverse_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
     if (saveflags & RT_END_NODE) rt->flags |= RT_START_NODE;
 
     area = get_route_area_forward_fromseg(net, rt, nseg, layer, visited,
-		method, NodeTable);
+		method, NodeTable, iroute);
 
     /* Replace the route segment with the original route */
     rt->segments = saveseg;
@@ -468,11 +612,12 @@ get_route_area_reverse_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
 
 float
 get_route_area_reverse(NET net, ROUTE rt, int layer, u_char *visited,
-		u_char method, Tcl_HashTable *NodeTable)
+		u_char method, Tcl_HashTable *NodeTable,
+		struct routeinfo_ *iroute)
 {
     float area;
     area = get_route_area_reverse_fromseg(net, rt, NULL, layer, visited,
-		method, NodeTable);
+		method, NodeTable, iroute);
     return area;
 }
 
@@ -487,7 +632,7 @@ int find_layer_antenna_violations(int layer, Tcl_HashTable *NodeTable)
     float antenna_ratio, thick;
     GATE g;
     NET net;
-    ROUTE rt;
+    ROUTE rt, saveroute;
     NODEINFO nodeptr;
     NODE node, tnode;
     SEG seg;
@@ -560,12 +705,14 @@ int find_layer_antenna_violations(int layer, Tcl_HashTable *NodeTable)
 
 	    for (rt = net->routes; rt; rt = rt->next) {
 		if ((rt->flags & RT_START_NODE) && (rt->start.node == node)) {
+		    saveroute = rt;
 		    metal_area += get_route_area_forward(net, rt, layer, visited,
-				method, NodeTable);
+				method, NodeTable, NULL);
 		}
 		else if ((rt->flags & RT_END_NODE) && (rt->end.node == node)) {
+		    saveroute = rt;
 		    metal_area += get_route_area_reverse(net, rt, layer, visited,
-				method, NodeTable);
+				method, NodeTable, NULL);
 		} 
 		else continue;
 	    }
@@ -615,6 +762,7 @@ int find_layer_antenna_violations(int layer, Tcl_HashTable *NodeTable)
 		    newantenna->net = net;
 		    newantenna->node = node;
 		    newantenna->layer = layer;
+		    newantenna->route = saveroute;
 		    newantenna->next = AntennaList;
 		    AntennaList = newantenna;
 		}
@@ -645,18 +793,243 @@ int find_layer_antenna_violations(int layer, Tcl_HashTable *NodeTable)
 }
 
 /*--------------------------------------------------------------*/
-/* Find all antenna violations					*/
+/* This routine is a combination of set_node_to_net(),		*/
+/* set_routes_to_net(), and disable_node_nets() (see qrouter.c	*/
+/* and maze.c), but walks the routes in the same manner used	*/
+/* for finding the antenna violations.  Set the antenna part of	*/
+/* the net as SOURCE, the free antenna taps as TARGET, and the	*/
+/* non-antenna portion of the net to an unused net number,	*/
+/* which can be converted back after routing.			*/
 /*--------------------------------------------------------------*/
 
-int find_antenna_violations()
+int set_antenna_to_net(int newflags, struct routeinfo_ *iroute,
+		u_char stage, ANTENNAINFO violation, Tcl_HashTable *NodeTable)
 {
-    int numerrors, layererrors;
+    int x, y, lay, rval, layer;
+    PROUTE *Pr;
+    ROUTE rt, clrrt;
+    NODE node;
+    NET net;
+
+    /* Set the node and connected antenna metal routes to PR_SOURCE.	*/
+
+    rt = violation->route;
+    node = violation->node;
+    net = violation->net;
+    layer = violation->layer;
+
+    if ((rt->flags & RT_START_NODE) && (rt->start.node == node))
+	get_route_area_forward(net, rt, layer, NULL, ANTENNA_ROUTE, NodeTable,
+		iroute);
+    else if ((rt->flags & RT_END_NODE) && (rt->end.node == node))
+	get_route_area_reverse(net, rt, layer, NULL, ANTENNA_ROUTE, NodeTable,
+		iroute);
+    else {
+	/* This should not happen */
+	Fprintf(stderr, "Error:  Antenna route and node do not connect!\n");
+	return 1;
+    }
+
+    /* Clear route visited flags for next pass */
+    for (clrrt = iroute->net->routes; clrrt; clrrt = clrrt->next)
+	clrrt->flags &= ~RT_VISITED;
+
+    /* Disable the remainder of the route */
+
+    if ((rt->flags & RT_START_NODE) && (rt->start.node == node))
+	get_route_area_forward(net, rt, layer, NULL, ANTENNA_DISABLE, NodeTable,
+		iroute);
+    else if ((rt->flags & RT_END_NODE) && (rt->end.node == node))
+	get_route_area_reverse(net, rt, layer, NULL, ANTENNA_DISABLE, NodeTable,
+		iroute);
+    else {
+	/* This should not happen */
+	Fprintf(stderr, "Error:  Antenna route and node do not connect!\n");
+	return 1;
+    }
+
+    /* Done checking routes;  clear route visited flags */
+    for (clrrt = iroute->net->routes; clrrt; clrrt = clrrt->next)
+	clrrt->flags &= ~RT_VISITED;
+
+    /* Set the antenna taps to the net number.		*/
+    /* Routine is similar to set_powerbus_to_net().	*/
+
+    rval = 0;
+    for (lay = 0; lay < Num_layers; lay++)
+	for (x = 0; x < NumChannelsX[lay]; x++)
+	    for (y = 0; y < NumChannelsY[lay]; y++)
+		if ((OBSVAL(x, y, lay) & NETNUM_MASK) == ANTENNA_NET) {
+		    Pr = &OBS2VAL(x, y, lay);
+		    // Skip locations that have been purposefully disabled
+		    if (!(Pr->flags & PR_COST) && (Pr->prdata.net == MAXNETNUM))
+			continue;
+		    else if (!(Pr->flags & PR_SOURCE)) {
+			Pr->flags |= (PR_TARGET | PR_COST);
+			Pr->prdata.cost = MAXRT;
+			rval = 1;
+			OBSVAL(x, y, lay) &= ~NETNUM_MASK;
+			OBSVAL(x, y, lay) |= net->netnum;
+		    }
+		}
+
+    return rval;
+}
+
+/*--------------------------------------------------------------*/
+/* This routine is similar to route_setup() for the normal	*/
+/* stage routes, with changes for the antenna routing.		*/
+/* Set the node in the "violation" record to source, and set	*/
+/* all free antenna taps to destination.  Add existing routes	*/
+/* to the source in the same manner as was used to find the	*/
+/* antenna violation in the first place (this is a subnet of	*/
+/* the complete net).  Disable the remainder of the net.	*/
+/* Set all free antenna taps to the net number being routed,	*/
+/* then route like stage 1 power routing.			*/
+/*--------------------------------------------------------------*/
+
+int antenna_setup(struct routeinfo_ *iroute, ANTENNAINFO violation,
+	Tcl_HashTable *NodeTable)
+{
+    int i, j, netnum, rval;
+    PROUTE *Pr;
+
+    for (i = 0; i < Num_layers; i++) {
+	for (j = 0; j < NumChannelsX[i] * NumChannelsY[i]; j++) {
+	    netnum = Obs[i][j] & (~BLOCKED_MASK);
+	    Pr = &Obs2[i][j];
+	    if (netnum != 0) {
+		Pr->flags = 0;            // Clear all flags
+		if (netnum == DRC_BLOCKAGE)
+		    Pr->prdata.net = netnum;
+		else
+		    Pr->prdata.net = netnum & NETNUM_MASK;
+	    } else {
+		Pr->flags = PR_COST;              // This location is routable
+		Pr->prdata.cost = MAXRT;
+	    }
+	}
+    }
+
+    // Fill out route information record
+
+    iroute->net = violation->net;
+    iroute->rt = NULL;
+    for (i = 0; i < 6; i++)
+	iroute->glist[i] = NULL;
+    iroute->nsrc = violation->node;
+    iroute->nsrctap = iroute->nsrc->taps;
+    iroute->maxcost = MAXRT;
+    iroute->do_pwrbus = TRUE;
+    iroute->pwrbus_src = 0;
+
+    iroute->bbox.x2 = iroute->bbox.y2 = 0;
+    iroute->bbox.x1 = NumChannelsX[0];
+    iroute->bbox.y1 = NumChannelsY[0];
+
+    rval = set_antenna_to_net(PR_SOURCE, iroute, 0, violation, NodeTable);
+
+    /* Unlikely that MASK_BBOX would be useful, since one does	*/
+    /* not know if an antenna tap is inside the box or not.	*/
+    /* Maybe if bounding box is expanded to encompass some	*/
+    /* number of taps. . .					*/
+
+    // if (maskMode == MASK_NONE)
+	   fillMask((u_char)0);
+    // else if (maskMode == MASK_BBOX)
+    //	   createBboxMask(iroute->net, (u_char)Numpasses);
+
+    iroute->maxcost = 20;
+    return rval;
+}
+
+/*--------------------------------------------------------------*/
+/* Route from nets with antenna violations to the nearest	*/
+/* routable antenna cell tap.					*/
+/*								*/
+/* This routine is essentially the same as doroute() but with	*/
+/* some special handling related to the antenna taps, which	*/
+/* have much in common with VDD and GND taps but significant	*/
+/* differences as well.						*/
+/*--------------------------------------------------------------*/
+
+int doantennaroute(ANTENNAINFO violation, Tcl_HashTable *NodeTable)
+{
+    NET net;
+    NODE node;
+    ROUTE rt1, lrt;
+    int layer, i, result, savelayers;
+    struct routeinfo_ iroute;
+
+    net = violation->net;
+    node = violation->node;
+    layer = violation->layer;
+
+    result = antenna_setup(&iroute, violation, NodeTable);
+
+    rt1 = createemptyroute();
+    rt1->netnum = net->netnum;
+    iroute.rt = rt1;
+
+    /* Force routing to be done at or below the antenna check layer.	*/
+
+    savelayers = Num_layers;
+    Num_layers = violation->layer + 1;
+
+    result = route_segs(&iroute, 0, (u_char)0);
+
+    Num_layers = savelayers;
+
+    if (result < 0) {
+	/* To do:  Handle failures? */
+	Fprintf(stderr, "Antenna anchoring route failed.\n");
+    }
+    else {
+	TotalRoutes++;
+	if (net->routes) {
+	    for (lrt = net->routes; lrt->next; lrt = lrt->next);
+	    lrt->next = rt1;
+	}
+	else {
+	    /* This should not happen */
+	    Fprintf(stderr, "Error:  Net has no routes!\n");
+	    net->routes = rt1;
+	}
+    }
+
+    /* For power-bus-type routing, glist is not empty after routing */
+    free_glist(&iroute);
+
+    /* Put free taps back to ANTENNA_NET */
+    revert_antenna_taps(net->netnum);
+
+    return result;
+}
+
+/*--------------------------------------------------------------*/
+/* Top level routine called from tclqrouter.c			*/
+/*--------------------------------------------------------------*/
+
+void
+resolve_antenna(char *antennacell, u_char do_fix)
+{
+    int numtaps, numerrors, numfixed, result;
+    int layererrors;
     int layer, i, new;
     Tcl_HashTable NodeTable;
     Tcl_HashEntry *entry;
     GATE g;
+    ANTENNAINFO nextviolation;
+    NET net;
 
+    numtaps = count_free_antenna_taps(antennacell);
+    if (Verbose > 3) {
+	Fprintf(stdout, "Number of free antenna taps = %d\n", numtaps);
+    }
+
+    AntennaList = NULL;
     numerrors = 0;
+    numfixed = 0;
 
     /* Build a hash table of nodes, so the gate area can be found	*/
     /* quickly for any node by hash lookup.				*/
@@ -687,98 +1060,28 @@ int find_antenna_violations()
 	    Fprintf(stdout, "Number of antenna errors on metal%d = %d\n",
 			layer + 1, layererrors);
 	}
+
+	/* Fix the violations found on this layer before moving	*/
+	/* on to the next layer.				*/
+
+	while (AntennaList != NULL) {
+	    nextviolation = AntennaList->next;
+    
+	    if (do_fix) {
+		result = doantennaroute(AntennaList, &NodeTable);
+		if (result >= 0) numfixed++;
+	    }
+
+	    /* Free the error information */
+	    free(AntennaList);
+	    AntennaList = nextviolation;
+	}
     }
 
-    FreeNodeTable(&NodeTable);
-    Tcl_DeleteHashTable(&NodeTable);
-
-    return numerrors;
-}
-
-/*--------------------------------------------------------------*/
-/* This routine is similar to route_setup() for the normal	*/
-/* stage routes, with changes for the antenna routing.		*/
-/* Set the node in the "violation" record to source, and set	*/
-/* all free antenna taps to destination.  Add existing routes	*/
-/* to the source in the same manner as was used to find the	*/
-/* antenna violation in the first place (this is a subnet of	*/
-/* the complete net).  Disable the remainder of the net.	*/
-/* Set all free antenna taps to the net number being routed,	*/
-/* then route like stage 1 power routing.			*/
-/*--------------------------------------------------------------*/
-
-int antenna_setup(struct routeinfo_ *iroute, ANTENNAINFO violation)
-{
-    /* Work in progress */
-    return 0;
-}
-
-/*--------------------------------------------------------------*/
-/* Route from nets with antenna violations to the nearest	*/
-/* routable antenna cell tap.					*/
-/*								*/
-/* This routine is essentially the same as doroute() but with	*/
-/* some special handling related to the antenna taps, which	*/
-/* have much in common with VDD and GND taps but significant	*/
-/* differences as well.						*/
-/*--------------------------------------------------------------*/
-
-int doantennaroute(ANTENNAINFO violation)
-{
-    NET net;
-    NODE node;
-    ROUTE rt1;
-    int layer, i, result;
-    struct routeinfo_ iroute;
-
-    net = violation->net;
-    node = violation->node;
-    layer = violation->layer;
-
-    // Fill out route information record
-    iroute.net = net;
-    iroute.rt = NULL;
-    for (i = 0; i < 6; i++)
-	iroute.glist[i] = NULL;
-    iroute.nsrc = node;
-    iroute.nsrctap = iroute.nsrc->taps;
-    iroute.maxcost = MAXRT;
-    iroute.do_pwrbus = TRUE;
-    iroute.pwrbus_src = 0;
-
-    result = antenna_setup(&iroute, violation);
-
-    rt1 = createemptyroute();
-    rt1->netnum = net->netnum;
-    iroute.rt = rt1;
-
-    result = route_segs(&iroute, 0, (u_char)0);
-
-    /* To do:  Handle failures, successes */
-
-    return 0;
-}
-
-/*--------------------------------------------------------------*/
-/* Top level routine called from tclqrouter.c			*/
-/*--------------------------------------------------------------*/
-
-void
-resolve_antenna(char *antennacell)
-{
-    int numtaps, numerrors, result;
-    ANTENNAINFO nextviolation;
-    NET net;
-
-    numtaps = find_free_antenna_taps(antennacell);
-    if (Verbose > 3) {
-	Fprintf(stdout, "Number of free antenna taps = %d\n", numtaps);
-    }
-
-    AntennaList = NULL;
-    numerrors = find_antenna_violations();
-    if (Verbose > 1) {
-	Fprintf(stdout, "Total number of antenna errors = %d\n", numerrors);
+    if (Verbose > 0) {
+	Fprintf(stdout, "Total number of antenna errors found = %d\n", numerrors);
+	if (do_fix)
+	    Fprintf(stdout, "Total number of antenna errors fixed = %d\n", numfixed);
     }
     if (numtaps < numerrors) {
 	if (numtaps == 0)
@@ -796,18 +1099,11 @@ resolve_antenna(char *antennacell)
 	/* pull routes up to a higher metal layer near the gate causing	*/
 	/* the error.							*/
     }
-    else if (numerrors > 0) {
-	while (AntennaList != NULL) {
-	    nextviolation = AntennaList->next;
-	    net = nextviolation->net;
 
-	    result = doantennaroute(nextviolation);
+    /* Free up the node hash table */
 
-	    /* Free the error information */
-	    free(AntennaList);
-	    AntennaList = nextviolation;
-	}
-    }
+    FreeNodeTable(&NodeTable);
+    Tcl_DeleteHashTable(&NodeTable);
 }
 
 #endif	/* TCL_QROUTER */

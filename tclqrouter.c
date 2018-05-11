@@ -1597,22 +1597,62 @@ qrouter_writedef(ClientData clientData, Tcl_Interp *interp,
 
 /*------------------------------------------------------*/
 /* Command "antenna"					*/
+/* Use:							*/
+/*	antenna init <cellname>				*/
+/*	antenna check					*/
+/*	antenna fix					*/
+/*							*/
+/* Calculate and handle antenna violations.  Option	*/
+/* "init" declares the cellname that is an antenna	*/
+/* anchoring cell.  This must be declared before	*/
+/* routing.  "antenna check" can be called at any time	*/
+/* and reports the number of antenna violations at each	*/
+/* metal layer.  "antenna fix" attempts to fix all 	*/
+/* antenna violations by anchoring each antenna to an	*/
+/* available antenna cell tap.				*/
 /*------------------------------------------------------*/
 
 static int
 qrouter_antenna(ClientData clientData, Tcl_Interp *interp,
                  int objc, Tcl_Obj *CONST objv[])
 {
-    char *antennacell = NULL;
+    char *option;
+    u_char do_fix = (u_char)0;
 
-    if (objc == 2)
-	antennacell = Tcl_GetString(objv[1]);
-    else if (antennacell == NULL) {
-	Tcl_SetResult(interp, "No antenna cell specified!", NULL);
+    if (objc >= 2) {
+	option = Tcl_GetString(objv[1]);
+	if (objc == 3) antenna_cell = strdup(Tcl_GetString(objv[2]));
+
+	if (!strcmp(option, "init")) {
+	    if (objc != 3) {
+		if (antenna_cell != NULL) {
+		    Tcl_SetObjResult(interp, Tcl_NewStringObj(antenna_cell, -1));
+		}
+		else {
+		    Tcl_SetResult(interp, "No antenna cell name specified.", NULL);
+		    return TCL_ERROR;
+		}
+	    }
+	}
+	else if (!strcmp(option, "check")) {
+	    resolve_antenna(antenna_cell, (u_char)0);
+	}
+	else if (!strcmp(option, "fix")) {
+	    resolve_antenna(antenna_cell, (u_char)1);
+	}
+	else {
+	    antenna_cell = Tcl_GetString(objv[1]);
+	}
+    }
+    else {
+	Tcl_SetResult(interp, "Usage: antenna init|check|fix [cellname]", NULL);
 	return TCL_ERROR;
     }
 
-    resolve_antenna(antennacell);
+    if (antenna_cell == NULL) {
+	Tcl_SetResult(interp, "No antenna cell specified!", NULL);
+	return TCL_ERROR;
+    }
     return QrouterTagCallback(interp, objc, objv);
 }
 

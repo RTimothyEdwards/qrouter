@@ -52,6 +52,7 @@ u_char needblock[MAX_LAYERS];
 
 char *vddnet = NULL;
 char *gndnet = NULL;
+char *antenna_cell = NULL;
 
 int    Numnets = 0;
 int    Pinlayers = 0;
@@ -632,6 +633,7 @@ static int post_def_setup()
    /* want improperly defined or positioned obstruction layers to over-	*/
    /* write our node list.						*/
 
+   find_free_antenna_taps(antenna_cell);
    expand_tap_geometry();
    clip_gate_taps();
    create_obstructions_from_gates();

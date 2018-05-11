@@ -462,6 +462,7 @@ extern u_char ripLimit;
 
 extern char *vddnet;
 extern char *gndnet;
+extern char *antenna_cell;
 
 /* Tcl output to console handling */
 

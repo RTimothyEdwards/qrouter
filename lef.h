@@ -51,10 +51,13 @@ typedef struct _lefSpacingRule {
     double spacing;	/* minimum spacing rule, in microns */
 } lefSpacingRule;
 
-/* Area calculation methods for finding antenna ratios */
+/* Area calculation methods for finding antenna ratios.  ANTENNA_ROUTE	*/
+/* is not a method but is used to indicate to the antenna search	*/
+/* routine that the search is for routing preparation and not for	*/
+/* calculating error.							*/
 
 enum area_methods {CALC_NONE = 0, CALC_AREA, CALC_SIDEAREA, CALC_AGG_AREA,
-	CALC_AGG_SIDEAREA};
+	CALC_AGG_SIDEAREA, ANTENNA_ROUTE, ANTENNA_DISABLE};
 
 /* Structure used to maintain default routing information for each	*/
 /* routable layer type.							*/
