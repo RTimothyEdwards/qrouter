@@ -26,16 +26,6 @@
 /* Find a node in the node list.				*/
 /*--------------------------------------------------------------*/
 
-/* Define record holding information pointing to a gate and the	*/
-/* index into a specific node of that gate.			*/
-
-typedef struct gatenode_ *GATENODE;
-
-struct gatenode_ {
-    GATE gate;
-    int idx;
-};
-
 GATE
 FindGateNode(Tcl_HashTable *NodeTable, NODE node, int *ridx)
 {
@@ -410,6 +400,24 @@ walk_route_output(endpointinfo *eptinfo, int eidx,
 }
 
 /*--------------------------------------------------------------*/
+/* Free data associated with each entry in the NodeTable hash.	*/
+/*--------------------------------------------------------------*/
+
+int FreeNodeTable(Tcl_HashTable *NodeTable)
+{
+    Tcl_HashEntry *entry;
+    Tcl_HashSearch hs;
+    GATENODE gn;
+
+    entry = Tcl_FirstHashEntry(NodeTable, &hs);
+    while (entry != NULL) {
+	gn = Tcl_GetHashValue(entry);
+	if (gn != NULL) free(gn);
+	entry = Tcl_NextHashEntry(&hs);
+    }
+}
+
+/*--------------------------------------------------------------*/
 /* Write an output file of the calculated R, C for every route	*/
 /* branch.  Because the qrouter algorithm is agnostic about the	*/
 /* direction of the signaling of routes, this has to be 	*/
@@ -496,7 +504,8 @@ int write_delays(char *filename)
     for (n = 0; n < Numnets; n++) {
 	net = Nlnets[n];
 
-	if ((net->netnum == VDD_NET) || (net->netnum == GND_NET)) continue;
+	if ((net->netnum == VDD_NET) || (net->netnum == GND_NET) ||
+		(net->netnum == ANTENNA_NET)) continue;
 
 	/* Count number of net routes */
 	numroutes = 0;
@@ -1012,6 +1021,7 @@ int write_delays(char *filename)
 
     free(lefrcvalues);
 
+    FreeNodeTable(&NodeTable);
     Tcl_DeleteHashTable(&NodeTable);
 
     return 0;

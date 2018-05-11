@@ -65,6 +65,9 @@ static int qrouter_writedef(
 static int qrouter_writedelays(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_antenna(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
 static int qrouter_readdef(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
@@ -141,6 +144,7 @@ static cmdstruct qrouter_commands[] =
    {"read_lef", qrouter_readlef},
    {"read_config", qrouter_readconfig},
    {"write_delays", qrouter_writedelays},
+   {"antenna", qrouter_antenna},
    {"layer_info", qrouter_layerinfo},
    {"obstruction", qrouter_obs},
    {"ignore", qrouter_ignore},
@@ -1588,6 +1592,27 @@ qrouter_writedef(ClientData clientData, Tcl_Interp *interp,
     }
 
     write_def(DEFoutfile);
+    return QrouterTagCallback(interp, objc, objv);
+}
+
+/*------------------------------------------------------*/
+/* Command "antenna"					*/
+/*------------------------------------------------------*/
+
+static int
+qrouter_antenna(ClientData clientData, Tcl_Interp *interp,
+                 int objc, Tcl_Obj *CONST objv[])
+{
+    char *antennacell = NULL;
+
+    if (objc == 2)
+	antennacell = Tcl_GetString(objv[1]);
+    else if (antennacell == NULL) {
+	Tcl_SetResult(interp, "No antenna cell specified!", NULL);
+	return TCL_ERROR;
+    }
+
+    resolve_antenna(antennacell);
     return QrouterTagCallback(interp, objc, objv);
 }
 

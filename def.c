@@ -1014,6 +1014,7 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 		gate->taps = (DSEG *)malloc(sizeof(DSEG));
 		gate->noderec = (NODE *)malloc(sizeof(NODE));
 		gate->direction = (u_char *)malloc(sizeof(u_char));
+		gate->area = (float *)malloc(sizeof(float));
 		gate->netnum = (int *)malloc(sizeof(int));
 		gate->node = (char **)malloc(sizeof(char *));
 		gate->taps[0] = NULL;
@@ -1021,6 +1022,7 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 		gate->netnum[0] = -1;
 		gate->node[0] = NULL;
 		gate->direction[0] = PORT_CLASS_DEFAULT;
+		gate->area[0] = 0.0;
 
 		/* Now do a search through the line for "+" entries	*/
 		/* And process each.					*/
@@ -1553,6 +1555,7 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
                     gate->taps = (DSEG *)malloc(gate->nodes * sizeof(DSEG));
                     gate->noderec = (NODE *)malloc(gate->nodes * sizeof(NODE));
                     gate->direction = (u_char *)malloc(gate->nodes * sizeof(u_char));
+                    gate->area = (float *)malloc(gate->nodes * sizeof(float));
                     gate->netnum = (int *)malloc(gate->nodes * sizeof(int));
                     gate->node = (char **)malloc(gate->nodes * sizeof(char *));
 
@@ -1565,6 +1568,7 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 
 			gate->node[i] = gateginfo->node[i];  /* copy pointer */
 			gate->direction[i] = gateginfo->direction[i];  /* copy */
+			gate->area[i] = gateginfo->area[i];
 			gate->taps[i] = (DSEG)NULL;
 
 			/* Global power/ground bus check */

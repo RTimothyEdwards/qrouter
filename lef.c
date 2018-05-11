@@ -1007,6 +1007,67 @@ LefGetRouteRCvalues(int layer, double *areacap, double *edgecap,
 
 /*
  *------------------------------------------------------------
+ * Get the antenna violation area ratio for the given layer.
+ *------------------------------------------------------------
+ */
+
+double
+LefGetRouteAreaRatio(int layer)
+{
+    LefList lefl;
+
+    lefl = LefFindLayerByNum(layer);
+    if (lefl) {
+	if (lefl->lefClass == CLASS_ROUTE) {
+	    return lefl->info.route.antenna;
+	}
+    }
+    return 0.0;
+}
+
+/*
+ *------------------------------------------------------------
+ * Get the antenna violation area calculation method for the
+ * given layer.
+ *------------------------------------------------------------
+ */
+
+u_char
+LefGetRouteAntennaMethod(int layer)
+{
+    LefList lefl;
+
+    lefl = LefFindLayerByNum(layer);
+    if (lefl) {
+	if (lefl->lefClass == CLASS_ROUTE) {
+	    return lefl->info.route.method;
+	}
+    }
+    return CALC_NONE;
+}
+
+/*
+ *------------------------------------------------------------
+ * Get the route metal layer thickness (if any is defined)
+ *------------------------------------------------------------
+ */
+
+double
+LefGetRouteThickness(int layer)
+{
+    LefList lefl;
+
+    lefl = LefFindLayerByNum(layer);
+    if (lefl) {
+	if (lefl->lefClass == CLASS_ROUTE) {
+	    return lefl->info.route.thick;
+	}
+    }
+    return 0.0;
+}
+
+/*
+ *------------------------------------------------------------
  * Get resistance per via for a via layer.
  * Return 0 on success, -1 if the layer is not found.
  * Fill in the pointer value with the resistance.
@@ -1649,11 +1710,12 @@ LefReadGeometry(GATE lefMacro, FILE *f, float oscale)
  */
 
 void
-LefReadPort(lefMacro, f, pinName, pinNum, pinDir, pinUse, oscale)
+LefReadPort(lefMacro, f, pinName, pinNum, pinDir, pinUse, pinArea, oscale)
     GATE lefMacro;
     FILE *f;
     char *pinName;
     int pinNum, pinDir, pinUse;
+    double pinArea;
     float oscale;
 {
     DSEG rectList, rlist;
@@ -1675,6 +1737,8 @@ LefReadPort(lefMacro, f, pinName, pinNum, pinDir, pinUse, oscale)
 			nodealloc * 10 * sizeof(NODE));
 		lefMacro->direction = (u_char *)realloc(lefMacro->direction,
 			nodealloc * 10 * sizeof(u_char));
+		lefMacro->area = (float *)realloc(lefMacro->area,
+			nodealloc * 10 * sizeof(float));
 		lefMacro->netnum = (int *)realloc(lefMacro->netnum,
 			nodealloc * 10 * sizeof(int));
 		lefMacro->node = (char **)realloc(lefMacro->node,
@@ -1683,7 +1747,9 @@ LefReadPort(lefMacro, f, pinName, pinNum, pinDir, pinUse, oscale)
         }
 	lefMacro->taps[pinNum] = rectList;
 	lefMacro->noderec[pinNum] = NULL;
+	lefMacro->area[pinNum] = 0.0;
 	lefMacro->direction[pinNum] = pinDir;
+	lefMacro->area[pinNum] = pinArea;
 	lefMacro->netnum[pinNum] = -1;
         if (pinName != NULL)
             lefMacro->node[pinNum] = strdup(pinName);
@@ -1732,6 +1798,7 @@ LefReadPin(lefMacro, f, pinname, pinNum, oscale)
     int keyword, subkey;
     int pinDir = PORT_CLASS_DEFAULT;
     int pinUse = PORT_USE_DEFAULT;
+    float pinArea = 0.0;
 
     static char *pin_keys[] = {
 	"DIRECTION",
@@ -1823,11 +1890,17 @@ LefReadPin(lefMacro, f, pinname, pinNum, oscale)
 		LefEndStatement(f);
 		break;
 	    case LEF_PORT:
-		LefReadPort(lefMacro, f, pinname, pinNum, pinDir, pinUse, oscale);
+		LefReadPort(lefMacro, f, pinname, pinNum, pinDir, pinUse, pinArea, oscale);
+		break;
+	    case LEF_ANTENNAGATE:
+		/* Read off the next value as the pin's antenna gate area. */
+		/* The layers or layers are not recorded. */
+		token = LefNextToken(f, TRUE);
+		sscanf(token, "%g", &pinArea);
+		LefEndStatement(f);
 		break;
 	    case LEF_CAPACITANCE:
 	    case LEF_ANTENNADIFF:
-	    case LEF_ANTENNAGATE:
 	    case LEF_ANTENNAMOD:
 	    case LEF_ANTENNAPAR:
 	    case LEF_ANTENNAPARSIDE:
@@ -1965,11 +2038,13 @@ LefReadMacro(f, mname, oscale)
     lefMacro->taps = (DSEG *)malloc(10 * sizeof(DSEG));
     lefMacro->noderec = (NODE *)malloc(10 * sizeof(NODE));
     lefMacro->direction = (u_char *)malloc(10 * sizeof(u_char));
+    lefMacro->area = (float *)malloc(10 * sizeof(float));
     lefMacro->netnum = (int *)malloc(10 * sizeof(int));
     lefMacro->node = (char **)malloc(10 * sizeof(char *));
     // Fill in 1st entry
     lefMacro->taps[0] = NULL;
     lefMacro->noderec[0] = NULL;
+    lefMacro->area[0] = 0.0;
     lefMacro->node[0] = NULL;
     lefMacro->netnum[0] = -1;
     GateInfo = lefMacro;
@@ -2183,8 +2258,10 @@ enum lef_layer_keys {LEF_LAYER_TYPE=0, LEF_LAYER_WIDTH,
 	LEF_LAYER_WIREEXT,
 	LEF_LAYER_RES, LEF_LAYER_CAP, LEF_LAYER_EDGECAP,
 	LEF_LAYER_THICKNESS, LEF_LAYER_HEIGHT,
-	LEF_LAYER_MINDENSITY, LEF_LAYER_ANTENNADIFF,
-	LEF_LAYER_ANTENNASIDE,
+	LEF_LAYER_MINDENSITY, LEF_LAYER_ANTENNA,
+	LEF_LAYER_ANTENNADIFF, LEF_LAYER_ANTENNASIDE,
+	LEF_LAYER_AGG_ANTENNA, LEF_LAYER_AGG_ANTENNADIFF,
+	LEF_LAYER_AGG_ANTENNASIDE,
 	LEF_VIA_DEFAULT, LEF_VIA_LAYER, LEF_VIA_RECT,
 	LEF_VIA_ENCLOSURE, LEF_VIA_PREFERENCLOSURE,
 	LEF_VIARULE_OVERHANG,
@@ -2233,8 +2310,12 @@ LefReadLayerSection(f, lname, mode, lefl)
 	"THICKNESS",
 	"HEIGHT",
 	"MINIMUMDENSITY",
+	"ANTENNAAREARATIO",
 	"ANTENNADIFFAREARATIO",
 	"ANTENNASIDEAREARATIO",
+	"ANTENNACUMAREARATIO",
+	"ANTENNACUMDIFFAREARATIO",
+	"ANTENNACUMSIDEAREARATIO",
 	"DEFAULT",
 	"LAYER",
 	"RECT",
@@ -2297,6 +2378,11 @@ LefReadLayerSection(f, lname, mode, lefl)
 			lefl->info.route.offsety = -1.0;
 			lefl->info.route.hdirection = (u_char)0;
 
+			lefl->info.route.minarea = 0.0;
+			lefl->info.route.thick = 0.0;
+			lefl->info.route.antenna = 0.0;
+			lefl->info.route.method = CALC_NONE;
+
 			/* A routing type has been declared.  Assume	*/
 			/* this takes the name "metal1", "M1", or some	*/
 			/* variant thereof.				*/
@@ -2352,7 +2438,13 @@ LefReadLayerSection(f, lname, mode, lefl)
 		LefEndStatement(f);
 		break;
 	    case LEF_LAYER_AREA:
-		// Not handled, but needed!
+		/* Read minimum area rule value */
+		token = LefNextToken(f, TRUE);
+		if (lefl->lefClass == CLASS_ROUTE) {
+		    sscanf(token, "%lg", &dvalue);
+		    // Units of area (length * length)
+		    lefl->info.route.minarea = dvalue / (double)oscale / (double)oscale;
+		}
 		LefEndStatement(f);
 		break;
 	    case LEF_LAYER_SPACING:
@@ -2526,9 +2618,47 @@ LefReadLayerSection(f, lname, mode, lefl)
 		break;
 	    case LEF_LAYER_THICKNESS:
 	    case LEF_LAYER_HEIGHT:
-	    case LEF_LAYER_MINDENSITY:
-	    case LEF_LAYER_ANTENNADIFF:
+		/* Assuming thickness and height are the same thing? */
+		token = LefNextToken(f, TRUE);
+		if (lefl->lefClass == CLASS_ROUTE) {
+		    sscanf(token, "%lg", &dvalue);
+		    // Units of length
+		    lefl->info.route.thick = dvalue / (double)oscale;
+		}
+		LefEndStatement(f);
+		break;
+	    case LEF_LAYER_ANTENNA:
 	    case LEF_LAYER_ANTENNASIDE:
+	    case LEF_LAYER_AGG_ANTENNA:
+	    case LEF_LAYER_AGG_ANTENNASIDE:
+		/* NOTE: Assuming that only one of these methods will	*/
+		/* be used!  If more than one is present, then only the	*/
+		/* last one will be recorded and used.			*/
+
+		token = LefNextToken(f, TRUE);
+		if (lefl->lefClass == CLASS_ROUTE) {
+		    sscanf(token, "%lg", &dvalue);
+		    // Unitless values (ratio)
+		    lefl->info.route.antenna = dvalue;
+		}
+		if (keyword == LEF_LAYER_ANTENNA)
+		    lefl->info.route.method = CALC_AREA;
+		else if (keyword == LEF_LAYER_ANTENNASIDE)
+		    lefl->info.route.method = CALC_SIDEAREA;
+		else if (keyword == LEF_LAYER_AGG_ANTENNA)
+		    lefl->info.route.method = CALC_AGG_AREA;
+		else
+		    lefl->info.route.method = CALC_AGG_SIDEAREA;
+		LefEndStatement(f);
+	    case LEF_LAYER_ANTENNADIFF:
+	    case LEF_LAYER_AGG_ANTENNADIFF:
+		/* Not specifically handling these antenna types */
+		/* (antenna ratios for antennas connected to diodes,	*/
+		/* which can still blow gates if the diode area is	*/
+		/* insufficiently large.)				*/
+		LefEndStatement(f);
+		break;
+	    case LEF_LAYER_MINDENSITY:
 	    case LEF_LAYER_WIREEXT:
 		/* Not specifically handling these */
 		LefEndStatement(f);
@@ -2926,6 +3056,7 @@ LefRead(inName)
 
         gateginfo->taps = (DSEG *)malloc(sizeof(DSEG));
         gateginfo->noderec = (NODE *)malloc(sizeof(NODE));
+        gateginfo->area = (float *)malloc(sizeof(float));
         gateginfo->direction = (u_char *)malloc(sizeof(u_char));
         gateginfo->netnum = (int *)malloc(sizeof(int));
         gateginfo->node = (char **)malloc(sizeof(char *));
@@ -2938,6 +3069,7 @@ LefRead(inName)
 	gateginfo->next = GateInfo;
 	gateginfo->taps[0] = grect;
         gateginfo->noderec[0] = NULL;
+        gateginfo->area[0] = 0.0;
         gateginfo->netnum[0] = -1;
 	gateginfo->node[0] = strdup("pin");
 	GateInfo = gateginfo;

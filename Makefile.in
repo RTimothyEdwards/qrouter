@@ -36,7 +36,7 @@ ALL_TARGET := @ALL_TARGET@
 SOURCES = qrouter.c point.c maze.c mask.c node.c output.c qconfig.c lef.c def.c
 OBJECTS := $(patsubst %.c,%.o,$(SOURCES))
 
-SOURCES2 = graphics.c tclqrouter.c tkSimple.c delays.c
+SOURCES2 = graphics.c tclqrouter.c tkSimple.c delays.c antenna.c
 OBJECTS2 := $(patsubst %.c,%.o,$(SOURCES2))
 
 SOURCES3 = qrouterexec.c

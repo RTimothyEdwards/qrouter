@@ -853,7 +853,7 @@ NET getnettoroute(int order)
    // only one node.
 
    if ((net->numnodes == 1) && (net->netnum == VDD_NET ||
-		net->netnum == GND_NET))
+		net->netnum == GND_NET || net->netnum == ANTENNA_NET))
       return net;
 
    if (Verbose > 3) {
@@ -1622,7 +1622,8 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
       }
   }
 
-  if (iroute->net->netnum == VDD_NET || iroute->net->netnum == GND_NET) {
+  if (iroute->net->netnum == VDD_NET || iroute->net->netnum == GND_NET ||
+		iroute->net->netnum == ANTENNA_NET) {
      // The normal method of selecting source and target is not amenable
      // to power bus routes.  Instead, we use the global standard cell
      // power rails as the target, and each net in sequence becomes the
@@ -1813,7 +1814,7 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
 /*   AUTHOR and DATE: steve beccue      Fri Aug 8		*/
 /*--------------------------------------------------------------*/
 
-static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
+int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
 {
   POINT gpoint, gunproc, newpt;
   int  i, o;
@@ -2131,7 +2132,7 @@ done:
 /*   AUTHOR and DATE: steve beccue      Fri Aug 8		*/
 /*--------------------------------------------------------------*/
 
-static ROUTE createemptyroute(void)
+ROUTE createemptyroute(void)
 {
    ROUTE rt;
 

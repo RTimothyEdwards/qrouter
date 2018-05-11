@@ -151,7 +151,7 @@ int set_powerbus_to_net(int netnum)
     PROUTE *Pr;
 
     rval = 0;
-    if ((netnum == VDD_NET) || (netnum == GND_NET)) {
+    if ((netnum == VDD_NET) || (netnum == GND_NET) || (netnum == ANTENNA_NET)) {
        for (lay = 0; lay < Num_layers; lay++)
           for (x = 0; x < NumChannelsX[lay]; x++)
 	     for (y = 0; y < NumChannelsY[lay]; y++)
@@ -370,7 +370,8 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist,
     /* net is a power bus, just return.					*/
 
     if ((node->taps == NULL) && (node->extend == NULL)) {
-       if ((node->netnum == VDD_NET) || (node->netnum == GND_NET))
+       if ((node->netnum == VDD_NET) || (node->netnum == GND_NET) ||
+		(node->netnum == ANTENNA_NET))
 	   return result;
     }
 

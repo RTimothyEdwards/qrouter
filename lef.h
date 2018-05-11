@@ -51,19 +51,28 @@ typedef struct _lefSpacingRule {
     double spacing;	/* minimum spacing rule, in microns */
 } lefSpacingRule;
 
+/* Area calculation methods for finding antenna ratios */
+
+enum area_methods {CALC_NONE = 0, CALC_AREA, CALC_SIDEAREA, CALC_AGG_AREA,
+	CALC_AGG_SIDEAREA};
+
 /* Structure used to maintain default routing information for each	*/
 /* routable layer type.							*/
 
 typedef struct {
     lefSpacingRule *spacing;	/* spacing rules, ordered by width */
-    double  width;	/* nominal route width, in microns */
-    double  pitchx;	/* route X pitch, in microns */
-    double  pitchy;	/* route Y pitch, in microns */
-    double  offsetx;	/* route track offset from X origin, in microns */
-    double  offsety;	/* route track offset from Y origin, in microns */
-    double  respersq;	/* resistance per square */
-    double  areacap;	/* area capacitance per square micron */
-    double  edgecap;	/* edge capacitance per micron */
+    double width;	/* nominal route width, in microns */
+    double pitchx;	/* route X pitch, in microns */
+    double pitchy;	/* route Y pitch, in microns */
+    double offsetx;	/* route track offset from X origin, in microns */
+    double offsety;	/* route track offset from Y origin, in microns */
+    double respersq;	/* resistance per square */
+    double areacap;	/* area capacitance per square micron */
+    double edgecap;	/* edge capacitance per micron */
+    double minarea;	/* minimum metal area rule */
+    double thick;	/* metal layer thickness, if given */
+    double antenna;	/* antenna area ratio rule */
+    u_char method;	/* antenna rule calculation method */ 
     u_char hdirection;	/* horizontal direction preferred */
 } lefRoute;
 
@@ -139,6 +148,9 @@ double LefGetRouteSpacing(int layer);
 double LefGetRouteWideSpacing(int layer, double width);
 double LefGetRoutePitch(int layer);
 double LefGetRouteOffset(int layer);
+double LefGetRouteThickness(int layer);
+double LefGetRouteAreaRatio(int layer);
+u_char LefGetRouteAntennaMethod(int layer);
 int    LefGetRouteRCvalues(int layer, double *areacap, double *edgecap,
 		double *respersq);
 int    LefGetViaResistance(int layer, double *respervia);

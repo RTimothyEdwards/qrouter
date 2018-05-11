@@ -274,6 +274,7 @@ struct gate_ {
     char **node;	// names of the pins on this gate
     int   *netnum;	// net number connected to each pin
     NODE  *noderec;	// node record for each pin
+    float *area;	// gate area for each pin
     u_char *direction;	// port direction (input, output, etc.)	
     DSEG  *taps;	// list of gate node locations and layers
     DSEG   obs;		// list of obstructions in gate
@@ -281,6 +282,16 @@ struct gate_ {
     double placedX;                 
     double placedY;
     int orient;
+};
+
+// Define record holding information pointing to a gate and the
+// index into a specific node of that gate.
+
+typedef struct gatenode_ *GATENODE;
+
+struct gatenode_ {
+    GATE gate;
+    int idx;
 };
 
 // Structure for a network to be routed
@@ -468,8 +479,8 @@ extern char *gndnet;
 
 static int next_route_setup(struct routeinfo_ *iroute, u_char stage);
 static int route_setup(struct routeinfo_ *iroute, u_char stage);
-static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug);
-static ROUTE createemptyroute(void);
+int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug);
+ROUTE createemptyroute(void);
 static void helpmessage(void);
 
 int    set_num_channels(void);
