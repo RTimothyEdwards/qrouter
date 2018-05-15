@@ -168,6 +168,9 @@ proc qrouter::standard_route {{filename ""} {doquit true}} {
         puts stdout "*** Writing DEF file (default)"
 	write_def
     }
+    if {$result > 0} {
+	write_failed fail.out
+    }
     if {(!$result) && $doquit} {quit}
 }
 
@@ -209,6 +212,9 @@ proc qrouter::congestion_route {filename} {
       qrouter::write_congested $filename
    }
    write_def
+   if {$result > 0} {
+      write_failed fail.out
+   }
    quit
 }
 

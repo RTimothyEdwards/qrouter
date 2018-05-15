@@ -454,6 +454,22 @@ runqrouter(int argc, char *argv[])
 }
 
 /*--------------------------------------------------------------*/
+/* remove_failed ---						*/
+/*								*/
+/* Free up memory in the list of route failures.		*/
+/*--------------------------------------------------------------*/
+
+void remove_failed()
+{
+    NETLIST nl;
+    while (FailedNets) {
+	nl = FailedNets;
+	FailedNets = FailedNets->next;
+	free(nl);
+    }
+}
+
+/*--------------------------------------------------------------*/
 /* reinitialize ---						*/
 /*								*/
 /* Free up memory in preparation for reading another DEF file	*/
@@ -494,11 +510,7 @@ static void reinitialize()
 
     // Free the netlist of failed nets (if there is one)
 
-    while (FailedNets) {
-	nl = FailedNets;
-	FailedNets = FailedNets->next;
-	free(nl);
-    }
+    remove_failed();
 
     // Free all net and route information
 
@@ -773,13 +785,7 @@ int dofirststage(u_char graphdebug, int debug_netnum)
    // Clear the lists of failed routes, in case first
    // stage is being called more than once.
 
-   if (debug_netnum <= 0) {
-      while (FailedNets) {
-         nl = FailedNets->next;
-         free(FailedNets);
-         FailedNets = nl;
-      }
-   }
+   if (debug_netnum <= 0) remove_failed();
 
    // Now find and route all the nets
 
@@ -1204,13 +1210,7 @@ int dothirdstage(u_char graphdebug, int debug_netnum, u_int effort)
 
    // Clear the lists of failed routes
 
-   if (debug_netnum <= 0) {
-      while (FailedNets) {
-         nl = FailedNets->next;
-         free(FailedNets);
-         FailedNets = nl;
-      }
-   }
+   if (debug_netnum <= 0) remove_failed();
 
    // Now find and route all the nets
 
@@ -1866,6 +1866,17 @@ int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
       if (gpoint == NULL) break;
 
       iroute->glist[0] = gpoint->next;
+
+      // Stop-gap:  Needs to be investigated.  Occasional gpoint has
+      // large negative (random?) value for y1.  Suggests a memory
+      // leak.  Only seen occurring during doantennaroute().  Check
+      // using valgrind.
+
+      if ((gpoint->x1 < 0) || (gpoint->y1 < 0)) {
+         Fprintf(stderr, "Internal memory error!\n");
+	 freePOINT(gpoint);
+	 continue;
+      }
 
       curpt.x = gpoint->x1;
       curpt.y = gpoint->y1;

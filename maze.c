@@ -2350,6 +2350,214 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	 }
       }
    }
+
+   /* Handle minimum metal area rule for stacked contacts */
+
+   else if (StackedContacts > 0) {
+
+      /* Search for all stacked contacts.  For each via position inside	*/
+      /* a stack, excluding top and bottom, determine if a minimum 	*/
+      /* metal area is violated.  If so, then find an unused		*/
+      /* neighboring grid and extend to that side.  If no unused	*/
+      /* neighboring grids exist, then fail.				*/
+
+      POINT lrppre;
+      PROUTE *pri, *pri2;
+      int violations = 1, checks;
+      int i, cx, cy, cl;
+      int mincost, minx = -1, miny = -1, collide, cost;
+      double min_area[MAX_LAYERS];
+      u_char need_check[MAX_LAYERS];
+
+      /* Register the minimum metal area rule for each via base layer */
+
+      checks = 0;
+      for (i = 0; i < Num_layers; i++) {
+	 min_area[i] = LefGetRouteMinArea(i);
+	 if (i == Num_layers - 1) {
+	    if (min_area[i] <= LefGetViaWidth(i - 1, i, 0) * LefGetViaWidth(i - 1, i, 1))
+	       need_check[i] = (u_char)0;
+	    else {
+	       need_check[i] = (u_char)1;
+	       checks++;
+	    }
+	 }
+	 else {
+	    if (min_area[i] <= LefGetViaWidth(i, i, 0) * LefGetViaWidth(i, i, 1))
+	       need_check[i] = (u_char)0;
+	    else {
+	       need_check[i] = (u_char)1;
+	       checks++;
+	    }
+	 }
+      }
+
+      if (checks == 0) violations = 0;	// No minimum area violations possible.
+
+      while (violations != 0) {	// Keep doing until all min. area violations are gone
+	 violations = 0;
+	 lrcur = lrend;
+	 lrprev = lrend->next;
+
+	 while (lrprev != NULL) {
+	    lrppre = lrprev->next;
+	    if (lrppre == NULL) break;
+	    collide = FALSE;
+	    while ((lrcur->layer != lrprev->layer) && (lrprev->layer != lrppre->layer)
+			&& (need_check[lrprev->layer] == (u_char)1)) {
+	       // Isolated via inside stack found
+	
+	       violations++;
+	       cx = lrprev->x1;
+	       cy = lrprev->y1;
+	       cl = lrprev->layer;
+	       mincost = MAXRT;
+
+	       // Check all four positions around the contact for a
+	       // free position to occupy.
+
+	       if (cx < NumChannelsX[cl] - 1) {
+	          dx = cx + 1;	// Check to the right
+	          pri = &OBS2VAL(dx, cy, cl);
+	          pflags = pri->flags;
+
+	          cost = pri->prdata.cost;
+	          if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
+				(pri->prdata.net < MAXNETNUM)) {
+		     pflags = 0;
+		     cost = ConflictCost;
+	          }
+	          if (pflags & PR_COST) {
+		     pflags &= ~PR_COST;
+		     if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
+		         mincost = cost;
+		         minx = dx;
+		         miny = cy;
+		     }
+	          }
+	       }
+
+	       if (cx > 0) {
+	          dx = cx - 1;	// Check to the left
+	          pri = &OBS2VAL(dx, cy, cl);
+	          pflags = pri->flags;
+	          cost = pri->prdata.cost;
+	          if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
+				(pri->prdata.net < MAXNETNUM)) {
+		     pflags = 0;
+		     cost = ConflictCost;
+	          }
+	          if (pflags & PR_COST) {
+		     pflags &= ~PR_COST;
+		     if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
+		         mincost = cost;
+		         minx = dx;
+		         miny = cy;
+		     }
+		  }
+	       }
+
+	       if (cy < NumChannelsY[cl] - 1) {
+	          dy = cy + 1;	// Check north
+	          pri = &OBS2VAL(cx, dy, cl);
+	          pflags = pri->flags;
+	          cost = pri->prdata.cost;
+	          if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
+				(pri->prdata.net < MAXNETNUM)) {
+		     pflags = 0;
+		     cost = ConflictCost;
+	          }
+	          if (pflags & PR_COST) {
+		     pflags &= ~PR_COST;
+		     if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
+		         mincost = cost;
+		         minx = cx;
+		         miny = dy;
+		     }
+		  }
+	       }
+
+	       if (cy > 0) {
+	          dy = cy - 1;	// Check south
+	          pri = &OBS2VAL(cx, dy, cl);
+	          pflags = pri->flags;
+	          cost = pri->prdata.cost;
+	          if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
+				(pri->prdata.net < MAXNETNUM)) {
+		     pflags = 0;
+		     cost = ConflictCost;
+	          }
+	          if (pflags & PR_COST) {
+		     pflags &= ~PR_COST;
+		     if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
+		         mincost = cost;
+		         minx = cx;
+		         miny = dy;
+		     }
+		  }
+	       }
+
+	       // Was there an available position?  If so, modify
+	       // records to route to and from this position.
+
+	       if (mincost < MAXRT) {
+
+		  newlr = (POINT)malloc(sizeof(struct point_));
+		  newlr->x1 = minx;
+		  newlr->y1 = miny;
+		  newlr->layer = cl;
+
+		  newlr2 = (POINT)malloc(sizeof(struct point_));
+		  newlr2->x1 = cx;
+		  newlr2->y1 = cy;
+		  newlr2->layer = cl;
+
+		  lrprev->next = newlr;
+		  newlr->next = newlr2;
+		  newlr2->next = lrppre;
+
+		  break;	/* Found a solution;  done. */
+	       }
+
+	       else if (stage == 0) {
+		  // On the first stage, we call it an error and move
+		  // on to the next net.  This is a bit conservative,
+		  // but it happens rarely.
+
+		  if (Verbose > 0)
+		     Fprintf(stderr, "Failed to reserve sufficient area "
+				"at grid point %d %d.\n",
+				lrcur->x1, lrcur->y1);
+		  violations = 0;
+		  rval = 0;
+		  goto cleanup;
+	       }
+	       else {
+		  if (collide == TRUE) {
+		     Fprintf(stderr, "Failed to reserve sufficient area "
+				"at grid point %d %d;  position may "
+				"not be routable.\n",
+				lrcur->x1, lrcur->y1);
+		     violations = 0;
+		     rval = 0;
+		     goto cleanup;
+		  }
+
+		  // On the second stage, we will run through the
+		  // search again, but allow overwriting other
+		  // nets, which will be treated like other colliding
+		  // nets in the regular route path search.
+
+		  collide = TRUE;
+	       }
+	    }
+	    lrcur = lrprev;
+	    lrprev = lrppre;
+	 }
+      }
+   }
+
+   /* Done handling stacked contacts */
  
    lrend = lrtop;
    lrcur = lrtop;

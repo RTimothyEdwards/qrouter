@@ -31,6 +31,39 @@
 int  Pathon = -1;
 
 /*--------------------------------------------------------------*/
+/* Output a list of failed nets.				*/
+/*--------------------------------------------------------------*/
+
+int write_failed(char *filename)
+{
+    FILE *ffail;
+    NET net;
+    NETLIST nl;
+    int failcount;
+
+    failcount = countlist(FailedNets);
+    if (failcount == 0) {
+	Fprintf(stdout, "There are no failing net routes.\n");
+	return 0;
+    }
+
+    ffail = fopen(filename, "w");
+    if (ffail == NULL) {
+	Fprintf(stderr, "Could not open file %s for writing.\n", filename);
+	return 1;
+    }
+    fprintf(ffail, "%d nets failed to route:\n");
+
+    for (nl = FailedNets; nl; nl = nl->next) {
+        net = FailedNets->net;
+        Fprintf(ffail, " %s\n", net->netname);
+    }
+
+    fclose(ffail);
+    return 0;
+}
+
+/*--------------------------------------------------------------*/
 /* Write the output annotated DEF file.				*/
 /*--------------------------------------------------------------*/
 
@@ -51,14 +84,11 @@ int write_def(char *filename)
          Fprintf(stdout, "Failed net routes: %d\n", countlist(FailedNets));
 	 Fprintf(stdout, "List of failed nets follows:\n");
 
-	 // Make sure FailedNets is cleaned up as we output the failed nets
+	 // Output a list of the failed nets
 
- 	 while (FailedNets) {
+	 for (nl = FailedNets; nl; nl = nl->next) {
 	    net = FailedNets->net;
 	    Fprintf(stdout, " %s\n", net->netname);
-	    nl = FailedNets->next;
-	    free(FailedNets);
-	    FailedNets = nl;
 	 }
 	 Fprintf(stdout, "\n");
       }

@@ -62,6 +62,9 @@ static int qrouter_stage3(
 static int qrouter_writedef(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_writefailed(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
 static int qrouter_writedelays(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
@@ -145,6 +148,7 @@ static cmdstruct qrouter_commands[] =
    {"read_config", qrouter_readconfig},
    {"write_delays", qrouter_writedelays},
    {"antenna", qrouter_antenna},
+   {"write_failed", qrouter_writefailed},
    {"layer_info", qrouter_layerinfo},
    {"obstruction", qrouter_obs},
    {"ignore", qrouter_ignore},
@@ -667,6 +671,11 @@ qrouter_quit(ClientData clientData, Tcl_Interp *interp,
 	Tcl_WrongNumArgs(interp, 1, objv, "(no arguments)");
 	return TCL_ERROR;
     }
+
+    /* Free up failed net list */
+    remove_failed();
+
+    /* Should be doing other cleanup tasks here. . . */
 
     if (consoleinterp == interp)
 	Tcl_Exit(TCL_OK);
@@ -1653,6 +1662,27 @@ qrouter_antenna(ClientData clientData, Tcl_Interp *interp,
 	Tcl_SetResult(interp, "No antenna cell specified!", NULL);
 	return TCL_ERROR;
     }
+    return QrouterTagCallback(interp, objc, objv);
+}
+
+/*------------------------------------------------------*/
+/* Command "write_failed"				*/
+/*------------------------------------------------------*/
+
+static int
+qrouter_writefailed(ClientData clientData, Tcl_Interp *interp,
+                 int objc, Tcl_Obj *CONST objv[])
+{
+    char *outfile = NULL;
+
+    if (objc == 2)
+	outfile = Tcl_GetString(objv[1]);
+    else if (outfile == NULL) {
+	Tcl_SetResult(interp, "No output filename specified!", NULL);
+	return TCL_ERROR;
+    }
+
+    write_failed(outfile);
     return QrouterTagCallback(interp, objc, objv);
 }
 

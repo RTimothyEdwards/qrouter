@@ -145,6 +145,7 @@ LefList LefFindLayerByNum(int layer);
 int    LefFindLayerNum(char *token);
 double LefGetRouteKeepout(int layer);
 double LefGetRouteWidth(int layer);
+double LefGetRouteMinArea(int layer);
 double LefGetXYViaWidth(int base, int layer, int dir, int orient);
 double LefGetViaWidth(int base, int layer, int dir);
 double LefGetRouteSpacing(int layer);

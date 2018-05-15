@@ -14,6 +14,7 @@ extern int  Pathon;
 static void emit_routes(char *filename, double oscale, int iscale);
 
 int    write_def(char *filename);
+int    write_failed(char *filename);
 char  *print_node_name(NODE node);
 void   print_nets(char *filename);
 void   print_routes(char *filename);

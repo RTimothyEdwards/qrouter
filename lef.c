@@ -743,6 +743,27 @@ LefGetRouteOffsetY(int layer)
 
 /*
  *------------------------------------------------------------
+ * Find and return the minimum metal area requirement for a
+ * route layer.
+ *------------------------------------------------------------
+ */
+
+double
+LefGetRouteMinArea(int layer)
+{
+    LefList lefl;
+
+    lefl = LefFindLayerByNum(layer);
+    if (lefl) {
+	if (lefl->lefClass == CLASS_ROUTE) {
+	    return lefl->info.route.minarea;
+	}
+    }
+    return 0.0;		/* Assume no minimum area requirement	*/
+}
+
+/*
+ *------------------------------------------------------------
  * Determine and return the width of a via.  The first layer
  * is the base (lower) layer of the via (e.g., layer 0, or
  * metal1, for via12).  The second layer is the layer for
@@ -1157,7 +1178,7 @@ LefReadLayers(f, obstruct, lreturn)
 	    /* CLASS_VIA in lefl record is a cut, and the layer */
 	    /* geometry is ignored for the purpose of routing.	*/
 
-	    if (lefl->lefClass != CLASS_VIA)
+	    if ((!lefl) || (lefl->lefClass != CLASS_VIA))
 		LefError("Don't know how to parse layer \"%s\"\n", token);
 	}
     }

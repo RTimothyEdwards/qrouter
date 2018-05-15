@@ -944,6 +944,20 @@ int antenna_setup(struct routeinfo_ *iroute, ANTENNAINFO violation,
 }
 
 /*--------------------------------------------------------------*/
+/* The simplest way to fix an antenna violation is to find	*/
+/* a place in the antenna metal to break the antenna and pull	*/
+/* it up to a higher level of metal.  Depending on the severity	*/
+/* of the antenna violation, this may need to be done more than	*/
+/* once.  If no place to break the antenna is found, return -1	*/
+/* for failure.							*/
+/*--------------------------------------------------------------*/
+
+int simpleantennafix(ANTENNAINFO violation, Tcl_HashTable *NodeTable)
+{
+    return -1;		/* Antenna was not fixed */
+}
+
+/*--------------------------------------------------------------*/
 /* Route from nets with antenna violations to the nearest	*/
 /* routable antenna cell tap.					*/
 /*								*/
@@ -983,6 +997,7 @@ int doantennaroute(ANTENNAINFO violation, Tcl_HashTable *NodeTable)
     if (result < 0) {
 	/* To do:  Handle failures? */
 	Fprintf(stderr, "Antenna anchoring route failed.\n");
+	free(rt1);
     }
     else {
 	TotalRoutes++;
@@ -1013,14 +1028,15 @@ int doantennaroute(ANTENNAINFO violation, Tcl_HashTable *NodeTable)
 void
 resolve_antenna(char *antennacell, u_char do_fix)
 {
+    FILE *fout;
     int numtaps, numerrors, numfixed, result;
     int layererrors;
     int layer, i, new;
     Tcl_HashTable NodeTable;
     Tcl_HashEntry *entry;
     GATE g;
-    ANTENNAINFO nextviolation;
     NET net;
+    ANTENNAINFO nextviolation, FixedList = NULL, BadList = NULL;
 
     numtaps = count_free_antenna_taps(antennacell);
     if (Verbose > 3) {
@@ -1068,12 +1084,21 @@ resolve_antenna(char *antennacell, u_char do_fix)
 	    nextviolation = AntennaList->next;
     
 	    if (do_fix) {
-		result = doantennaroute(AntennaList, &NodeTable);
+		result = simpleantennafix(AntennaList, &NodeTable);
+		if (result < 0)
+		    result = doantennaroute(AntennaList, &NodeTable);
 		if (result >= 0) numfixed++;
 	    }
 
-	    /* Free the error information */
-	    free(AntennaList);
+	    /* Move the error information to either the Fixed or Bad lists */
+	    if (result >= 0) {
+		AntennaList->next = FixedList;
+		FixedList = AntennaList;
+	    }
+	    else {
+		AntennaList->next = BadList;
+		BadList = AntennaList;
+	    }
 	    AntennaList = nextviolation;
 	}
     }
@@ -1100,10 +1125,62 @@ resolve_antenna(char *antennacell, u_char do_fix)
 	/* the error.							*/
     }
 
+    /* Output the violation lists.  The fixed violations need to be	*/
+    /* known so that the additional connection to the net can be added	*/
+    /* to the netlist for verification purposes.  The unfixed		*/
+    /* violations need to be reported so they can be tracked down and	*/
+    /* fixed by hand.							*/
+
+    if ((FixedList != NULL) || (BadList != NULL))
+	fout = fopen("antenna.out", "w");
+
+    if (FixedList != NULL) {
+	ROUTE rt;
+	fprintf(fout, "Revised netlist: New antenna anchor connections\n");
+
+	for (nextviolation = FixedList; nextviolation;
+			nextviolation = nextviolation->next) {
+	    for (rt = nextviolation->net->routes; rt && rt->next; rt = rt->next);
+	    g = FindGateNode(&NodeTable, rt->start.node, &i);
+	    fprintf(fout, "Net=%s Instance=%s Cell=%s Pin=%s\n",
+			nextviolation->net->netname, g->gatename,
+			g->gatetype->gatename, g->gatetype->node[i]);
+	}
+	fprintf(fout, "\n");
+    }
+
+    if (BadList != NULL) {
+	fprintf(fout, "Unfixed antenna errors:\n");
+
+	for (nextviolation = BadList; nextviolation;
+			nextviolation = nextviolation->next) {
+	    g = FindGateNode(&NodeTable, nextviolation->node, &i);
+	    fprintf(fout, "Net=%s Instance=%s Cell=%s Pin=%s error on Metal%d\n",
+			nextviolation->net->netname,
+			g->gatename, g->gatetype->gatename,
+			g->gatetype->node[i], nextviolation->layer + 1);
+	}
+    }
+
+    if ((FixedList != NULL) || (BadList != NULL)) fclose(fout);
+
     /* Free up the node hash table */
 
     FreeNodeTable(&NodeTable);
     Tcl_DeleteHashTable(&NodeTable);
+
+    /* Free up the violation lists */
+
+    while (FixedList != NULL) {
+	nextviolation = FixedList->next;
+	free(FixedList);
+	FixedList = nextviolation;
+    }
+    while (BadList != NULL) {
+	nextviolation = BadList->next;
+	free(BadList);
+	BadList = nextviolation;
+    }
 }
 
 #endif	/* TCL_QROUTER */

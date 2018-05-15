@@ -488,6 +488,7 @@ int    set_num_channels(void);
 int    allocate_obs_array(void);
 int    countlist(NETLIST net);
 int    runqrouter(int argc, char *argv[]);
+void   remove_failed();
 
 void   read_def(char *filename);
 
