@@ -454,6 +454,33 @@ runqrouter(int argc, char *argv[])
 }
 
 /*--------------------------------------------------------------*/
+/* remove_from_failed ---					*/
+/*								*/
+/* Remove one net from the list of failing nets.  If "net" was	*/
+/* in the list FailedNets, then return TRUE, otherwise return	*/
+/* FALSE.							*/
+/*--------------------------------------------------------------*/
+
+u_char remove_from_failed(NET net)
+{
+    NETLIST nl, lastnl;
+
+    lastnl = (NETLIST)NULL;
+    for (nl = FailedNets; nl; nl = nl->next) {
+	if (nl->net == net) {
+	    if (lastnl == NULL)
+		FailedNets = nl->next;
+	    else
+		lastnl->next = nl->next;
+	    free(nl);
+	    return TRUE;
+	}
+	lastnl = nl;
+    }
+    return FALSE; 
+}
+
+/*--------------------------------------------------------------*/
 /* remove_failed ---						*/
 /*								*/
 /* Free up memory in the list of route failures.		*/
@@ -1203,14 +1230,11 @@ dosecondstage(u_char graphdebug, u_char singlestep, u_char onlybreak, u_int effo
 int dothirdstage(u_char graphdebug, int debug_netnum, u_int effort)
 {
    int i, failcount, remaining, result, maskSave;
+   u_char failed;
    NET net;
    ROUTE rt;
    NETLIST nl;
    u_int loceffort = (effort > minEffort) ? effort : minEffort;
-
-   // Clear the lists of failed routes
-
-   if (debug_netnum <= 0) remove_failed();
 
    // Now find and route all the nets
 
@@ -1220,26 +1244,29 @@ int dothirdstage(u_char graphdebug, int debug_netnum, u_int effort)
    for (i = (debug_netnum >= 0) ? debug_netnum : 0; i < Numnets; i++) {
 
       net = getnettoroute(i);
+      failed = remove_from_failed(net);
       if ((net != NULL) && (net->netnodes != NULL)) {
 
 	 // Simple optimization:  If every route has four or fewer
 	 // segments, then rerouting is almost certainly a waste of
 	 // time.
 
-	 for (rt = net->routes; rt; rt = rt->next) {
-	    int j;
-	    SEG seg = rt->segments;
-	    for (j = 0; j < 3; j++) {
-	       if (seg->next == NULL) break;
-	       seg = seg->next;
+	 if (!failed) {
+	    for (rt = net->routes; rt; rt = rt->next) {
+	       int j;
+	       SEG seg = rt->segments;
+	       for (j = 0; j < 3; j++) {
+	          if (seg->next == NULL) break;
+	          seg = seg->next;
+	       }
+	       if (j == 3) break;
 	    }
-	    if (j == 3) break;
-	 }
-	 if (rt == NULL) {
-	    if (Verbose > 0)
-	       Fprintf(stdout, "Keeping route for net %s\n", net->netname);
-	    remaining--;
-	    continue;
+	    if (rt == NULL) {
+	       if (Verbose > 0)
+	          Fprintf(stdout, "Keeping route for net %s\n", net->netname);
+	       remaining--;
+	       continue;
+	    }
 	 }
 
 	 setBboxCurrent(net);
@@ -1260,7 +1287,7 @@ int dothirdstage(u_char graphdebug, int debug_netnum, u_int effort)
 	    Fprintf(stdout, "Nets remaining: %d\n", remaining);
 	    remove_routes(rt, FALSE);	/* original is no longer needed */
 	 }
-	 else {
+	 else if (!failed) {
 	    if (Verbose > 0)
 	       Fprintf(stdout, "Failed to route net %s; restoring original\n",
 			net->netname);
@@ -1274,6 +1301,10 @@ int dothirdstage(u_char graphdebug, int debug_netnum, u_int effort)
 	       free(FailedNets);
 	       FailedNets = nl;
 	    }
+	 }
+	 else {
+	    if (Verbose > 0)
+	       Fprintf(stdout, "Failed to route net %s.\n", net->netname);
 	 }
       }
       else {

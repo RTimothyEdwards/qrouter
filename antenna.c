@@ -203,20 +203,45 @@ get_route_area_forward_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
 	    int i;
 
 	    node = rt->start.node;
+
 	    if (visited) {
-		g = FindGateNode(NodeTable, node, &i);
-		if (g->area[i] == 0.0) {
-		    /* There's a diffusion diode here! */
-		    visited[node->nodenum] = ANCHOR;
-		    return 0.0;
-		} else {
-		    /* Add this node to the list of nodes with gates	*/
-		    /* attached to this antenna area.			*/
-		    visited[node->nodenum] = VISITED;
+
+		/* If more than one route is connected to the node,	*/
+		/* then this node may have been visited already.	*/
+
+		if (visited[node->nodenum] == NOT_VISITED) {
+		    g = FindGateNode(NodeTable, node, &i);
+		    if (g->area[i] == 0.0) {
+			/* There's a diffusion diode here! */
+			visited[node->nodenum] = ANCHOR;
+			return 0.0;
+		    } else {
+			/* Add this node to the list of nodes with gates	*/
+			/* attached to this antenna area.			*/
+			visited[node->nodenum] = VISITED;
+		    }
 		}
 	    }
 	    else if ((method == ANTENNA_ROUTE) && (iroute != NULL)) {
 		set_node_to_net(node, PR_SOURCE, iroute->glist[0], iroute->bbox, 0);
+	    }
+
+	    /* Walk all other routes that start or end on this node */
+
+	    for (rt2 = net->routes; rt2; rt2 = rt2->next) {
+		if (rt2->flags & RT_VISITED) continue;
+
+		if ((rt2->flags & RT_START_NODE) && (rt2->start.node == node)) {
+		    /* The start point of rt2 connects to the same node */
+		    area += get_route_area_forward(net, rt2, layer, visited,
+				method, NodeTable, NULL);
+		}
+		else if ((rt2->flags & RT_END_NODE) && (rt2->end.node == node)) {
+		    /* The end point of rt2 connects to the same node */
+		    for (iseg = rt2->segments; iseg && iseg->next; iseg = iseg->next);
+		    area += get_route_area_reverse(net, rt2, layer, visited,
+				method, NodeTable, NULL);
+		}
 	    }
 	}
     }
@@ -337,6 +362,7 @@ get_route_area_forward_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
 	    x = iseg->x1;
 	    y = iseg->y1;
 	    l = iseg->layer;
+	    if (l > layer) continue;
 	}
 	else if (!(rt2->flags & RT_END_NODE) && (rt2->end.route == rt)) {
 	    /* The end point of rt2 connects somewhere on rt */
@@ -344,6 +370,7 @@ get_route_area_forward_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
 	    x = iseg->x2;
 	    y = iseg->y2;
 	    l = iseg->layer;
+	    if (l > layer) continue;
 	}
 	else
 	    continue;
@@ -351,7 +378,7 @@ get_route_area_forward_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
 	/* Must determine if rt2 intersects rt within the antenna area */
 
 	found = (u_char)0;
-	for (chkseg = rt->segments; chkseg; chkseg = chkseg->next) {
+	for (chkseg = rt->segments; chkseg && chkseg != seg; chkseg = chkseg->next) {
 	    if (chkseg->segtype & ST_WIRE) {
 		if (iseg->segtype & ST_WIRE) {
 		    compat = (l == chkseg->layer);
@@ -409,7 +436,6 @@ get_route_area_forward_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
 		    }
 		}
 	    }
-	    if (chkseg == seg) break;
 	}
 	if (found == (u_char)1) {
 	    if (rt2->start.route == rt)
@@ -431,6 +457,25 @@ get_route_area_forward_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
 	    int i;
 
 	    node = rt->end.node;
+
+	    /* Walk all other routes that start or end on this node */
+
+	    for (rt2 = net->routes; rt2; rt2 = rt2->next) {
+		if (rt2->flags & RT_VISITED) continue;
+
+		if ((rt2->flags & RT_START_NODE) && (rt2->start.node == node)) {
+		    /* The start point of rt2 connects to the same node */
+		    area += get_route_area_forward(net, rt2, layer, visited,
+				method, NodeTable, NULL);
+		}
+		else if ((rt2->flags & RT_END_NODE) && (rt2->end.node == node)) {
+		    /* The end point of rt2 connects to the same node */
+		    for (iseg = rt2->segments; iseg && iseg->next; iseg = iseg->next);
+		    area += get_route_area_reverse(net, rt2, layer, visited,
+				method, NodeTable, NULL);
+		}
+	    }
+
 	    g = FindGateNode(NodeTable, node, &i);
 	    if (g->area[i] == 0.0) {
 		/* There's a diffusion diode here! */
@@ -1036,6 +1081,7 @@ resolve_antenna(char *antennacell, u_char do_fix)
     Tcl_HashEntry *entry;
     GATE g;
     NET net;
+    ROUTE rt;
     ANTENNAINFO nextviolation, FixedList = NULL, BadList = NULL;
 
     numtaps = count_free_antenna_taps(antennacell);
@@ -1085,7 +1131,12 @@ resolve_antenna(char *antennacell, u_char do_fix)
     
 	    if (do_fix) {
 		result = simpleantennafix(AntennaList, &NodeTable);
-		if (result < 0)
+		if (result == 0) {
+		    /* No antenna cell involved, so no backannotation	*/
+		    /* required.  Remove the "route" record. */
+		    AntennaList->route = NULL;
+		}
+		else
 		    result = doantennaroute(AntennaList, &NodeTable);
 		if (result >= 0) numfixed++;
 	    }
@@ -1094,6 +1145,14 @@ resolve_antenna(char *antennacell, u_char do_fix)
 	    if (result >= 0) {
 		AntennaList->next = FixedList;
 		FixedList = AntennaList;
+		if (AntennaList->route != NULL) {
+		    /* Replace the route record with the last route	*/
+		    /* of the net, which was the route added to fix.	*/
+		    /* If the net requires more than one antenna 	*/
+		    /* anchor, then routes won't be confused.		*/
+		    for (rt = AntennaList->net->routes; rt && rt->next; rt = rt->next);
+		    AntennaList->route = rt;
+		}
 	    }
 	    else {
 		AntennaList->next = BadList;
@@ -1140,8 +1199,10 @@ resolve_antenna(char *antennacell, u_char do_fix)
 
 	for (nextviolation = FixedList; nextviolation;
 			nextviolation = nextviolation->next) {
-	    for (rt = nextviolation->net->routes; rt && rt->next; rt = rt->next);
-	    g = FindGateNode(&NodeTable, rt->start.node, &i);
+	    // NOTE:  nextviolation->route was changed from the route that
+	    // connects to the gate in violation, to the route that fixes
+	    // the antenna error.
+	    g = FindGateNode(&NodeTable, nextviolation->route->start.node, &i);
 	    fprintf(fout, "Net=%s Instance=%s Cell=%s Pin=%s\n",
 			nextviolation->net->netname, g->gatename,
 			g->gatetype->gatename, g->gatetype->node[i]);
