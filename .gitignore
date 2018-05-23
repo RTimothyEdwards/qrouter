@@ -4,6 +4,7 @@ config.status
 config.log
 Makefile
 qrouterexec
+qrouternullg
 qrouter.sh
 qrouter.tcl
 *.o
