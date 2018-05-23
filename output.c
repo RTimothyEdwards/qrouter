@@ -603,11 +603,11 @@ void print_nlnets( char *filename )
 /*								*/
 /* Note that the ensuing change in connectivity can violate	*/
 /* the route endpoints and thereby mess up the delay output	*/
-/* routine unless route_set_connections() is re-run on the	*/
-/* modified routes.						*/
+/* routine and/or the antenna violation finding routine unless	*/
+/* route_set_connections() is re-run on the modified routes.	*/
 /*--------------------------------------------------------------*/
 
-static void cleanup_net(NET net)
+void cleanup_net(NET net)
 {
    SEG segf, segl, seg;
    ROUTE rt, rt2;
@@ -1989,13 +1989,6 @@ static void emit_routes(char *filename, double oscale, int iscale)
 			Numnets);
     }
 
-    // Quick check to see if cleanup_nets can be avoided
-    for (i = 0; i < Num_layers; i++)
-       if (needblock[i] & (VIABLOCKX | VIABLOCKY))
-	  break;
-
-    if (i != Num_layers) need_cleanup = TRUE;
-
     for (i = 0; i < numnets; i++) {
        if (errcond == TRUE) break;
        while (fgets(line, MAX_LINE_LEN, fdef) != NULL) {
@@ -2061,7 +2054,6 @@ static void emit_routes(char *filename, double oscale, int iscale)
 	  /* Add last net terminal, without the semicolon */
 	  fputs(line, Cmd);
 
-	  if (need_cleanup) cleanup_net(net);
 	  emit_routed_net(Cmd, net, (u_char)0, oscale, iscale);
 	  fprintf(Cmd, ";\n");
        }

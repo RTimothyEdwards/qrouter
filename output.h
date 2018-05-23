@@ -13,6 +13,7 @@ extern int  Pathon;
 /* Function prototypes */
 static void emit_routes(char *filename, double oscale, int iscale);
 
+void   cleanup_net(NET net);
 int    write_def(char *filename);
 int    write_failed(char *filename);
 char  *print_node_name(NODE node);

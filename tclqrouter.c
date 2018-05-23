@@ -59,6 +59,9 @@ static int qrouter_stage2(
 static int qrouter_stage3(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_cleanup(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
 static int qrouter_writedef(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
@@ -142,6 +145,7 @@ static cmdstruct qrouter_commands[] =
    {"stage1", qrouter_stage1},
    {"stage2", qrouter_stage2},
    {"stage3", qrouter_stage3},
+   {"cleanup", qrouter_cleanup},
    {"write_def", qrouter_writedef},
    {"read_def", qrouter_readdef},
    {"read_lef", qrouter_readlef},
@@ -1372,6 +1376,74 @@ qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
     // Restore global defaults in case they were locally changed
     forceRoutable = saveForce;
 
+    return QrouterTagCallback(interp, objc, objv);
+}
+
+/*------------------------------------------------------*/
+/* Command "cleanup"					*/
+/*							*/
+/*   Clean up the nets by removing adjacent vias where	*/
+/*   such adjacent vias would cause a DRC violation.	*/
+/*   Note that this must be done between the last	*/
+/*   routing stage but before finding antenna		*/
+/*   violations, output, and delay writing, as all of	*/
+/*   these can be dependent on topology changes caused	*/
+/*   by the cleanup.					*/
+/*							*/
+/* Options:						*/
+/*							*/
+/*   cleanup all	Clean up all nets in the design	*/
+/*   cleanup net <name> [...]				*/
+/* 			Clean up the named net(s)	*/
+/*------------------------------------------------------*/
+
+static int
+qrouter_cleanup(ClientData clientData, Tcl_Interp *interp,
+               int objc, Tcl_Obj *CONST objv[])
+{
+    int result, idx, i;
+    NET net;
+
+    static char *subCmds[] = {
+	"all", "net", NULL
+    };
+    enum SubIdx {
+	AllIdx, NetIdx
+    };
+
+    if (objc < 2) {
+	Tcl_WrongNumArgs(interp, 0, objv, "?option?");
+	return TCL_ERROR;
+    }
+    else {
+	if ((result = Tcl_GetIndexFromObj(interp, objv[1],
+		(CONST84 char **)subCmds, "option", 0, &idx))
+		!= TCL_OK)
+	    return result;
+
+	// Quick check to see if cleanup_net can be avoided completely.
+	for (i = 0; i < Num_layers; i++)
+	    if (needblock[i] & (VIABLOCKX | VIABLOCKY))
+		break;
+	if (i == Num_layers) return;        /* No cleanup needed */
+
+	switch (idx) {
+	    case AllIdx:
+		for (i = 0; i < Numnets; i++) {
+		   net = Nlnets[i];
+		   cleanup_net(net);
+		}
+		break;
+
+	    case NetIdx:
+		for (i = 2; i < objc; i++) {
+		    net = LookupNet(Tcl_GetString(objv[i]));
+		    if (net != NULL)
+			cleanup_net(net);
+		}
+		break;
+	}
+    }
     return QrouterTagCallback(interp, objc, objv);
 }
 
