@@ -2161,11 +2161,7 @@ qrouter_layerinfo(ClientData clientData, Tcl_Interp *interp,
 /*	  a single point.  Value "none", "0", and "1"	*/
 /*	  all mean the same thing.			*/
 /*							*/
-/* via_pattern:  If vias are non-square, then they are	*/
-/*	  placed in a checkerboard pattern, with every	*/
-/*	  other via rotated 90 degrees.  If inverted,	*/
-/*	  the rotation is swapped relative to the grid	*/
-/*	  positions used in the non-inverted case.	*/
+/* via_pattern:  (deprecated)				*/
 /*							*/
 /* use: List of names of vias to use.  If any via not	*/
 /*	in this list is found when reading a .lef file	*/
@@ -2221,8 +2217,7 @@ qrouter_via(ClientData clientData, Tcl_Interp *interp,
 		    break;
 		case PatternIdx:
 		    Tcl_SetObjResult(interp,
-				Tcl_NewStringObj(
-				patternSubCmds[ViaPattern + 1], -1));
+				Tcl_NewStringObj("deprecated", -1));
 		    break;
 		case UseIdx:
 		    /* Return list of vias to use */
@@ -2264,7 +2259,6 @@ qrouter_via(ClientData clientData, Tcl_Interp *interp,
 				(CONST84 char **)patternSubCmds, "option",
 				0, &idx2)) != TCL_OK)
 			return result;
-		    ViaPattern = idx2 - 1;
 		    break;
 		case UseIdx:
 		    /* Create list of vias to use */
@@ -2281,7 +2275,7 @@ qrouter_via(ClientData clientData, Tcl_Interp *interp,
 			newVia->next = AllowedVias;
 			AllowedVias = newVia;
 		    }
-		    /* Regenerate the ViaX and ViaY lists */
+		    /* Regenerate the ViaXX, etc., lists */
 		    LefAssignLayerVias();
 		    break;
 	    }

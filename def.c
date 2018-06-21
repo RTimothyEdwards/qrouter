@@ -174,13 +174,14 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 
 	    if (routeLayer < 0)
 	    {
-		LefError("Unknown layer type \"%s\" for NEW route\n", token); 
+		LefError(DEF_ERROR, "Unknown layer type \"%s\" for NEW route\n", token); 
 		continue;
 	    }
             else if (routeLayer >= Num_layers)
 	    {
-		LefError("DEF file contains layer \"%s\" which is not allowed "
-			"by the layer limit setting of %d\n", token, Num_layers);
+		LefError(DEF_ERROR, "DEF file contains layer \"%s\" which is"
+			" not allowed by the layer limit setting of %d\n",
+			token, Num_layers);
 		continue;
 	    }
 	    paintLayer = routeLayer;
@@ -191,7 +192,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 		token = LefNextToken(f, TRUE);
 		if (sscanf(token, "%lg", &w) != 1)
 		{
-		    LefError("Bad width in special net\n");
+		    LefError(DEF_ERROR, "Bad width in special net\n");
 		    continue;
 		}
 		if (w != 0)
@@ -224,7 +225,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 
 	    else if (valid == FALSE)
 	    {
-		LefError("Route has via name \"%s\" but no points!\n", token);
+		LefError(DEF_ERROR, "Route has via name \"%s\" but no points!\n", token);
 		continue;
 	    }
 	    lefl = LefFindLayer(token);
@@ -265,11 +266,11 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 		}
 		else
 		{
-		    LefError("Error: Via \"%s\" named but undefined.\n", token);
+		    LefError(DEF_ERROR, "Error: Via \"%s\" named but undefined.\n", token);
 		    paintLayer = routeLayer;
 		}
 		if ((special == (char)0) && (paintLayer >= 0) &&
-				(paintLayer < Num_layers)) {
+				(paintLayer < (Num_layers - 1))) {
 
 		    newRoute = (SEG)malloc(sizeof(struct seg_));
 		    newRoute->segtype = ST_VIA;
@@ -294,14 +295,18 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 		    routednet->segments = newRoute;
 		}
 		else {
-		    if (paintLayer >= Num_layers)
-		        LefError("Via \"%s\" exceeds layer limit setting!\n", token);
-		    else
-		        LefError("Via \"%s\" does not define a metal layer!\n", token);
+		    if (paintLayer >= (Num_layers - 1))
+			/* Not necessarily an error to have predefined geometry */
+			/* above the route layer limit.				*/
+		        LefError(DEF_WARNING, "Via \"%s\" exceeds layer "
+					"limit setting.\n", token);
+		    else if (special == (char)0)
+		        LefError(DEF_ERROR, "Via \"%s\" does not define a"
+					" metal layer!\n", token);
 		}
 	    }
 	    else
-		LefError("Via name \"%s\" unknown in route.\n", token);
+		LefError(DEF_ERROR, "Via name \"%s\" unknown in route.\n", token);
 	}
 	else
 	{
@@ -320,7 +325,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    {
 		if (valid == FALSE)
 		{
-		    LefError("No reference point for \"*\" wildcard\n"); 
+		    LefError(DEF_ERROR, "No reference point for \"*\" wildcard\n"); 
 		    goto endCoord;
 		}
 	    }
@@ -331,7 +336,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    }
 	    else
 	    {
-		LefError("Cannot parse X coordinate.\n"); 
+		LefError(DEF_ERROR, "Cannot parse X coordinate.\n"); 
 		goto endCoord;
 	    }
 	    token = LefNextToken(f, TRUE);	/* read Y */
@@ -339,7 +344,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    {
 		if (valid == FALSE)
 		{
-		    LefError("No reference point for \"*\" wildcard\n"); 
+		    LefError(DEF_ERROR, "No reference point for \"*\" wildcard\n"); 
 		    if (newRoute != NULL) {
 			free(newRoute);
 			newRoute = NULL;
@@ -354,7 +359,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    }
 	    else
 	    {
-		LefError("Cannot parse Y coordinate.\n"); 
+		LefError(DEF_ERROR, "Cannot parse Y coordinate.\n"); 
 		goto endCoord;
 	    }
 
@@ -369,7 +374,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 		/* Skip over nonmanhattan segments, reset the reference	*/
 		/* point, and output a warning.				*/
 
-		LefError("Can't deal with nonmanhattan geometry in route.\n");
+		LefError(DEF_ERROR, "Can't deal with nonmanhattan geometry in route.\n");
 		locarea.x1 = refp.x1;
 		locarea.y1 = refp.y1;
 		lx = x;
@@ -438,7 +443,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 		   routednet->segments = newRoute;
 		}
 		else if (paintLayer >= Num_layers) {
-		    LefError("Route layer exceeds layer limit setting!\n");
+		    LefError(DEF_ERROR, "Route layer exceeds layer limit setting!\n");
 		}
 	    }
 
@@ -490,7 +495,7 @@ DefReadGatePin(NET net, NODE node, char *instname, char *pinname, double *home)
 	gateginfo = g->gatetype;
 
 	if (!gateginfo) {
-	    LefError("Endpoint %s/%s of net %s not found\n",
+	    LefError(DEF_ERROR, "Endpoint %s/%s of net %s not found\n",
 				instname, pinname, net->netname);
 	    return;
 	}
@@ -650,7 +655,7 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 	keyword = Lookup(token, net_keys);
 	if (keyword < 0)
 	{
-	    LefError("Unknown keyword \"%s\" in NET "
+	    LefError(DEF_WARNING, "Unknown keyword \"%s\" in NET "
 			"definition; ignoring.\n", token);
 	    LefEndStatement(f);
 	    continue;
@@ -732,7 +737,7 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 		    subkey = Lookup(token, net_property_keys);
 		    if (subkey < 0)
 		    {
-			LefError("Unknown net property \"%s\" in "
+			LefError(DEF_WARNING, "Unknown net property \"%s\" in "
 				"NET definition; ignoring.\n", token);
 			continue;
 		    }
@@ -771,7 +776,7 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 	    case DEF_NET_END:
 		if (!LefParseEndStatement(f, sname))
 		{
-		    LefError("Net END statement missing.\n");
+		    LefError(DEF_ERROR, "Net END statement missing.\n");
 		    keyword = -1;
 		}
 		break;
@@ -801,7 +806,7 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 			(special) ? " special" : "");
     }
     else
-	LefError("Warning:  Number of nets read (%d) does not match "
+	LefError(DEF_WARNING, "Warning:  Number of nets read (%d) does not match "
 		"the number declared (%d).\n", processed, total);
 }
 
@@ -853,7 +858,7 @@ DefReadLocation(gate, f, oscale)
     keyword = Lookup(token, orientations);
     if (keyword < 0)
     {
-	LefError("Unknown macro orientation \"%s\".\n", token);
+	LefError(DEF_ERROR, "Unknown macro orientation \"%s\".\n", token);
 	return -1;
     }
 
@@ -877,7 +882,7 @@ DefReadLocation(gate, f, oscale)
 	case DEF_WEST:
 	case DEF_FLIPPED_EAST:
 	case DEF_FLIPPED_WEST:
-	    LefError("Error:  Cannot handle 90-degree rotated components!\n");
+	    LefError(DEF_ERROR, "Error:  Cannot handle 90-degree rotated components!\n");
 	    break;
     }
 
@@ -891,7 +896,7 @@ DefReadLocation(gate, f, oscale)
     return 0;
 
 parse_error:
-    LefError("Cannot parse location: must be ( X Y ) orient\n");
+    LefError(DEF_ERROR, "Cannot parse location: must be ( X Y ) orient\n");
     return -1;
 }
 
@@ -979,7 +984,7 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 
 	if (keyword < 0)
 	{
-	    LefError("Unknown keyword \"%s\" in PINS "
+	    LefError(DEF_WARNING, "Unknown keyword \"%s\" in PINS "
 			"definition; ignoring.\n", token);
 	    LefEndStatement(f);
 	    continue;
@@ -997,7 +1002,7 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 		token = LefNextToken(f, TRUE);
 		if (sscanf(token, "%2047s", pinname) != 1)
 		{
-		    LefError("Bad pin statement:  Need pin name\n");
+		    LefError(DEF_ERROR, "Bad pin statement:  Need pin name\n");
 		    LefEndStatement(f);
 		    break;
 		}
@@ -1036,7 +1041,7 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 		    subkey = Lookup(token, pin_property_keys);
 		    if (subkey < 0)
 		    {
-			LefError("Unknown pin property \"%s\" in "
+			LefError(DEF_WARNING, "Unknown pin property \"%s\" in "
 				"PINS definition; ignoring.\n", token);
 			continue;
 		    }
@@ -1052,21 +1057,24 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 			    token = LefNextToken(f, TRUE);
 			    subkey = Lookup(token, pin_classes);
 			    if (subkey < 0)
-				LefError("Unknown pin class %s\n", token);
+				LefError(DEF_ERROR, "Unknown pin class %s\n", token);
 			    else
 				gate->direction[0] = subkey;
 			    break;
 			case DEF_PINS_PROP_LAYER:
 			    curlayer = LefReadLayer(f, FALSE);
 			    currect = LefReadRect(f, curlayer, oscale);
-			    gate->width = currect->x2 - currect->x1;
-			    gate->height = currect->y2 - currect->y1;
+			    /* Warn if pin is on layer above routing layer limit? */
+			    if (currect) {
+				gate->width = currect->x2 - currect->x1;
+				gate->height = currect->y2 - currect->y1;
+			    }
 			    break;
 			case DEF_PINS_PROP_USE:
 			    token = LefNextToken(f, TRUE);
 			    subkey = Lookup(token, pin_uses);
 			    if (subkey < 0)
-				LefError("Unknown pin use %s\n", token);
+				LefError(DEF_ERROR, "Unknown pin use %s\n", token);
 			    else
 				pin_use = subkey;
 			    break;
@@ -1107,8 +1115,8 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 		    DefHashInstance(gate);
 		}
 		else {
-		    LefError("Pin %s is defined outside of route layer area!\n",
-				pinname);
+		    LefError(DEF_ERROR, "Pin %s is defined outside of route "
+				"layer area!\n", pinname);
 		    free(gate->taps);
 		    free(gate->noderec);
 		    free(gate->direction);
@@ -1122,7 +1130,7 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 	    case DEF_PINS_END:
 		if (!LefParseEndStatement(f, sname))
 		{
-		    LefError("Pins END statement missing.\n");
+		    LefError(DEF_ERROR, "Pins END statement missing.\n");
 		    keyword = -1;
 		}
 		if (pin_use != PORT_USE_DEFAULT && gate->direction[0] ==
@@ -1155,7 +1163,7 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 	    Fprintf(stdout, "  Processed %d pins total.\n", processed);
     }
     else
-	LefError("Warning:  Number of pins read (%d) does not match "
+	LefError(DEF_WARNING, "Warning:  Number of pins read (%d) does not match "
 		"the number declared (%d).\n", processed, total);
 }
  
@@ -1212,7 +1220,7 @@ DefReadVias(f, sname, oscale, total)
 
 	if (keyword < 0)
 	{
-	    LefError("Unknown keyword \"%s\" in VIAS "
+	    LefError(DEF_WARNING, "Unknown keyword \"%s\" in VIAS "
 			"definition; ignoring.\n", token);
 	    LefEndStatement(f);
 	    continue;
@@ -1230,7 +1238,7 @@ DefReadVias(f, sname, oscale, total)
 		token = LefNextToken(f, TRUE);
 		if (sscanf(token, "%2047s", vianame) != 1)
 		{
-		    LefError("Bad via statement:  Need via name\n");
+		    LefError(DEF_ERROR, "Bad via statement:  Need via name\n");
 		    LefEndStatement(f);
 		    break;
 		}
@@ -1255,7 +1263,8 @@ DefReadVias(f, sname, oscale, total)
 		}
 		else
 		{
-		    LefError("Warning:  Composite via \"%s\" redefined.\n", vianame);
+		    LefError(DEF_WARNING, "Warning:  Composite via \"%s\" "
+				"redefined.\n", vianame);
 		    lefl = LefRedefined(lefl, vianame);
 		}
 
@@ -1271,7 +1280,7 @@ DefReadVias(f, sname, oscale, total)
 		    subkey = Lookup(token, via_property_keys);
 		    if (subkey < 0)
 		    {
-			LefError("Unknown via property \"%s\" in "
+			LefError(DEF_WARNING, "Unknown via property \"%s\" in "
 				"VIAS definition; ignoring.\n", token);
 			continue;
 		    }
@@ -1288,7 +1297,7 @@ DefReadVias(f, sname, oscale, total)
 	    case DEF_VIAS_END:
 		if (!LefParseEndStatement(f, sname))
 		{
-		    LefError("Vias END statement missing.\n");
+		    LefError(DEF_ERROR, "Vias END statement missing.\n");
 		    keyword = -1;
 		}
 		break;
@@ -1301,7 +1310,7 @@ DefReadVias(f, sname, oscale, total)
 	    Fprintf(stdout, "  Processed %d vias total.\n", processed);
     }
     else
-	LefError("Warning:  Number of vias read (%d) does not match "
+	LefError(DEF_WARNING, "Warning:  Number of vias read (%d) does not match "
 		"the number declared (%d).\n", processed, total);
 }
  
@@ -1345,7 +1354,7 @@ DefReadBlockages(FILE *f, char *sname, float oscale, int total)
 
 	if (keyword < 0)
 	{
-	    LefError("Unknown keyword \"%s\" in BLOCKAGE "
+	    LefError(DEF_WARNING, "Unknown keyword \"%s\" in BLOCKAGE "
 			"definition; ignoring.\n", token);
 	    LefEndStatement(f);
 	    continue;
@@ -1374,7 +1383,7 @@ DefReadBlockages(FILE *f, char *sname, float oscale, int total)
 		}
 		else
 		{
-		    LefError("Bad blockage statement:  Need layer name\n");
+		    LefError(DEF_ERROR, "Bad blockage statement:  Need layer name\n");
 		    LefEndStatement(f);
 		    break;
 		}
@@ -1383,7 +1392,7 @@ DefReadBlockages(FILE *f, char *sname, float oscale, int total)
 	    case DEF_BLOCK_END:
 		if (!LefParseEndStatement(f, sname))
 		{
-		    LefError("Blockage END statement missing.\n");
+		    LefError(DEF_ERROR, "Blockage END statement missing.\n");
 		    keyword = -1;
 		}
 		break;
@@ -1396,7 +1405,7 @@ DefReadBlockages(FILE *f, char *sname, float oscale, int total)
 	    Fprintf(stdout, "  Processed %d blockages total.\n", processed);
     }
     else
-	LefError("Warning:  Number of blockages read (%d) does not match "
+	LefError(DEF_WARNING, "Warning:  Number of blockages read (%d) does not match "
 		"the number declared (%d).\n", processed, total);
 }
 
@@ -1465,7 +1474,7 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 
 	if (keyword < 0)
 	{
-	    LefError("Unknown keyword \"%s\" in COMPONENT "
+	    LefError(DEF_WARNING, "Unknown keyword \"%s\" in COMPONENT "
 			"definition; ignoring.\n", token);
 	    LefEndStatement(f);
 	    continue;
@@ -1483,7 +1492,8 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 		token = LefNextToken(f, TRUE);
 		if (sscanf(token, "%511s", usename) != 1)
 		{
-		    LefError("Bad component statement:  Need use and macro names\n");
+		    LefError(DEF_ERROR, "Bad component statement:  Need use "
+				"and macro names\n");
 		    LefEndStatement(f);
 		    break;
 		}
@@ -1498,7 +1508,7 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 		    }
 		}
 		if (!OK) {
-		    LefError("Could not find a macro definition for \"%s\"\n",
+		    LefError(DEF_ERROR, "Could not find a macro definition for \"%s\"\n",
 				token);
 		    gate = NULL;
 		}
@@ -1520,7 +1530,7 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 		    subkey = Lookup(token, property_keys);
 		    if (subkey < 0)
 		    {
-			LefError("Unknown component property \"%s\" in "
+			LefError(DEF_WARNING, "Unknown component property \"%s\" in "
 				"COMPONENT definition; ignoring.\n", token);
 			continue;
 		    }
@@ -1590,13 +1600,15 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 			}
 
 			/* Make a copy of the gate nodes and adjust for	*/
-			/* instance position				*/
+			/* instance position and number of layers	*/
 
 			for (drect = gateginfo->taps[i]; drect; drect = drect->next) {
-			    newrect = (DSEG)malloc(sizeof(struct dseg_));
-			    *newrect = *drect;
-			    newrect->next = gate->taps[i];
-			    gate->taps[i] = newrect;
+			    if (drect->layer < Num_layers) {
+				newrect = (DSEG)malloc(sizeof(struct dseg_));
+				*newrect = *drect;
+				newrect->next = gate->taps[i];
+				gate->taps[i] = newrect;
+			    }
 			}
 
 			for (drect = gate->taps[i]; drect; drect = drect->next) {
@@ -1635,10 +1647,12 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 		    /* Make a copy of the gate obstructions and adjust	*/
 		    /* for instance position				*/
 		    for (drect = gateginfo->obs; drect; drect = drect->next) {
-			newrect = (DSEG)malloc(sizeof(struct dseg_));
-			*newrect = *drect;
-			newrect->next = gate->obs;
-			gate->obs = newrect;
+			if (drect->layer < Num_layers) {
+			    newrect = (DSEG)malloc(sizeof(struct dseg_));
+			    *newrect = *drect;
+			    newrect->next = gate->obs;
+			    gate->obs = newrect;
+			}
 		    }
 
 		    for (drect = gate->obs; drect; drect = drect->next) {
@@ -1682,7 +1696,7 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 	    case DEF_COMP_END:
 		if (!LefParseEndStatement(f, sname))
 		{
-		    LefError("Component END statement missing.\n");
+		    LefError(DEF_ERROR, "Component END statement missing.\n");
 		    keyword = -1;
 		}
 
@@ -1702,7 +1716,7 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 	    Fprintf(stdout, "  Processed %d subcell instances total.\n", processed);
     }
     else
-	LefError("Warning:  Number of subcells read (%d) does not match "
+	LefError(DEF_WARNING, "Warning:  Number of subcells read (%d) does not match "
 		"the number declared (%d).\n", processed, total);
 }
 
@@ -1748,6 +1762,7 @@ DefRead(char *inName)
     float oscale;
     double start, step;
     double llx, lly, urx, ury;
+    double dXlowerbound, dYlowerbound, dXupperbound, dYupperbound;
     char corient = '.';
     DSEG diearea;
 
@@ -1817,7 +1832,8 @@ DefRead(char *inName)
 	keyword = Lookup(token, sections);
 	if (keyword < 0)
 	{
-	    LefError("Unknown keyword \"%s\" in DEF file; ignoring.\n", token);
+	    LefError(DEF_WARNING, "Unknown keyword \"%s\" in DEF file; "
+			"ignoring.\n", token);
 	    LefEndStatement(f);
 	    continue;
 	}
@@ -1889,8 +1905,8 @@ DefRead(char *inName)
 		token = LefNextToken(f, TRUE);
 		if (sscanf(token, "%d", &dscale) != 1)
 		{
-		    LefError("Invalid syntax for UNITS statement.\n");
-		    LefError("Assuming default value of 100\n");
+		    LefError(DEF_ERROR, "Invalid syntax for UNITS statement.\n");
+		    LefError(DEF_WARNING, "Assuming default value of 100\n");
 		    dscale = 100;
 		}
 		/* We don't care if the scale is 100, 200, 1000, or 2000. */
@@ -1904,28 +1920,28 @@ DefRead(char *inName)
 	    case DEF_TRACKS:
 		token = LefNextToken(f, TRUE);
 		if (strlen(token) != 1) {
-		    LefError("Problem parsing track orientation (X or Y).\n");
+		    LefError(DEF_ERROR, "Problem parsing track orientation (X or Y).\n");
 		}
 		corient = tolower(token[0]);	// X or Y
 		token = LefNextToken(f, TRUE);
 		if (sscanf(token, "%lg", &start) != 1) {
-		    LefError("Problem parsing track start position.\n");
+		    LefError(DEF_ERROR, "Problem parsing track start position.\n");
 		}
 		token = LefNextToken(f, TRUE);
 		if (strcmp(token, "DO")) {
-		    LefError("TRACKS missing DO loop.\n");
+		    LefError(DEF_ERROR, "TRACKS missing DO loop.\n");
 		}
 		token = LefNextToken(f, TRUE);
 		if (sscanf(token, "%d", &channels) != 1) {
-		    LefError("Problem parsing number of track channels.\n");
+		    LefError(DEF_ERROR, "Problem parsing number of track channels.\n");
 		}
 		token = LefNextToken(f, TRUE);
 		if (strcmp(token, "STEP")) {
-		    LefError("TRACKS missing STEP size.\n");
+		    LefError(DEF_ERROR, "TRACKS missing STEP size.\n");
 		}
 		token = LefNextToken(f, TRUE);
 		if (sscanf(token, "%lg", &step) != 1) {
-		    LefError("Problem parsing track step size.\n");
+		    LefError(DEF_ERROR, "Problem parsing track step size.\n");
 		}
 		token = LefNextToken(f, TRUE);
 		if (!strcmp(token, "LAYER")) {
@@ -1939,12 +1955,9 @@ DefRead(char *inName)
 			PitchX[curlayer + 1] = PitchX[curlayer];
 		    llx = start;
 		    urx = start + step * channels;
-		    // Fix, 5/24/2013:  Set bounds according to the tracks,
-		    // since we really don't care about the die area.  But,
-		    // we should make sure this is consistent across layers. . .
-		    // if (llx < Xlowerbound)
+		    if ((llx / oscale) < Xlowerbound)
 			Xlowerbound = llx / oscale;
-		    // if (urx > Xupperbound)
+		    if ((urx / oscale) > Xupperbound)
 			Xupperbound = urx / oscale;
 		}
 		else {
@@ -1955,9 +1968,9 @@ DefRead(char *inName)
 			PitchY[curlayer + 1] = PitchY[curlayer];
 		    lly = start;
 		    ury = start + step * channels;
-		    // if (lly < Ylowerbound)
+		    if ((lly / oscale) < Ylowerbound)
 			Ylowerbound = lly / oscale;
-		    // if (ury > Yupperbound)
+		    if ((ury / oscale) > Yupperbound)
 			Yupperbound = ury / oscale;
 		}
 		LefEndStatement(f);
@@ -1976,10 +1989,15 @@ DefRead(char *inName)
 		break;
 	    case DEF_DIEAREA:
 		diearea = LefReadRect(f, 0, oscale); // no current layer, use 0
-		Xlowerbound = diearea->x1;
-		Ylowerbound = diearea->y1;
-		Xupperbound = diearea->x2;
-		Yupperbound = diearea->y2;
+		dXlowerbound = diearea->x1;
+		dYlowerbound = diearea->y1;
+		dXupperbound = diearea->x2;
+		dYupperbound = diearea->y2;
+		/* Seed actual lower/upper bounds with the midpoint */
+		Xlowerbound = (diearea->x1 + diearea->x2) / 2;
+		Ylowerbound = (diearea->y1 + diearea->y2) / 2;
+		Xupperbound = Xlowerbound;
+		Yupperbound = Ylowerbound;
 		LefEndStatement(f);
 		break;
 	    case DEF_PROPERTYDEFINITIONS:
@@ -2027,8 +2045,8 @@ DefRead(char *inName)
 		if (sscanf(token, "%d", &total) != 1) total = 0;
 		LefEndStatement(f);
 		if (total > MAX_NETNUMS) {
-		   LefError("Number of nets in design (%d) exceeds maximum (%d)\n",
-				total, MAX_NETNUMS);
+		   LefError(DEF_WARNING, "Number of nets in design (%d) exceeds "
+				"maximum (%d)\n", total, MAX_NETNUMS);
 		}
 		DefReadNets(f, sections[DEF_NETS], oscale, FALSE, total);
 		break;
@@ -2050,7 +2068,7 @@ DefRead(char *inName)
 	    case DEF_END:
 		if (!LefParseEndStatement(f, "DESIGN"))
 		{
-		    LefError("END statement out of context.\n");
+		    LefError(DEF_ERROR, "END statement out of context.\n");
 		    keyword = -1;
 		}
 		break;
@@ -2059,7 +2077,17 @@ DefRead(char *inName)
     }
     if (Verbose > 0)
 	Fprintf(stdout, "DEF read: Processed %d lines.\n", lefCurrentLine);
-    LefError(NULL);	/* print statement of errors, if any, and reset */
+    LefError(DEF_ERROR, NULL);	/* print statement of errors, if any, and reset */
+
+    /* If there were no TRACKS statements, then use the DIEAREA */
+    if (Xlowerbound == Xupperbound) {
+	Xlowerbound = dXlowerbound;
+	Xupperbound = dXupperbound;
+    }
+    if (Ylowerbound == Yupperbound) {
+	Ylowerbound = dYlowerbound;
+	Yupperbound = dYupperbound;
+    }
 
     /* Cleanup */
 

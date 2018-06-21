@@ -32,6 +32,9 @@ typedef struct
 #define DO_SPECIAL  1
 #define ALL_SPECIAL 2	/* treat all nets as SPECIALNETS */
 
+/* Types of error messages */
+enum lef_error_types {LEF_ERROR = 0, LEF_WARNING, DEF_ERROR, DEF_WARNING};
+
 /* Port classes */
 enum port_classes {PORT_CLASS_DEFAULT = 0, PORT_CLASS_INPUT,
 	PORT_CLASS_OUTPUT, PORT_CLASS_TRISTATE, PORT_CLASS_BIDIRECTIONAL,
@@ -93,15 +96,19 @@ typedef struct {
 				/* more complicated geometry.		*/
     double      respervia;	/* resistance per via			*/
     int		obsType;	/* Secondary obstruction type		*/
+    char	generated;	/* Flag indicating via from VIARULE	*/
 } lefVia;
 
 /* Defined types for "lefClass" in the lefLayer structure */
+/* Note that the first four match TYPE records in the LEF.  IGNORE has	*/
+/* a special meaning to qrouter, and VIA is for VIA definitions.	*/
 
-#define CLASS_ROUTE	0	/* routing layer */
-#define CLASS_VIA	1	/* via or cut layer */
+#define CLASS_ROUTE	0	/* route layer */
+#define CLASS_CUT	1	/* cut layer */
 #define CLASS_MASTER	2	/* masterslice layer */
 #define CLASS_OVERLAP	3	/* overlap layer */
 #define CLASS_IGNORE	4	/* inactive layer */
+#define CLASS_VIA	5	/* via record */
 
 /* Structure defining a route or via layer and matching it to a magic	*/
 /* layer type.  This structure is saved in the LefInfo list.		*/
@@ -168,7 +175,7 @@ void   LefHashCell(GATE gateginfo);
 int    LefRead(char *inName);
 void   LefAssignLayerVias();
 
-void LefError(char *fmt, ...);	/* Variable argument procedure requires */
-				/* parameter list.			*/
+void LefError(int type, char *fmt, ...);	/* Variable argument procedure */
+						/* requires parameter list. */
 
 #endif /* _LEFINT_H */

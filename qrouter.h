@@ -45,7 +45,11 @@ typedef int (*__compar_fn_t)(const void*, const void*);
 #endif
 
 /* Maximum number of route layers */
-#define MAX_LAYERS    9
+#define MAX_LAYERS    12
+
+/* Maximum number of all defined layers.  Since masterslice and	*/
+/* overlap types are ignored, this just includes all the cuts.	*/
+#define MAX_TYPES    (MAX_LAYERS * 2 - 1)
 
 /* Cell name (and other names) max length */
 #define MAX_NAME_LEN    1024

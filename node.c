@@ -110,7 +110,7 @@ count_reachable_taps()
 	    if (node->numtaps == 0) {
 
 		/* Will try more than one via if available */
-		for (orient = 0; orient < 2; orient++) {
+		for (orient = 0; orient < 4; orient += 2) {
 		    for (ds = g->taps[i]; ds; ds = ds->next) {
 			deltax = 0.5 * LefGetXYViaWidth(ds->layer, ds->layer, 0, orient);
 			deltay = 0.5 * LefGetXYViaWidth(ds->layer, ds->layer, 1, orient);
@@ -157,8 +157,8 @@ count_reachable_taps()
 					    lnode->nodeloc = node;
 					    lnode->nodesav = node;
 
-					    /* If we got to orient = 1, mark NI_NO_VIAX */
-					    if (orient == 1) lnode->flags |= NI_NO_VIAX;
+					    /* If we got to orient = 2, mark NI_NO_VIAX */
+					    if (orient == 2) lnode->flags |= NI_NO_VIAX;
 
 					    node->numtaps++;
 					}
@@ -182,7 +182,7 @@ count_reachable_taps()
 		int dir, mask, tapx, tapy, tapl;
 
 		/* Will try more than one via if available */
-		for (orient = 0; orient < 2; orient++) {
+		for (orient = 0; orient < 4; orient += 2) {
 
 		    /* Initialize mindist to a large value */
 		    mask = 0;
@@ -320,8 +320,8 @@ count_reachable_taps()
 			lnode->stub = dist;
 			lnode->flags |= dir;
 
-			/* If we got to orient = 1 then mark NI_NO_VIAX */
-			if (orient == 1) lnode->flags |= NI_NO_VIAX;
+			/* If we got to orient = 2 then mark NI_NO_VIAX */
+			if (orient == 2) lnode->flags |= NI_NO_VIAX;
 
 			node->numtaps++;
 		    }
@@ -1024,7 +1024,8 @@ void create_obstructions_inside_nodes(void)
     DSEG ds;
     u_int dir, mask, k;
     int i, gridx, gridy;
-    double dx, dy, xdist;
+    double dx, dy, xdist, vwx, vwy;
+    u_char o0okay, o2okay;
     float dist;
 
     // For each node terminal (gate pin), mark each grid position with the
@@ -1183,6 +1184,36 @@ void create_obstructions_inside_nodes(void)
 				lnode->nodesav = node;
 				lnode->stub = dist;
 				lnode->flags |= dir;
+
+				/* If a horizontal or vertical via fits completely */
+				/* inside the pin but the other orientation	   */
+				/* doesn't, then mark as prohibiting the other	   */
+				/* orientation.					   */
+
+				vwx = LefGetXYViaWidth(ds->layer, ds->layer, 0, 0) / 2.0;
+				vwy = LefGetXYViaWidth(ds->layer, ds->layer, 1, 0) / 2.0;
+				if ((dx - vwx > ds->x1 - EPS) &&
+					(dx + vwx < ds->x2 + EPS) &&
+				    	(dy - vwy > ds->y1 - EPS) &&
+					(dy + vwy < ds->y2 + EPS)) {
+				    o0okay = TRUE;
+				} else {
+				    o0okay = FALSE;
+				}
+				vwx = LefGetXYViaWidth(ds->layer, ds->layer, 0, 2) / 2.0;
+				vwy = LefGetXYViaWidth(ds->layer, ds->layer, 1, 2) / 2.0;
+				if ((dx - vwx > ds->x1 - EPS) &&
+					(dx + vwx < ds->x2 + EPS) &&
+				    	(dy - vwy > ds->y1 - EPS) &&
+					(dy + vwy < ds->y2 + EPS)) {
+				    o2okay = TRUE;
+				} else {
+				    o2okay = FALSE;
+				}
+				if ((o0okay == TRUE) && (o2okay == FALSE))
+				    lnode->flags |= NI_NO_VIAY;
+				else if ((o0okay == FALSE) && (o2okay == TRUE))
+				    lnode->flags |= NI_NO_VIAX;
 			     }
 			     else if ((orignet & NO_NET) && ((orignet & OBSTRUCT_MASK)
 					!= OBSTRUCT_MASK)) {

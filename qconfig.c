@@ -30,9 +30,9 @@ int    PinNumber = 0;
 int     Num_layers   = MAX_LAYERS;	// layers to use to route
 
 double  PathWidth[MAX_LAYERS];		// width of the paths
-int     GDSLayer[MAX_LAYERS];		// GDS layer number 
+int     GDSLayer[MAX_TYPES];		// GDS layer number 
 int     GDSCommentLayer = 1;		// for dummy wires, etc.
-char    CIFLayer[MAX_LAYERS][50];	// CIF layer name
+char    CIFLayer[MAX_TYPES][50];	// CIF layer name
 double  PitchX[MAX_LAYERS];		// Horizontal wire pitch of layer
 double  PitchY[MAX_LAYERS];		// Vertical wire pitch of layer
 int     NumChannelsX[MAX_LAYERS];	// number of wire channels in X on layer
@@ -41,8 +41,6 @@ int     Vert[MAX_LAYERS];		// 1 if vertical, 0 if horizontal
 int     Numpasses = 10;			// number of times to iterate in route_segs
 char	StackedContacts = MAX_LAYERS;	// Value is number of contacts that may
 					// be stacked on top of each other.
-char	ViaPattern = VIA_PATTERN_NONE;	// Patterning to be used for vias based
-					// on grid position (i.e., checkerboarding)
 
 double  Xlowerbound=0.0;		// Bounding Box of routes, in microns
 double  Xupperbound=0.0;      
@@ -59,8 +57,10 @@ int	OffsetCost = 50;	   // Cost per micron of a node offset
 int 	ConflictCost = 50;	   // Cost of shorting another route
 				   // during the rip-up and reroute stage
 
-char    *ViaX[MAX_LAYERS];
-char    *ViaY[MAX_LAYERS];
+char    *ViaXX[MAX_LAYERS];
+char    *ViaXY[MAX_LAYERS];
+char    *ViaYX[MAX_LAYERS];
+char    *ViaYY[MAX_LAYERS];
 
 /*--------------------------------------------------------------*/
 /* post_config ---						*/
@@ -156,8 +156,10 @@ int read_config(FILE *fconfig, int is_info)
     if (Firstcall) {
 	for (i = 0; i < MAX_LAYERS; i++) {
 	    sprintf(line, "via%d%d", i + 1, i + 2);
-	    ViaX[i] = strdup(line);
-	    ViaY[i] = NULL;
+	    ViaXX[i] = strdup(line);
+	    ViaXY[i] = NULL;
+	    ViaYX[i] = NULL;
+	    ViaYY[i] = NULL;
 	}
 
 	DontRoute = (STRING)NULL;
@@ -206,13 +208,13 @@ int read_config(FILE *fconfig, int is_info)
 	}
 
 	if ((i = sscanf(lineptr, "layer_%d_name %s", &iarg2, sarg)) == 2) {
-	    if (iarg2 > 0 && iarg2 < 10) {
+	    if (iarg2 > 0 && iarg2 <= MAX_LAYERS) {
 	       OK = 1; strcpy(CIFLayer[iarg2 - 1], sarg);
 	    }
 	}
 
 	if ((i = sscanf(lineptr, "gds_layer_%d %d", &iarg2, &iarg)) == 2) {
-	    if (iarg2 > 0 && iarg2 < 10) {
+	    if (iarg2 > 0 && iarg2 <= MAX_TYPES) {
 	        OK = 1; GDSLayer[iarg2 - 1] = iarg;
 	    }
 	}
@@ -376,14 +378,6 @@ int read_config(FILE *fconfig, int is_info)
 	    OK = 1; StackedContacts = iarg;
 	    if (StackedContacts == 0) StackedContacts = 1;
 	}
-
-	// Look for via patterning specifications
-	if (strcasestr(lineptr, "via pattern") != NULL) {
-	    if (strcasestr(lineptr + 12, "normal") != NULL)
-		ViaPattern = VIA_PATTERN_NORMAL;
-	    else if (strcasestr(lineptr + 12, "invert") != NULL)
-		ViaPattern = VIA_PATTERN_INVERT;
- 	}
 
 	if ((i = sscanf(lineptr, "obstruction %lf %lf %lf %lf %s\n",
 			&darg, &darg2, &darg3, &darg4, sarg)) == 5) {

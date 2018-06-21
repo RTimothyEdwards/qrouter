@@ -55,7 +55,7 @@ int write_failed(char *filename)
     fprintf(ffail, "%d nets failed to route:\n");
 
     for (nl = FailedNets; nl; nl = nl->next) {
-        net = FailedNets->net;
+        net = nl->net;
         Fprintf(ffail, " %s\n", net->netname);
     }
 
@@ -87,7 +87,7 @@ int write_def(char *filename)
 	 // Output a list of the failed nets
 
 	 for (nl = FailedNets; nl; nl = nl->next) {
-	    net = FailedNets->net;
+	    net = nl->net;
 	    Fprintf(stdout, " %s\n", net->netname);
 	 }
 	 Fprintf(stdout, "\n");
@@ -202,15 +202,94 @@ pathvia(FILE *cmd, int layer, int x, int y, int lastx, int lasty,
         int gridx, int gridy, double invscale)
 {
     char *s;
-    char checkersign = (gridx + gridy + layer) & 0x01;
+    char checkersign = (gridx + gridy) & 0x01;
+    int ob, ot, othernet, thisnet;
+    u_char blocking;
     NODEINFO lnode;
 
-    if ((ViaPattern == VIA_PATTERN_NONE) || (ViaY[layer] == NULL))
-	s = ViaX[layer];
-    else if (ViaPattern == VIA_PATTERN_NORMAL)
-	s = (checkersign == 0) ?  ViaX[layer] : ViaY[layer];
+    /* Default orientation:  Via layers in the direction of the routes */
+    ob = LefGetRouteOrientation(layer);
+    ot = LefGetRouteOrientation(layer + 1);
+    if (ob == 0 && ot == 1)
+	s = ViaYX[layer];
+    else if (ob == 1 && ot == 0)
+	s = ViaXY[layer];
+    else if (ob == 0 && ot == 0)
+	s = ViaYY[layer];
     else
-	s = (checkersign == 0) ?  ViaY[layer] : ViaX[layer];
+	s = ViaXX[layer];
+
+    /* Check for other net on long side of via bottom */
+
+    thisnet = OBSVAL(gridx, gridy, layer) & ROUTED_NET_MASK;
+    blocking = FALSE;
+    if (ob == 0) {
+	if (gridy < NumChannelsY[layer] - 1) {
+	    othernet = OBSVAL(gridx, gridy + 1, layer) & ROUTED_NET_MASK;
+	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
+	}
+	if ((blocking == FALSE) && (gridy > 0)) {
+	    othernet = OBSVAL(gridx, gridy - 1, layer) & ROUTED_NET_MASK;
+	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
+	}
+	if (blocking && (checkersign == 1)) {
+	    if (s == ViaYX[layer])
+		s = ViaXX[layer];
+	    else	/* s == ViaYY */
+		s = ViaXY[layer];
+	}
+    }
+    else {
+	if (gridx < NumChannelsX[layer] - 1) {
+	    othernet = OBSVAL(gridx + 1, gridy, layer) & ROUTED_NET_MASK;
+	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
+	}
+	if ((blocking == FALSE) && (gridx > 0)) {
+	    othernet = OBSVAL(gridx - 1, gridy, layer) & ROUTED_NET_MASK;
+	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
+	}
+	if (blocking && (checkersign == 1)) {
+	    if (s == ViaXY[layer])
+		s = ViaYY[layer];
+	    else	/* s == ViaXX */
+		s = ViaYX[layer];
+	}
+    }
+
+    /* And check if there is a via on the top in the long direction */
+    blocking = FALSE;
+    if (ot == 0) {
+	if (gridy < NumChannelsY[layer + 1] - 1) {
+	    othernet = OBSVAL(gridx, gridy + 1, layer + 1) & ROUTED_NET_MASK;
+	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
+	}
+	if ((blocking == FALSE) && (gridy > 0)) {
+	    othernet = OBSVAL(gridx, gridy - 1, layer + 1) & ROUTED_NET_MASK;
+	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
+	}
+	if (blocking && (checkersign == 1)) {
+	    if (s == ViaXY[layer])
+		s = ViaXX[layer];
+	    else if (s == ViaYY[layer])
+		s = ViaYX[layer];
+	}
+    }
+    else {
+	if (gridx < NumChannelsX[layer + 1] - 1) {
+	    othernet = OBSVAL(gridx + 1, gridy, layer + 1) & ROUTED_NET_MASK;
+	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
+	}
+	if ((blocking == FALSE) && (gridx > 0)) {
+	    othernet = OBSVAL(gridx - 1, gridy, layer + 1) & ROUTED_NET_MASK;
+	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
+	}
+	if (blocking && (checkersign == 1)) {
+	    if (s == ViaYX[layer])
+		s = ViaYY[layer];
+	    else if (s == ViaXX[layer])
+		s = ViaXY[layer];
+	}
+    }
 
     /* If the position is a node, then the via type may be switched if	*/
     /* there is a prohibition declared in the flags.			*/
@@ -218,10 +297,18 @@ pathvia(FILE *cmd, int layer, int x, int y, int lastx, int lasty,
     if (layer < Pinlayers) {
 	if (((lnode = NODEIPTR(gridx, gridy, layer)) != NULL)
 			&& (lnode->nodesav != NULL)) {
-	    if ((lnode->flags & NI_NO_VIAX) && (s == ViaX[layer]))
-		s = ViaY[layer];
-	    if ((lnode->flags & NI_NO_VIAY) && (s == ViaY[layer]))
-		s = ViaX[layer];
+	    if (lnode->flags & NI_NO_VIAX) {
+		if (s == ViaXY[layer])
+		    s = ViaYY[layer];
+		else if (s == ViaXX[layer])
+		    s = ViaYX[layer];
+	    }
+	    if (lnode->flags & NI_NO_VIAY) {
+		if (s == ViaYX[layer])
+		    s = ViaXX[layer];
+		else if (s == ViaYY[layer])
+		    s = ViaXY[layer];
+	    }
 	}
     }
 
@@ -910,6 +997,14 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
    viaOffsetX[Num_layers - 1][2] = 0;	// nothing above the last via
    viaOffsetY[Num_layers - 1][2] = 0;
 
+#if 0
+
+   /* This code is being disabled.  Vias should not need offsets in any	*/
+   /* reasonable standard cell set and route pitch as long as vias can	*/
+   /* be arbitrarily rotated.  This code should be revisited to cover	*/
+   /* cases in which this all fails, but it's not clear that it would	*/
+   /* ever be necessary.						*/
+
    for (layer = 0; layer < Num_layers - 1; layer++) {
       double s1  = LefGetRouteSpacing(layer);
       double s2  = LefGetRouteSpacing(layer + 1);
@@ -978,6 +1073,8 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		viaOffsetY[layer][2] > 0)
 	 viaCheckY[layer] = 1;
    }
+
+#endif /* 0 */
 
    Pathon = -1;
    lastlay = -1;
@@ -1976,6 +2073,11 @@ static void emit_routes(char *filename, double oscale, int iscale)
        if (!strncmp(lptr, "NETS", 4)) {
 	  sscanf(lptr + 4, "%d", &numnets);
 	  break;
+       }
+       if (!strncmp(lptr, "PINS", 4)) {
+	   /* Check if there are any generated vias, and write them	*/
+	   /* prior to the PINS section.				*/
+	   LefWriteGeneratedVias(Cmd, (double)(oscale / (double)iscale));
        }
        fputs(line, Cmd);
     }

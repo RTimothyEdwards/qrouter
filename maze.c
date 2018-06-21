@@ -723,11 +723,14 @@ int set_route_to_net_recursive(NET net, ROUTE rt, int newflags,
 	    }
 	}
     }
-    else {
+    else if (rt->start.route) {
 	result = set_route_to_net_recursive(net, rt->start.route, newflags,
 			pushlist, bbox, stage);
 	if (result < 0) return result;
     }
+    else
+	Fprintf(stderr, "Error:  Route start information not recorded, cannot walk.\n");
+	
     if (rt->flags & RT_END_NODE) {
 	for (route = net->routes; route; route = route->next) {
 	    if (!(route->flags & RT_START_NODE) && (route->start.route == rt)) {
@@ -742,11 +745,13 @@ int set_route_to_net_recursive(NET net, ROUTE rt, int newflags,
 	    }
 	}
     }
-    else {
+    else if (rt->end.route) {
 	result = set_route_to_net_recursive(net, rt->end.route, newflags,
 			pushlist, bbox, stage);
 	if (result < 0) return result;
     }
+    else
+	Fprintf(stderr, "Error:  Route end information not recorded, cannot walk.\n");
     return result;
 }
 
@@ -1170,7 +1175,8 @@ u_char ripup_net(NET net, u_char restore, u_char flagged, u_char retain)
 		     // net and route associated with the incorrect net.
 		     analyze_route_overwrite(x, y, lay, oldnet);
 
-		     // return FALSE;	// Something went wrong
+		     if ((rt == NULL) || (rt->segments == NULL))
+			 return FALSE;	// Something went wrong
 	          }
 
 	          // Reset the net number to zero along this route for
@@ -1582,16 +1588,16 @@ void writeback_segment(SEG seg, int netnum)
 	 if ((seg->x1 < (NumChannelsX[seg->layer + 1] - 1)) &&
 		(OBSVAL(seg->x1 + 1, seg->y1, seg->layer + 1) & NETNUM_MASK) == 0)
  	    OBSVAL(seg->x1 + 1, seg->y1, seg->layer + 1) = DRC_BLOCKAGE;
-	 if ((seg->x1 > 0) &&
-		(OBSVAL(seg->x1 - 1, seg->y1, seg->layer + 1) & NETNUM_MASK) == 0)
+	 if ((seg->x1 > 0) && (OBSVAL(seg->x1 - 1, seg->y1, seg->layer + 1)
+			& NETNUM_MASK) == 0)
 	    OBSVAL(seg->x1 - 1, seg->y1, seg->layer + 1) = DRC_BLOCKAGE;
       }
       if (needblock[seg->layer + 1] & VIABLOCKY) {
 	 if ((seg->y1 < (NumChannelsY[seg->layer + 1] - 1)) &&
 		(OBSVAL(seg->x1, seg->y1 + 1, seg->layer + 1) & NETNUM_MASK) == 0)
 	    OBSVAL(seg->x1, seg->y1 + 1, seg->layer + 1) = DRC_BLOCKAGE;
-	 if ((seg->y1 > 0) &&
-		(OBSVAL(seg->x1, seg->y1 - 1, seg->layer + 1) & NETNUM_MASK) == 0)
+	 if ((seg->y1 > 0) && (OBSVAL(seg->x1, seg->y1 - 1, seg->layer + 1)
+		& NETNUM_MASK) == 0)
 	    OBSVAL(seg->x1, seg->y1 - 1, seg->layer + 1) = DRC_BLOCKAGE;
       }
 
@@ -2364,7 +2370,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
       POINT lrppre;
       PROUTE *pri, *pri2;
       int violations = 1, checks;
-      int i, cx, cy, cl;
+      int i, cx, cy, cl, o, orient;
       int mincost, minx = -1, miny = -1, collide, cost;
       double min_area[MAX_LAYERS];
       u_char need_check[MAX_LAYERS];
@@ -2414,85 +2420,95 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	       mincost = MAXRT;
 
 	       // Check all four positions around the contact for a
-	       // free position to occupy.
+	       // free position to occupy.  Positions in the preferred
+	       // direction of the route layer take precedence.
 
-	       if (cx < NumChannelsX[cl] - 1) {
-	          dx = cx + 1;	// Check to the right
-	          pri = &OBS2VAL(dx, cy, cl);
-	          pflags = pri->flags;
-
-	          cost = pri->prdata.cost;
-	          if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
-				(pri->prdata.net < MAXNETNUM)) {
-		     pflags = 0;
-		     cost = ConflictCost;
-	          }
-	          if (pflags & PR_COST) {
-		     pflags &= ~PR_COST;
-		     if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
-		         mincost = cost;
-		         minx = dx;
-		         miny = cy;
+	       o = LefGetRouteOrientation(cl);
+	       for (orient = 0; orient < 2; orient++) {
+		  if (o == orient) {
+		     if (cy < NumChannelsY[cl] - 1) {
+			dy = cy + 1;	// Check north
+			pri = &OBS2VAL(cx, dy, cl);
+			pflags = pri->flags;
+			cost = pri->prdata.cost;
+			if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
+					(pri->prdata.net < MAXNETNUM)) {
+			   pflags = 0;
+			   cost = ConflictCost;
+			}
+			if (pflags & PR_COST) {
+			   pflags &= ~PR_COST;
+			   if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE &&
+					cost < mincost) {
+			      mincost = cost;
+			      minx = cx;
+			      miny = dy;
+			   }
+			}
 		     }
-	          }
-	       }
 
-	       if (cx > 0) {
-	          dx = cx - 1;	// Check to the left
-	          pri = &OBS2VAL(dx, cy, cl);
-	          pflags = pri->flags;
-	          cost = pri->prdata.cost;
-	          if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
-				(pri->prdata.net < MAXNETNUM)) {
-		     pflags = 0;
-		     cost = ConflictCost;
-	          }
-	          if (pflags & PR_COST) {
-		     pflags &= ~PR_COST;
-		     if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
-		         mincost = cost;
-		         minx = dx;
-		         miny = cy;
-		     }
-		  }
-	       }
-
-	       if (cy < NumChannelsY[cl] - 1) {
-	          dy = cy + 1;	// Check north
-	          pri = &OBS2VAL(cx, dy, cl);
-	          pflags = pri->flags;
-	          cost = pri->prdata.cost;
-	          if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
-				(pri->prdata.net < MAXNETNUM)) {
-		     pflags = 0;
-		     cost = ConflictCost;
-	          }
-	          if (pflags & PR_COST) {
-		     pflags &= ~PR_COST;
-		     if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
-		         mincost = cost;
-		         minx = cx;
-		         miny = dy;
+		     if (cy > 0) {
+			dy = cy - 1;	// Check south
+			pri = &OBS2VAL(cx, dy, cl);
+			pflags = pri->flags;
+			cost = pri->prdata.cost;
+			if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
+					(pri->prdata.net < MAXNETNUM)) {
+			   pflags = 0;
+			   cost = ConflictCost;
+			}
+			if (pflags & PR_COST) {
+			   pflags &= ~PR_COST;
+			   if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE &&
+					cost < mincost) {
+			      mincost = cost;
+			      minx = cx;
+			      miny = dy;
+			   }
+			}
 		     }
 		  }
-	       }
+		  else {
+		     if (cx < NumChannelsX[cl] - 1) {
+			dx = cx + 1;	// Check to the right
+			pri = &OBS2VAL(dx, cy, cl);
+			pflags = pri->flags;
+			cost = pri->prdata.cost;
+			if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
+					(pri->prdata.net < MAXNETNUM)) {
+			   pflags = 0;
+			   cost = ConflictCost;
+			}
+			if (pflags & PR_COST) {
+			   pflags &= ~PR_COST;
+			   if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE &&
+					cost < mincost) {
+			      mincost = cost;
+			      minx = dx;
+			      miny = cy;
+			   }
+			}
+		     }
 
-	       if (cy > 0) {
-	          dy = cy - 1;	// Check south
-	          pri = &OBS2VAL(cx, dy, cl);
-	          pflags = pri->flags;
-	          cost = pri->prdata.cost;
-	          if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
+		     if (cx > 0) {
+			dx = cx - 1;	// Check to the left
+			pri = &OBS2VAL(dx, cy, cl);
+			pflags = pri->flags;
+			cost = pri->prdata.cost;
+			if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
 				(pri->prdata.net < MAXNETNUM)) {
-		     pflags = 0;
-		     cost = ConflictCost;
-	          }
-	          if (pflags & PR_COST) {
-		     pflags &= ~PR_COST;
-		     if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
-		         mincost = cost;
-		         minx = cx;
-		         miny = dy;
+			   pflags = 0;
+			   cost = ConflictCost;
+			}
+			if (pflags & PR_COST) {
+			   pflags &= ~PR_COST;
+			   if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE &&
+					cost < mincost) {
+			      mincost = cost;
+			      minx = dx;
+			      miny = cy;
+			   }
+			}
 		     }
 		  }
 	       }
@@ -2784,7 +2800,10 @@ int writeback_route(ROUTE rt)
       lay2 = (seg->segtype & ST_VIA) ? seg->layer + 1 : seg->layer;
 
       dir1 = OBSVAL(seg->x1, seg->y1, seg->layer) & PINOBSTRUCTMASK;
-      dir2 = OBSVAL(seg->x2, seg->y2, lay2) & PINOBSTRUCTMASK;
+      if (lay2 < Num_layers)
+	 dir2 = OBSVAL(seg->x2, seg->y2, lay2) & PINOBSTRUCTMASK;
+      else
+	 dir2 = 0;
 
       writeback_segment(seg, netnum);
 

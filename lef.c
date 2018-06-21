@@ -274,6 +274,8 @@ LefNextToken(FILE *f, u_char ignore_eol)
  *	Print an error message (via fprintf) giving the line
  *	number of the input file on which the error occurred.
  *
+ *	"type" should be either LEF_ERROR or LEF_WARNING (or DEF_*).
+ *
  * Results:
  *	None.
  *
@@ -284,36 +286,49 @@ LefNextToken(FILE *f, u_char ignore_eol)
  */
 
 void
-LefError(char *fmt, ...)
+LefError(int type, char *fmt, ...)
 {  
-    static int errors = 0;
+    static int fatal = 0;
+    static int nonfatal = 0;
+    char lefordef = 'L';
+    int errors;
     va_list args;
 
     if (Verbose == 0) return;
 
+    if ((type == DEF_WARNING) || (type == DEF_ERROR)) lefordef = 'D';
+
+    errors = fatal + nonfatal;
     if (fmt == NULL)  /* Special case:  report any errors and reset */
     {
-	if (errors)
+	if (errors > 0)
 	{
-	    Fprintf(stdout, "LEF Read: encountered %d error%s total.\n",
-			errors, (errors == 1) ? "" : "s");
-	    errors = 0;
+	    Fprintf(stdout, "%cEF Read: encountered %d error%s and %d warning%s total.\n",
+			lefordef,
+			fatal, (fatal == 1) ? "" : "s",
+			nonfatal, (nonfatal == 1) ? "" : "s");
+	    fatal = 0;
+	    nonfatal = 0;
 	}
 	return;
     }
 
     if (errors < LEF_MAX_ERRORS)
     {
-	Fprintf(stderr, "LEF Read, Line %d: ", lefCurrentLine);
+	Fprintf(stderr, "%cEF Read, Line %d: ", lefordef, lefCurrentLine);
 	va_start(args, fmt);
 	Vprintf(stderr, fmt, args);
 	va_end(args);
 	Flush(stderr);
     }
     else if (errors == LEF_MAX_ERRORS)
-	Fprintf(stderr, "LEF Read:  Further errors will not be reported.\n");
+	Fprintf(stderr, "%cEF Read:  Further errors/warnings will not be reported.\n",
+		lefordef);
 
-    errors++;
+    if ((type == LEF_ERROR) || (type == DEF_ERROR))
+	fatal++;
+    else if ((type == LEF_WARNING) || (type == DEF_WARNING))
+	nonfatal++;
 }
 
 /*
@@ -349,7 +364,7 @@ LefParseEndStatement(FILE *f, char *match)
     token = LefNextToken(f, (match == NULL) ? FALSE : TRUE);
     if (token == NULL)
     {
-	LefError("Bad file read while looking for END statement\n");
+	LefError(LEF_ERROR, "Bad file read while looking for END statement\n");
 	return FALSE;
     }
 
@@ -413,7 +428,7 @@ LefSkipSection(FILE *f, char *section)
 	}
     }
 
-    LefError("Section %s has no END record!\n", section);
+    LefError(LEF_ERROR, "Section %s has no END record!\n", section);
     return;
 }
 
@@ -790,12 +805,19 @@ LefGetViaWidth(int base, int layer, int dir)
 
 /*
  *------------------------------------------------------------
- * The base routing used by LefGetViaWidth(), with an
+ * The base routine used by LefGetViaWidth(), with an
  * additional argument that specifies which via orientation
  * to use, if an alternative orientation is available.  This
- * is necessary for doing checkerboard via patterning and
- * for certain standard cells with ports that do not always
- * fit one orientation of via.
+ * is necessary for doing checkerboard via patterning and for
+ * certain standard cells with ports that do not always fit
+ * one orientation of via.
+ *
+ * "orient" is defined as follows:
+ * 0 = XX = both layers horizontal
+ * 1 = XY = bottom layer horizontal, top layer vertical
+ * 2 = YX = bottom layer vertical, top layer horizontal
+ * 3 = YY = both layers vertical.
+ *
  *------------------------------------------------------------
  */
 
@@ -807,18 +829,79 @@ LefGetXYViaWidth(int base, int layer, int dir, int orient)
     double width;
     char **viatable;
 
-    viatable = (orient == 1) ? ViaY : ViaX;
-
+    switch (orient) {
+	case 0:
+	    viatable = ViaXX;
+	    break;
+	case 1:
+	    viatable = ViaXY;
+	    break;
+	case 2:
+	    viatable = ViaYX;
+	    break;
+	case 3:
+	    viatable = ViaYY;
+	    break;
+    }
     lefl = LefFindLayer(*(viatable + base));
+
+    /* The routine LefAssignLayerVias() should assign all Via** types.	*/
+    /* Below are fallback assignments.					*/
+
     if (!lefl) {
-	viatable = (orient == 1) ? ViaX : ViaY;
+	switch (orient) {
+	    case 0:
+		viatable = ViaXY;
+		break;
+	    case 1:
+		viatable = ViaYX;
+		break;
+	    case 2:
+		viatable = ViaYY;
+		break;
+	    case 3:
+		viatable = ViaYX;
+		break;
+	}
 	lefl = LefFindLayer(*(viatable + base));
-	viatable = (orient == 1) ? ViaY : ViaX;
     }
+
     if (!lefl) {
-	if (base == (Num_layers - 1))
-	    lefl = LefFindLayer(*(viatable + base - 1));
+	switch (orient) {
+	    case 0:
+		viatable = ViaYX;
+		break;
+	    case 1:
+		viatable = ViaYY;
+		break;
+	    case 2:
+		viatable = ViaXX;
+		break;
+	    case 3:
+		viatable = ViaXY;
+		break;
+	}
+	lefl = LefFindLayer(*(viatable + base));
     }
+
+    if (!lefl) {
+	switch (orient) {
+	    case 0:
+		viatable = ViaYY;
+		break;
+	    case 1:
+		viatable = ViaYX;
+		break;
+	    case 2:
+		viatable = ViaXY;
+		break;
+	    case 3:
+		viatable = ViaXX;
+		break;
+	}
+	lefl = LefFindLayer(*(viatable + base));
+    }
+
     if (lefl) {
 	if (lefl->lefClass == CLASS_VIA) {
 	    if (lefl->info.via.area.layer == layer) {
@@ -1101,11 +1184,19 @@ LefGetViaResistance(int layer, double *respervia)
     DSEG lrect;
     LefList lefl;
     double width;
-    char **viatable = ViaX;
+    char **viatable = ViaXX;
 
     lefl = LefFindLayer(*(viatable + layer));
     if (!lefl) {
-	viatable = ViaY;
+	viatable = ViaXY;
+	lefl = LefFindLayer(*(viatable + layer));
+    }
+    if (!lefl) {
+	viatable = ViaYX;
+	lefl = LefFindLayer(*(viatable + layer));
+    }
+    if (!lefl) {
+	viatable = ViaYY;
 	lefl = LefFindLayer(*(viatable + layer));
     }
     if (lefl) {
@@ -1150,7 +1241,7 @@ LefReadLayers(f, obstruct, lreturn)
     token = LefNextToken(f, TRUE);
     if (*token == ';')
     {
-	LefError("Bad Layer statement\n");
+	LefError(LEF_ERROR, "Bad Layer statement\n");
 	return -1;
     }
     else
@@ -1164,7 +1255,7 @@ LefReadLayers(f, obstruct, lreturn)
 		curlayer = lefl->obsType;
 		if ((curlayer < 0) && (lefl->lefClass != CLASS_IGNORE))
 		    curlayer = lefl->type;
-		else if (lefl->lefClass == CLASS_VIA)
+		else if (lefl->lefClass == CLASS_VIA || lefl->lefClass == CLASS_CUT)
 		    if (lreturn) *lreturn = lefl->info.via.obsType;
 	    }
 	    else
@@ -1178,8 +1269,28 @@ LefReadLayers(f, obstruct, lreturn)
 	    /* CLASS_VIA in lefl record is a cut, and the layer */
 	    /* geometry is ignored for the purpose of routing.	*/
 
-	    if ((!lefl) || (lefl->lefClass != CLASS_VIA))
-		LefError("Don't know how to parse layer \"%s\"\n", token);
+	    if (lefl && (lefl->lefClass == CLASS_CUT)) {
+		int cuttype;
+
+		/* By the time a cut layer is being requested,	*/
+		/* presumably from a VIA definition, the route	*/
+		/* layers should all be defined, so start	*/
+		/* assigning layers to cuts.			*/
+
+		/* If a cut layer is found with an unassigned number,	*/
+		/* then assign it here.					*/
+		cuttype = LefGetMaxLayer();
+		if (cuttype < MAX_TYPES) {
+		    lefl->type = cuttype;
+		    curlayer = cuttype;
+		    strcpy(CIFLayer[cuttype], lefl->lefName);
+		}
+		else
+		    LefError(LEF_WARNING, "Too many cut types;  type \"%s\" ignored.\n",
+				token);
+	    }
+	    else if ((!lefl) || (lefl->lefClass != CLASS_VIA))
+		LefError(LEF_ERROR, "Don't know how to parse layer \"%s\"\n", token);
 	}
     }
     return curlayer;
@@ -1270,7 +1381,11 @@ LefReadRect(FILE *f, int curlayer, float oscale)
     }
     if (curlayer < 0) {
 	/* Issue warning but keep geometry with negative layer number */
-	LefError("No layer defined for RECT.\n");
+	LefError(LEF_WARNING, "No layer defined for RECT.\n");
+    }
+    else if (curlayer >= Num_layers) {
+	LefError(LEF_WARNING, "Layer defined for RECT is above route layer limit.\n");
+	return (DSEG)NULL;
     }
 
     /* Scale coordinates (microns to centimicrons)	*/
@@ -1283,7 +1398,58 @@ LefReadRect(FILE *f, int curlayer, float oscale)
     return (&paintrect);
 
 parse_error:
-    LefError("Bad port geometry: RECT requires 4 values.\n");
+    LefError(LEF_ERROR, "Bad port geometry: RECT requires 4 values.\n");
+    return (DSEG)NULL;
+}
+
+/*
+ *------------------------------------------------------------
+ * LefReadEnclosure --
+ *
+ *	Read a LEF "ENCLOSURE" record from the file, and
+ *	return a Rect in micron coordinates, representing
+ *	the bounding box of the stated enclosure dimensions
+ *	in both directions, centered on the origin.
+ *
+ * Results:
+ *	Returns a pointer to a Rect containing the micron
+ *	coordinates, or NULL if an error occurred.
+ *
+ * Side Effects:
+ *	Reads input from file f
+ *
+ *------------------------------------------------------------
+ */
+
+DSEG
+LefReadEnclosure(FILE *f, int curlayer, float oscale)
+{
+    char *token;
+    float x, y, scale;
+    static struct dseg_ paintrect;
+
+    token = LefNextToken(f, TRUE);
+    if (!token || sscanf(token, "%f", &x) != 1) goto enc_parse_error;
+    token = LefNextToken(f, TRUE);
+    if (!token || sscanf(token, "%f", &y) != 1) goto enc_parse_error;
+
+    if (curlayer < 0) {
+	/* Issue warning but keep geometry with negative layer number */
+	LefError(LEF_ERROR, "No layer defined for RECT.\n");
+    }
+
+    /* Scale coordinates (microns to centimicrons) (doubled)	*/
+		
+    scale = oscale / 2.0;
+    paintrect.x1 = -x / scale;
+    paintrect.y1 = -y / scale;
+    paintrect.x2 = x / scale;
+    paintrect.y2 = y / scale;
+    paintrect.layer = curlayer;
+    return (&paintrect);
+
+enc_parse_error:
+    LefError(LEF_ERROR, "Bad enclosure geometry: ENCLOSURE requires 2 values.\n");
     return (DSEG)NULL;
 }
 
@@ -1488,7 +1654,7 @@ LefPolygonToRects(DSEG *rectListPtr, DPOINT pointlist)
 
     if (npts < 4)
     {
-	LefError("Polygon with fewer than 4 points.\n");
+	LefError(LEF_ERROR, "Polygon with fewer than 4 points.\n");
 	goto done;
     }
 
@@ -1500,7 +1666,7 @@ LefPolygonToRects(DSEG *rectListPtr, DPOINT pointlist)
 
     if (!lefOrient(edges, npts, dir))
     {
-	LefError("I can't handle non-manhattan polygons!\n");
+	LefError(LEF_ERROR, "I can't handle non-manhattan polygons!\n");
 	goto done;
     }
 
@@ -1576,13 +1742,15 @@ LefReadPolygon(FILE *f, int curlayer, float oscale)
     char *token;
     double px, py;
 
+    if (curlayer >= Num_layers) return (DPOINT)NULL;
+
     while (1)
     {
 	token = LefNextToken(f, TRUE);
 	if (token == NULL || *token == ';') break;
 	if (sscanf(token, "%lg", &px) != 1)
 	{
-	    LefError("Bad X value in polygon.\n");
+	    LefError(LEF_ERROR, "Bad X value in polygon.\n");
 	    LefEndStatement(f);
 	    break;
 	}
@@ -1590,12 +1758,12 @@ LefReadPolygon(FILE *f, int curlayer, float oscale)
 	token = LefNextToken(f, TRUE);
 	if (token == NULL || *token == ';')
 	{
-	    LefError("Missing Y value in polygon point!\n");
+	    LefError(LEF_ERROR, "Missing Y value in polygon point!\n");
 	    break;
 	}
 	if (sscanf(token, "%lg", &py) != 1)
 	{
-	    LefError("Bad Y value in polygon.\n");
+	    LefError(LEF_ERROR, "Bad Y value in polygon.\n");
 	    LefEndStatement(f);
 	    break;
 	}
@@ -1661,7 +1829,8 @@ LefReadGeometry(GATE lefMacro, FILE *f, float oscale)
 	keyword = Lookup(token, geometry_keys);
 	if (keyword < 0)
 	{
-	    LefError("Unknown keyword \"%s\" in LEF file; ignoring.\n", token);
+	    LefError(LEF_WARNING, "Unknown keyword \"%s\" in LEF file; ignoring.\n",
+			token);
 	    LefEndStatement(f);
 	    continue;
 	}
@@ -1702,7 +1871,7 @@ LefReadGeometry(GATE lefMacro, FILE *f, float oscale)
 	    case LEF_GEOMETRY_END:
 		if (!LefParseEndStatement(f, NULL))
 		{
-		    LefError("Geometry (PORT or OBS) END statement missing.\n");
+		    LefError(LEF_ERROR, "Geometry (PORT or OBS) END statement missing.\n");
 		    keyword = -1;
 		}
 		break;
@@ -1886,7 +2055,8 @@ LefReadPin(lefMacro, f, pinname, pinNum, oscale)
 	keyword = Lookup(token, pin_keys);
 	if (keyword < 0)
 	{
-	    LefError("Unknown keyword \"%s\" in LEF file; ignoring.\n", token);
+	    LefError(LEF_WARNING, "Unknown keyword \"%s\" in LEF file; ignoring.\n",
+			token);
 	    LefEndStatement(f);
 	    continue;
 	}
@@ -1896,7 +2066,7 @@ LefReadPin(lefMacro, f, pinname, pinNum, oscale)
 		token = LefNextToken(f, TRUE);
 		subkey = Lookup(token, pin_classes);
 		if (subkey < 0)
-		    LefError("Improper DIRECTION statement\n");
+		    LefError(LEF_ERROR, "Improper DIRECTION statement\n");
 		else
 		    pinDir = lef_class_to_bitmask[subkey];
 		LefEndStatement(f);
@@ -1905,7 +2075,7 @@ LefReadPin(lefMacro, f, pinname, pinNum, oscale)
 		token = LefNextToken(f, TRUE);
 		subkey = Lookup(token, pin_uses);
 		if (subkey < 0)
-		    LefError("Improper USE statement\n");
+		    LefError(LEF_ERROR, "Improper USE statement\n");
 		else
 		    pinUse = lef_use_to_bitmask[subkey];
 		LefEndStatement(f);
@@ -1934,7 +2104,7 @@ LefReadPin(lefMacro, f, pinname, pinNum, oscale)
 	    case LEF_PIN_END:
 		if (!LefParseEndStatement(f, pinname))
 		{
-		    LefError("Pin END statement missing.\n");
+		    LefError(LEF_ERROR, "Pin END statement missing.\n");
 		    keyword = -1;
 		}
 		break;
@@ -2036,7 +2206,7 @@ LefReadMacro(f, mname, oscale)
 		if (!strcmp(altMacro->gatename, newname))
 		    break;
 	}
-	LefError("Cell \"%s\" was already defined in this file.  "
+	LefError(LEF_WARNING, "Cell \"%s\" was already defined in this file.  "
 		"Renaming original cell \"%s\"\n", mname, newname);
 
 	lefMacro->gatename = strdup(newname);
@@ -2082,7 +2252,8 @@ LefReadMacro(f, mname, oscale)
 	keyword = Lookup(token, macro_keys);
 	if (keyword < 0)
 	{
-	    LefError("Unknown keyword \"%s\" in LEF file; ignoring.\n", token);
+	    LefError(LEF_WARNING, "Unknown keyword \"%s\" in LEF file; ignoring.\n",
+			token);
 	    LefEndStatement(f);
 	    continue;
 	}
@@ -2109,7 +2280,7 @@ LefReadMacro(f, mname, oscale)
 		LefEndStatement(f);
 		break;
 size_error:
-		LefError("Bad macro SIZE; requires values X BY Y.\n");
+		LefError(LEF_ERROR, "Bad macro SIZE; requires values X BY Y.\n");
 		LefEndStatement(f);
 		break;
 	    case LEF_ORIGIN:
@@ -2128,7 +2299,7 @@ size_error:
 		LefEndStatement(f);
 		break;
 origin_error:
-		LefError("Bad macro ORIGIN; requires 2 values.\n");
+		LefError(LEF_ERROR, "Bad macro ORIGIN; requires 2 values.\n");
 		LefEndStatement(f);
 		break;
 	    case LEF_SYMMETRY:
@@ -2183,7 +2354,7 @@ origin_error:
 	    case LEF_MACRO_END:
 		if (!LefParseEndStatement(f, mname))
 		{
-		    LefError("Macro END statement missing.\n");
+		    LefError(LEF_ERROR, "Macro END statement missing.\n");
 		    keyword = -1;
 		}
 		break;
@@ -2205,7 +2376,7 @@ origin_error:
 	    lefMacro->placedY = lefBBox.y1;
 	}
 	else {
-	    LefError("Gate %s has no size information!\n", lefMacro->gatename);
+	    LefError(LEF_ERROR, "Gate %s has no size information!\n", lefMacro->gatename);
 	}
     }
 }
@@ -2246,6 +2417,19 @@ LefAddViaGeometry(FILE *f, LefList lefl, int curlayer, float oscale)
     if (lefl->info.via.area.layer < 0)
     {
 	lefl->info.via.area = *currect;
+
+	/* If entries exist for info.via.lr, this is a via GENERATE	*/
+	/* statement, and metal enclosures have been parsed.  Therefore	*/
+	/* add the via dimensions to the enclosure rectangles.		*/
+
+	viarect = lefl->info.via.lr;
+	while (viarect != NULL) {
+	    viarect->x1 += currect->x1;
+	    viarect->x2 += currect->x2;
+	    viarect->y1 += currect->y1;
+	    viarect->y2 += currect->y2;
+	    viarect = viarect->next;
+	}
     }
     else 
     {
@@ -2256,6 +2440,75 @@ LefAddViaGeometry(FILE *f, LefList lefl, int curlayer, float oscale)
     }
 }
 
+/*
+ *------------------------------------------------------------
+ *
+ * LefNewRoute ---
+ *
+ *     Allocate space for and fill out default records of a
+ *     route layer.
+ * 
+ *------------------------------------------------------------
+ */
+
+LefList LefNewRoute(char *name)
+{
+    LefList lefl;
+
+    lefl = (LefList)malloc(sizeof(lefLayer));
+    lefl->type = -1;
+    lefl->obsType = -1;
+    lefl->lefClass = CLASS_IGNORE;	/* For starters */
+    lefl->lefName = strdup(name);
+
+    return lefl;
+}
+
+/*
+ *------------------------------------------------------------
+ *
+ * LefNewVia ---
+ *
+ *     Allocate space for and fill out default records of a
+ *     via definition.
+ * 
+ *------------------------------------------------------------
+ */
+
+LefList LefNewVia(char *name)
+{
+    LefList lefl;
+
+    lefl = (LefList)calloc(1, sizeof(lefLayer));
+    lefl->type = -1;
+    lefl->obsType = -1;
+    lefl->lefClass = CLASS_VIA;
+    lefl->info.via.area.x1 = 0.0;
+    lefl->info.via.area.y1 = 0.0;
+    lefl->info.via.area.x2 = 0.0;
+    lefl->info.via.area.y2 = 0.0;
+    lefl->info.via.area.layer = -1;
+    lefl->info.via.cell = (GATE)NULL;
+    lefl->info.via.lr = (DSEG)NULL;
+    lefl->info.via.generated = FALSE;
+    lefl->lefName = strdup(name);
+
+    return lefl;
+}
+
+/* Note:  Used directly below, as it is passed to variable "mode"
+ * in LefReadLayerSection().  However, mainly used in LefRead().
+ */
+
+enum lef_sections {LEF_VERSION = 0,
+	LEF_BUSBITCHARS, LEF_DIVIDERCHAR, LEF_MANUFACTURINGGRID,
+	LEF_USEMINSPACING, LEF_CLEARANCEMEASURE,
+	LEF_NAMESCASESENSITIVE, LEF_PROPERTYDEFS, LEF_UNITS,
+	LEF_SECTION_LAYER, LEF_SECTION_VIA, LEF_SECTION_VIARULE,
+	LEF_SECTION_SPACING, LEF_SECTION_SITE, LEF_PROPERTY,
+	LEF_NOISETABLE, LEF_CORRECTIONTABLE, LEF_IRDROP,
+	LEF_ARRAY, LEF_SECTION_TIMING, LEF_EXTENSION, LEF_MACRO,
+	LEF_END};
 /*
  *------------------------------------------------------------
  *
@@ -2303,6 +2556,7 @@ LefReadLayerSection(f, lname, mode, lefl)
     struct seg_ viaArea;
     int curlayer = -1;
     double dvalue, oscale;
+    LefList altVia;
     lefSpacingRule *newrule = NULL, *testrule;
 
     /* These are defined in the order of CLASS_* in lefInt.h */
@@ -2370,7 +2624,8 @@ LefReadLayerSection(f, lname, mode, lefl)
 	keyword = Lookup(token, layer_keys);
 	if (keyword < 0)
 	{
-	    LefError("Unknown keyword \"%s\" in LEF file; ignoring.\n", token);
+	    LefError(LEF_WARNING, "Unknown keyword \"%s\" in LEF file; ignoring.\n",
+			token);
 	    LefEndStatement(f);
 	    continue;
 	}
@@ -2382,7 +2637,7 @@ LefReadLayerSection(f, lname, mode, lefl)
 		{
 		    typekey = Lookup(token, layer_type_keys);
 		    if (typekey < 0)
-			LefError("Unknown layer type \"%s\" in LEF file; "
+			LefError(LEF_WARNING, "Unknown layer type \"%s\" in LEF file; "
 				"ignoring.\n", token);
 		}
 		if (lefl->lefClass == CLASS_IGNORE) {
@@ -2425,13 +2680,13 @@ LefReadLayerSection(f, lname, mode, lefl)
 			/* it, defining it to be the next layer up from	*/
 			/* whatever the previous topmost route layer	*/
 			/* was.  This should work unless the LEF file	*/
-			/* is really weirdly written.			*/
+			/* is incorrectly written.			*/
 
 			if (lefl->type < 0) {
 			    lefl->type = LefGetMaxLayer();
 			}
 		    }
-		    else if (typekey == CLASS_VIA) {
+		    else if (typekey == CLASS_CUT || typekey == CLASS_VIA) {
 			lefl->info.via.area.x1 = 0.0;
 			lefl->info.via.area.y1 = 0.0;
 			lefl->info.via.area.x2 = 0.0;
@@ -2439,10 +2694,14 @@ LefReadLayerSection(f, lname, mode, lefl)
 			lefl->info.via.area.layer = -1;
 			lefl->info.via.cell = (GATE)NULL;
 			lefl->info.via.lr = (DSEG)NULL;
+
+			/* Note:  lefl->type not set here for cut	*/
+			/* layers so that route layers will all be	*/
+			/* clustered at the bottom.			*/
 		    }
 		}
 		else if (lefl->lefClass != typekey) {
-		    LefError("Attempt to reclassify layer %s from %s to %s\n",
+		    LefError(LEF_ERROR, "Attempt to reclassify layer %s from %s to %s\n",
 				lname, layer_type_keys[lefl->lefClass],
 				layer_type_keys[typekey]);
 		}
@@ -2451,7 +2710,15 @@ LefReadLayerSection(f, lname, mode, lefl)
 	    case LEF_LAYER_WIDTH:
 		token = LefNextToken(f, TRUE);
 		sscanf(token, "%lg", &dvalue);
-		lefl->info.route.width = dvalue / (double)oscale;
+		if (lefl->lefClass == CLASS_ROUTE)
+		    lefl->info.route.width = dvalue / (double)oscale;
+		else if (lefl->lefClass == CLASS_CUT) {
+		    double baseval = (dvalue / (double)oscale) / 2.0;
+		    lefl->info.via.area.x1 = -baseval;
+		    lefl->info.via.area.y1 = -baseval;
+		    lefl->info.via.area.x2 = baseval;
+		    lefl->info.via.area.y2 = baseval;
+		}
 		LefEndStatement(f);
 		break;
 	    case LEF_LAYER_MAXWIDTH:
@@ -2469,6 +2736,12 @@ LefReadLayerSection(f, lname, mode, lefl)
 		LefEndStatement(f);
 		break;
 	    case LEF_LAYER_SPACING:
+		// Only parse spacing for routes
+
+		if (lefl->lefClass != CLASS_ROUTE) {
+		    LefEndStatement(f);
+		    break;
+		}
 		token = LefNextToken(f, TRUE);
 		sscanf(token, "%lg", &dvalue);
 		token = LefNextToken(f, TRUE);
@@ -2609,7 +2882,7 @@ LefReadLayerSection(f, lname, mode, lefl)
 			lefl->info.route.respersq = dvalue;
 		    }
 		}
-		else if (lefl->lefClass == CLASS_VIA) {
+		else if (lefl->lefClass == CLASS_VIA || lefl->lefClass == CLASS_CUT) {
 		    sscanf(token, "%lg", &dvalue);
 		    lefl->info.via.respervia = dvalue;	// Units ohms
 		}
@@ -2698,10 +2971,36 @@ LefReadLayerSection(f, lname, mode, lefl)
 		LefEndStatement(f);
 		break;
 	    case LEF_VIA_ENCLOSURE:
-	    case LEF_VIA_PREFERENCLOSURE:
+		/* Defines how to draw via metal layers.  Ignore unless */
+		/* this is a VIARULE GENERATE section.			*/
+		if (mode == LEF_SECTION_VIARULE) {
+		    /* Note that values can interact with ENCLOSURE	*/	
+		    /* values given for the cut layer type.  This is	*/
+		    /* not being handled.				*/
+
+		    DSEG viarect, encrect;
+		    encrect = LefReadEnclosure(f, curlayer, oscale);
+		    viarect = (DSEG)malloc(sizeof(struct dseg_));
+		    *viarect = *encrect;
+		    viarect->next = lefl->info.via.lr;
+		    lefl->info.via.lr = viarect;
+		    lefl->info.via.generated = TRUE;
+		}
+		LefEndStatement(f);
+		break;
 	    case LEF_VIARULE_OVERHANG:
 	    case LEF_VIARULE_METALOVERHANG:
-		/* Ignoring this:  Need to handle via generates */
+		/* These are from older LEF definitions (e.g., 5.4)	*/
+		/* and cannot completely specify via geometry.  So if	*/
+		/* seen, ignore the rest of the via section.  Only the	*/
+		/* explicitly defined VIA types will be used.		*/
+		LefError(LEF_WARNING, "NOTE:  Old format VIARULE ignored.\n");
+		lefl->lefClass == CLASS_IGNORE;
+		LefEndStatement(f);
+		/* LefSkipSection(f, lname); */  /* Continue parsing */
+		break;
+	    case LEF_VIA_PREFERENCLOSURE:
+		/* Ignoring this. */
 		LefEndStatement(f);
 		break;
 	    case LEF_VIARULE_VIA:
@@ -2710,7 +3009,7 @@ LefReadLayerSection(f, lname, mode, lefl)
 	    case LEF_LAYER_END:
 		if (!LefParseEndStatement(f, lname))
 		{
-		    LefError("Layer END statement missing.\n");
+		    LefError(LEF_ERROR, "Layer END statement missing.\n");
 		    keyword = -1;
 		}
 		break;
@@ -2719,46 +3018,173 @@ LefReadLayerSection(f, lname, mode, lefl)
     }
 }
 
-/*----------------------------------------------------------------*/
-/* This routine runs through all the defined vias, from last to	  */
-/* first defined.  Check the X vs. Y dimension of the base layer. */
-/* If X is longer, save as ViaX.  If Y is longer, save as ViaY.   */
-/* If there is an AllowedVias list, then only assign vias that	  */
-/* are in the list.						  */
-/*----------------------------------------------------------------*/
+/*--------------------------------------------------------------*/
+/* If any vias have been built from VIARULE entries, then they	*/
+/* do not appear in the tech LEF and need to be defined in the	*/
+/* DEF file.  This routine finds all generated vias and writes	*/
+/* out the entries to the indicated file f.			*/
+/*--------------------------------------------------------------*/
+
+void
+LefWriteGeneratedVias(FILE *f, double oscale)
+{
+    double scale;
+    int numvias;
+    LefList lefl;
+
+    scale = oscale / 2.0;	/* Via dimensions are double */
+
+    /* 1st pass---check if any vias are generated. */
+
+    numvias = 0;
+    for (lefl = LefInfo; lefl; lefl = lefl->next)
+	if (lefl->lefClass == CLASS_VIA)
+	    if (lefl->info.via.generated)
+		numvias++;
+
+    if (numvias == 0) return;	/* Nothing to write */
+
+    fprintf(f, "\n");
+    fprintf(f, "VIAS %d ;\n", numvias);
+
+    /* 2nd pass---output the VIA records.  All vias consist of	*/
+    /* two metal layers and a cut layer.			*/
+
+    for (lefl = LefInfo; lefl; lefl = lefl->next)
+	if (lefl->lefClass == CLASS_VIA)
+	    if (lefl->info.via.generated) {
+		fprintf(f, "- %s\n", lefl->lefName);
+		fprintf(f, "+ RECT %s ( %ld %ld ) ( %ld %ld )",
+			CIFLayer[lefl->info.via.area.layer],
+			(long) (-0.5 + scale * lefl->info.via.area.x1),
+			(long) (-0.5 + scale * lefl->info.via.area.y1),
+			(long) (0.5 + scale * lefl->info.via.area.x2),
+			(long) (0.5 + scale * lefl->info.via.area.y2));
+		if (lefl->info.via.lr != NULL) {
+		    fprintf(f, "\n+ RECT %s ( %ld %ld ) ( %ld %ld )",
+				CIFLayer[lefl->info.via.lr->layer],
+				(long) (-0.5 + scale * lefl->info.via.lr->x1),
+				(long) (-0.5 + scale * lefl->info.via.lr->y1),
+				(long) (0.5 + scale * lefl->info.via.lr->x2),
+				(long) (0.5 + scale * lefl->info.via.lr->y2));
+		    if (lefl->info.via.lr->next != NULL) {
+			fprintf(f, "\n+ RECT %s ( %ld %ld ) ( %ld %ld )",
+				CIFLayer[lefl->info.via.lr->next->layer],
+				(long) (-0.5 + scale * lefl->info.via.lr->next->x1),
+				(long) (-0.5 + scale * lefl->info.via.lr->next->y1),
+				(long) (0.5 + scale * lefl->info.via.lr->next->x2),
+				(long) (0.5 + scale * lefl->info.via.lr->next->y2));
+		    }
+		}
+		fprintf(f, " ;\n");	/* Finish record */
+	    }
+
+    fprintf(f, "END VIAS\n", numvias);
+    fprintf(f, "\n");
+}
+
+/*--------------------------------------------------------------*/
+/* This routine runs through all the defined vias, from last to	*/
+/* first defined.  Check the X vs. Y dimension of the base and	*/
+/* top layers.  If both base and top layers are longer in X,	*/
+/* then save as ViaXX.  If longer in Y, save as ViaYY.  If the	*/
+/* base is longer in X and the top is longer in Y, then save as	*/
+/* ViaXY, and if the base is longer in Y and the top is longer	*/
+/* in X, then save as ViaYX.					*/
+/*								*/
+/* If all via types have the same X and Y for the top and/or	*/
+/* bottom layer, then save as both X and Y variants.		*/
+/*								*/
+/* If there is an AllowedVias list, then only assign vias that	*/
+/* are in the list.						*/
+/*								*/
+/* If the layer pair has a VIARULE GENERATE type, then it is	*/
+/* preferred over fixed via definitions.			*/
+/*--------------------------------------------------------------*/
 
 void
 LefAssignLayerVias()
 {
     LefList lefl;
-    int layer;
-    double xydiff;
+    int toplayer, baselayer;
+    int minroute, maxroute;
+    double xybdiff, xytdiff;
     DSEG grect;
     LinkedStringPtr viaName;
-    char *newViaX[MAX_LAYERS];
-    char *newViaY[MAX_LAYERS];
+    char *newViaXX[MAX_LAYERS];
+    char *newViaXY[MAX_LAYERS];
+    char *newViaYX[MAX_LAYERS];
+    char *newViaYY[MAX_LAYERS];
+    u_char hasGenerate[MAX_LAYERS];
 
-    for (layer = 0; layer < MAX_LAYERS; layer++) {
-	newViaX[layer] = newViaY[layer] = NULL;
+    for (baselayer = 0; baselayer < MAX_LAYERS; baselayer++) {
+	newViaXX[baselayer] = newViaXY[baselayer] = NULL;
+	newViaYX[baselayer] = newViaYY[baselayer] = NULL;
+        hasGenerate[baselayer] = FALSE;
+    }
+
+    /* Determine if there is a VIARULE GENERATE for each base layer */
+
+    for (lefl = LefInfo; lefl; lefl = lefl->next) {
+	if (lefl->lefClass == CLASS_VIA) {
+	    if (lefl->info.via.generated == TRUE) {
+		/* Find the base layer and set hasGenerate[] for that layer */
+		baselayer = lefl->info.via.area.layer;
+		if (lefl->info.via.lr)
+		    if (lefl->info.via.lr->layer < baselayer)
+			baselayer = lefl->info.via.lr->layer;
+		if (lefl->info.via.lr->next)
+		    if (lefl->info.via.lr->next->layer < baselayer)
+			baselayer = lefl->info.via.lr->next->layer;
+		if ((baselayer >= 0) && (baselayer < MAX_LAYERS))
+		    hasGenerate[baselayer] = TRUE;
+	    }
+	}
+    }
+
+    /* Make sure we know what are the minimum and maximum route layers */
+
+    minroute = maxroute = -1;
+    for (lefl = LefInfo; lefl; lefl = lefl->next) {
+	if (lefl->lefClass == CLASS_ROUTE) {
+	    if (minroute == -1) {
+		minroute = lefl->type;
+		maxroute = lefl->type;
+	    }
+	    else {
+		if (lefl->type < minroute)
+		    minroute = lefl->type;
+		if (lefl->type > maxroute)
+		    maxroute = lefl->type;
+	    }
+	}
     }
 
     for (lefl = LefInfo; lefl; lefl = lefl->next) {
 	if (lefl->lefClass == CLASS_VIA) {
 	    if (lefl->info.via.lr) {
-		layer = MAX_LAYERS;
-		if (lefl->info.via.area.layer >= 0) {
-		   layer = lefl->info.via.area.layer;
-		   xydiff = (lefl->info.via.area.x2 - lefl->info.via.area.x1) -
+		baselayer = toplayer = MAX_LAYERS;
+		if (lefl->info.via.area.layer >= minroute &&
+				lefl->info.via.area.layer <= maxroute) {
+		   baselayer = toplayer = lefl->info.via.area.layer;
+		   xybdiff = xytdiff =
+			(lefl->info.via.area.x2 - lefl->info.via.area.x1) -
 			(lefl->info.via.area.y2 - lefl->info.via.area.y1);
 		}
 
 		for (grect = lefl->info.via.lr; grect; grect = grect->next) {
-		    if (grect->layer >= 0 && grect->layer < layer) {
-			layer = grect->layer;
-			xydiff = (grect->x2 - grect->x1) - (grect->y2 - grect->y1);
+		    if (grect->layer >= minroute && grect->layer <= maxroute) {
+			if (grect->layer > baselayer) {
+			    toplayer = grect->layer;
+			    xytdiff = (grect->x2 - grect->x1) - (grect->y2 - grect->y1);
+			}
+			else {
+			    baselayer = grect->layer;
+			    xybdiff = (grect->x2 - grect->x1) - (grect->y2 - grect->y1);
+			}
 		    }
 		}
-		if (layer < MAX_LAYERS) {
+		if (baselayer < MAX_LAYERS) {
 		    /* Assign only to layers in AllowedVias, if it is non-NULL */
 		    if (AllowedVias != NULL) {
 			for (viaName = AllowedVias; viaName; viaName = viaName->next) {
@@ -2767,44 +3193,103 @@ LefAssignLayerVias()
 			}
 			if (viaName == NULL) continue;
 		    }
-		    if (xydiff > -EPS) {
-			if (newViaX[layer] != NULL) free(newViaX[layer]);
-			newViaX[layer] = strdup(lefl->lefName);      
+		    else if (hasGenerate[baselayer] && lefl->info.via.generated == FALSE)
+			continue;
+
+		    if ((xytdiff > -EPS) && (xybdiff > -EPS)) {
+			if (newViaXX[baselayer] != NULL) free(newViaXX[baselayer]);
+			newViaXX[baselayer] = strdup(lefl->lefName);      
+		    }
+		    else if ((xytdiff > -EPS) && (xybdiff < EPS)) {
+			if (newViaYX[baselayer] != NULL) free(newViaYX[baselayer]);
+			newViaYX[baselayer] = strdup(lefl->lefName);      
+		    }
+		    else if ((xytdiff < EPS) && (xybdiff > -EPS)) {
+			if (newViaXY[baselayer] != NULL) free(newViaXY[baselayer]);
+			newViaXY[baselayer] = strdup(lefl->lefName);      
 		    }
 		    else {
-			if (newViaY[layer] != NULL) free(newViaY[layer]);
-			newViaY[layer] = strdup(lefl->lefName);
+			if (newViaYY[baselayer] != NULL) free(newViaYY[baselayer]);
+			newViaYY[baselayer] = strdup(lefl->lefName);
 		    }
 		}
 	    }
 	}
     }
 
-    /* Copy newViaX and newViaY back into viaX and viaY, making */
-    /* sure that at least one entry exists for each layer.	*/
+    /* Copy newVia** back into via**, making sure that at least	*/
+    /* one entry exists for each layer.				*/
 
-    /* At this time, only ViaX[] reports values back in		*/
-    /* LefGetViaWidth(), so make sure that if there is only one	*/
-    /* allowed via for a layer, it is copied into the ViaX	*/
-    /* array, regardless of its orientation.			*/
-
-    for (layer = 0; layer < MAX_LAYERS; layer++) {
-	if ((newViaX[layer] == NULL) && (newViaY[layer] == NULL))
+    for (baselayer = 0; baselayer < MAX_LAYERS; baselayer++) {
+	if ((newViaXX[baselayer] == NULL) && (newViaXY[baselayer] == NULL)
+		&& (newViaYX[baselayer] == NULL) && (newViaYY[baselayer] == NULL))
 	    continue;
-	if (ViaX[layer] != NULL) free(ViaX[layer]);
-	if (ViaY[layer] != NULL) free(ViaY[layer]);
+	if (ViaXX[baselayer] != NULL) {
+	    free(ViaXX[baselayer]);
+	    ViaXX[baselayer] = NULL;
+	}
+	if (ViaXY[baselayer] != NULL) {
+	    free(ViaXY[baselayer]);
+	    ViaXY[baselayer] = NULL;
+	}
+	if (ViaYX[baselayer] != NULL) {
+	    free(ViaYX[baselayer]);
+	    ViaYX[baselayer] = NULL;
+	}
+	if (ViaYY[baselayer] != NULL) {
+	    free(ViaYY[baselayer]);
+	    ViaYY[baselayer] = NULL;
+	}
 
-	if (newViaX[layer] != NULL)
-	    ViaX[layer] = strdup(newViaX[layer]);
-	else
-	    ViaX[layer] = strdup(newViaY[layer]);
-	if (newViaY[layer] != NULL)
-	    ViaY[layer] = strdup(newViaY[layer]);
+	if (newViaXX[baselayer] != NULL)
+	    ViaXX[baselayer] = strdup(newViaXX[baselayer]);
+	if (newViaXY[baselayer] != NULL)
+	    ViaXY[baselayer] = strdup(newViaXY[baselayer]);
+	if (newViaYX[baselayer] != NULL)
+	    ViaYX[baselayer] = strdup(newViaYX[baselayer]);
+	if (newViaYY[baselayer] != NULL)
+	    ViaYY[baselayer] = strdup(newViaYY[baselayer]);
+
+	/* Fallback in case some permutations don't exist */
+	if (ViaXX[baselayer] == NULL) {
+	    if (newViaXY[baselayer] != NULL)
+		ViaXX[baselayer] = strdup(newViaXY[baselayer]);
+	    else if (newViaYX[baselayer] != NULL)
+		ViaXX[baselayer] = strdup(newViaYX[baselayer]);
+	    else if (newViaYY[baselayer] != NULL)
+		ViaXX[baselayer] = strdup(newViaYY[baselayer]);
+	}
+	if (ViaXY[baselayer] == NULL) {
+	    if (newViaXX[baselayer] != NULL)
+		ViaXY[baselayer] = strdup(newViaXX[baselayer]);
+	    else if (newViaYY[baselayer] != NULL)
+		ViaXY[baselayer] = strdup(newViaYY[baselayer]);
+	    else if (newViaYX[baselayer] != NULL)
+		ViaXY[baselayer] = strdup(newViaYX[baselayer]);
+	}
+	if (ViaYX[baselayer] == NULL) {
+	    if (newViaYY[baselayer] != NULL)
+		ViaYX[baselayer] = strdup(newViaYY[baselayer]);
+	    else if (newViaXX[baselayer] != NULL)
+		ViaYX[baselayer] = strdup(newViaXX[baselayer]);
+	    else if (newViaXY[baselayer] != NULL)
+		ViaYX[baselayer] = strdup(newViaXY[baselayer]);
+	}
+	if (ViaYY[baselayer] == NULL) {
+	    if (newViaYX[baselayer] != NULL)
+		ViaYY[baselayer] = strdup(newViaYX[baselayer]);
+	    else if (newViaXY[baselayer] != NULL)
+		ViaYY[baselayer] = strdup(newViaXY[baselayer]);
+	    else if (newViaXX[baselayer] != NULL)
+		ViaYY[baselayer] = strdup(newViaXX[baselayer]);
+	}
     }
 
-    for (layer = 0; layer < MAX_LAYERS; layer++) {
-	if (newViaX[layer] != NULL) free(newViaX[layer]);
-	if (newViaY[layer] != NULL) free(newViaY[layer]);
+    for (baselayer = 0; baselayer < MAX_LAYERS; baselayer++) {
+	if (newViaXX[baselayer] != NULL) free(newViaXX[baselayer]);
+	if (newViaXY[baselayer] != NULL) free(newViaXY[baselayer]);
+	if (newViaYX[baselayer] != NULL) free(newViaYX[baselayer]);
+	if (newViaYY[baselayer] != NULL) free(newViaYY[baselayer]);
     }
 }
 
@@ -2826,15 +3311,7 @@ LefAssignLayerVias()
  *------------------------------------------------------------
  */
 
-enum lef_sections {LEF_VERSION = 0,
-	LEF_BUSBITCHARS, LEF_DIVIDERCHAR, LEF_MANUFACTURINGGRID,
-	LEF_USEMINSPACING, LEF_CLEARANCEMEASURE,
-	LEF_NAMESCASESENSITIVE, LEF_PROPERTYDEFS, LEF_UNITS,
-	LEF_SECTION_LAYER, LEF_SECTION_VIA, LEF_SECTION_VIARULE,
-	LEF_SECTION_SPACING, LEF_SECTION_SITE, LEF_PROPERTY,
-	LEF_NOISETABLE, LEF_CORRECTIONTABLE, LEF_IRDROP,
-	LEF_ARRAY, LEF_SECTION_TIMING, LEF_EXTENSION, LEF_MACRO,
-	LEF_END};
+/* See above for "enum lef_sections {...}" */
 
 int
 LefRead(inName)
@@ -2905,7 +3382,8 @@ LefRead(inName)
 	keyword = Lookup(token, sections);
 	if (keyword < 0)
 	{
-	    LefError("Unknown keyword \"%s\" in LEF file; ignoring.\n", token);
+	    LefError(LEF_WARNING, "Unknown keyword \"%s\" in LEF file; ignoring.\n",
+			token);
 	    LefEndStatement(f);
 	    continue;
 	}
@@ -2938,35 +3416,39 @@ LefRead(inName)
 		sprintf(tsave, "%.127s", token);
 
 		lefl = LefFindLayer(token);
-		if (lefl == NULL)
-		{
-		    lefl = (LefList)calloc(1, sizeof(lefLayer));
-		    lefl->type = -1;
-		    lefl->obsType = -1;
-		    lefl->lefClass = CLASS_VIA;
-		    lefl->info.via.area.x1 = 0.0;
-		    lefl->info.via.area.y1 = 0.0;
-		    lefl->info.via.area.x2 = 0.0;
-		    lefl->info.via.area.y2 = 0.0;
-		    lefl->info.via.area.layer = -1;
-		    lefl->info.via.cell = (GATE)NULL;
-		    lefl->info.via.lr = (DSEG)NULL;
-		    lefl->lefName = strdup(token);
 
+		if (keyword == LEF_SECTION_VIARULE) {
+		    char *vianame = (char *)malloc(strlen(token) + 3);
+		    sprintf(vianame, "%s_0", token);
+
+		    /* If the following keyword is GENERATE, then	*/
+		    /* prepare up to four contact types to represent	*/
+		    /* all possible orientations of top and bottom	*/
+		    /* metal layers.  If no GENERATE keyword, ignore.	*/
+
+		    token = LefNextToken(f, TRUE);
+		    if (!strcmp(token, "GENERATE")) {
+			lefl = LefNewVia(vianame);
+			lefl->next = LefInfo;
+			LefInfo = lefl;
+			LefReadLayerSection(f, tsave, keyword, lefl);
+		    }
+		    else {
+			LefSkipSection(f, tsave);
+		    }
+		    free(vianame);
+		}
+		else if (lefl == NULL)
+		{
+		    lefl = LefNewVia(token);
 		    lefl->next = LefInfo;
 		    LefInfo = lefl;
-
 		    LefReadLayerSection(f, tsave, keyword, lefl);
 		}
-		else if (keyword == LEF_SECTION_VIARULE)
-		    /* If we've already seen this via, don't reprocess. */
-		    /* This deals with VIA followed by VIARULE.  We	*/
-		    /* really ought to have special processing for the	*/
-		    /* VIARULE section. . .				*/
-		    LefSkipSection(f, tsave);
 		else
 		{
-		    LefError("Warning:  Cut type \"%s\" redefined.\n", token);
+		    LefError(LEF_WARNING, "Warning:  Cut type \"%s\" redefined.\n",
+				token);
 		    lefl = LefRedefined(lefl, token);
 		    LefReadLayerSection(f, tsave, keyword, lefl);
 		}
@@ -2979,11 +3461,7 @@ LefRead(inName)
 		lefl = LefFindLayer(token);	
 		if (lefl == (LefList)NULL)
 		{
-		    lefl = (LefList)malloc(sizeof(lefLayer));
-		    lefl->type = -1;
-		    lefl->obsType = -1;
-		    lefl->lefClass = CLASS_IGNORE;	/* For starters */
-		    lefl->lefName = strdup(token);
+		    lefl = LefNewRoute(token);
 		    lefl->next = LefInfo;
 		    LefInfo = lefl;
 		}
@@ -2991,7 +3469,8 @@ LefRead(inName)
 		{
 		    if (lefl && lefl->type < 0)
 		    {
-			LefError("Layer %s is only defined for obstructions!\n", token);
+			LefError(LEF_ERROR, "Layer %s is only defined for"
+					" obstructions!\n", token);
 			LefSkipSection(f, tsave);
 			break;
 		    }
@@ -3042,7 +3521,7 @@ LefRead(inName)
 	    case LEF_END:
 		if (!LefParseEndStatement(f, "LIBRARY"))
 		{
-		    LefError("END statement out of context.\n");
+		    LefError(LEF_ERROR, "END statement out of context.\n");
 		    keyword = -1;
 		}
 		break;
@@ -3051,7 +3530,7 @@ LefRead(inName)
     }
     if (Verbose > 0) {
 	Fprintf(stdout, "LEF read: Processed %d lines.\n", lefCurrentLine);
-	LefError(NULL);	/* print statement of errors, if any */
+	LefError(LEF_ERROR, NULL);	/* print statement of errors, if any */
     }
 
     /* Cleanup */
@@ -3106,6 +3585,165 @@ LefRead(inName)
 	    strcpy(CIFLayer[lefl->type], lefl->lefName);
 	}
     }
+
+    /* If VIARULE contacts are not square, generate rotated versions */
+
+    for (lefl = LefInfo; lefl; lefl = lefl->next) {
+	if (lefl->lefClass == CLASS_VIA) {
+	    if (lefl->info.via.generated == TRUE) {
+		DSEG viarect1, viarect2, viarect;
+		LefList altVia;
+		u_char nsq1, nsq2;
+		char *vianame;
+
+		viarect1 = lefl->info.via.lr;
+		if (viarect1 == NULL) continue;
+		viarect2 = lefl->info.via.lr->next;
+
+		nsq1 = (ABSDIFF((viarect1->x2 - viarect1->x1),
+				(viarect1->y2 - viarect1->y1)) > EPS) ? TRUE : FALSE;
+		if (viarect2)
+		    nsq2 = (ABSDIFF((viarect2->x2 - viarect2->x1),
+				(viarect2->y2 - viarect2->y1)) > EPS) ? TRUE : FALSE;
+		else
+		    nsq2 = FALSE;
+	
+		/* If viarect is not square, then generate a via in the	*/
+		/* 90-degree rotated orientation.			*/
+
+		if (nsq1 || nsq2) {
+		    vianame = strdup(lefl->lefName);
+		    *(vianame + strlen(vianame) - 1) = '1';
+		    altVia = LefFindLayer(vianame);
+		    if (altVia != NULL) {
+			Fprintf(stderr, "Warning: Via name %s has already been "
+					"defined!\n", vianame);
+			continue;
+		    }
+
+		    altVia = LefNewVia(vianame);
+		    altVia->info.via.generated = TRUE;
+		    altVia->next = LefInfo;
+		    LefInfo = altVia;
+
+		    /* Copy all but lr geometry from original via */
+		    altVia->lefClass = lefl->lefClass;
+		    altVia->info.via.respervia = lefl->info.via.respervia;
+		    altVia->info.via.area = lefl->info.via.area;
+
+		    /* Create first lr geometry */
+		    viarect = (DSEG)malloc(sizeof(struct dseg_));
+		    *viarect = *viarect1;
+		    if (nsq1) {
+			/* Swap X and Y to rotate */
+			viarect->x1 = viarect1->y1;
+			viarect->x2 = viarect1->y2;
+			viarect->y1 = viarect1->x1;
+			viarect->y2 = viarect1->x2;
+		    }
+		    viarect->next = altVia->info.via.lr;
+		    altVia->info.via.lr = viarect;
+
+		    /* Create second lr geometry (if it exists) */
+		    if (viarect2) {
+			viarect = (DSEG)malloc(sizeof(struct dseg_));
+			*viarect = *viarect2;
+			if (nsq2) {
+			    /* Swap X and Y to rotate */
+			    viarect->x1 = viarect2->y1;
+			    viarect->x2 = viarect2->y2;
+			    viarect->y1 = viarect2->x1;
+			    viarect->y2 = viarect2->x2;
+			}
+			viarect->next = altVia->info.via.lr;
+			altVia->info.via.lr = viarect;
+		    }
+		    free(vianame);
+		}
+		if (nsq1 && nsq2) {
+
+		    /* If both contact metal layers are non-square,	*/
+		    /* then create the additional vias with reversed	*/
+		    /* orientations of the two layers.			*/
+
+		    vianame = strdup(lefl->lefName);
+		    *(vianame + strlen(vianame) - 1) = '2';
+		    altVia = LefFindLayer(vianame);
+		    if (altVia != NULL) {
+			Fprintf(stderr, "Warning: Via name %s has already been "
+					"defined!\n", vianame);
+			continue;
+		    }
+
+		    altVia = LefNewVia(vianame);
+		    altVia->info.via.generated = TRUE;
+		    altVia->next = LefInfo;
+		    LefInfo = altVia;
+
+		    /* Copy all but lr geometry from original via */
+		    altVia->lefClass = lefl->lefClass;
+		    altVia->info.via.respervia = lefl->info.via.respervia;
+		    altVia->info.via.area = lefl->info.via.area;
+
+		    /* Create first lr geometry, not rotated */
+		    viarect = (DSEG)malloc(sizeof(struct dseg_));
+		    *viarect = *lefl->info.via.lr;
+		    viarect->next = altVia->info.via.lr;
+		    altVia->info.via.lr = viarect;
+
+		    /* Create second lr geometry, rotated */
+		    viarect = (DSEG)malloc(sizeof(struct dseg_));
+		    *viarect = *lefl->info.via.lr->next;
+		    /* Swap X and Y to rotate */
+		    viarect->x1 = lefl->info.via.lr->next->y1;
+		    viarect->x2 = lefl->info.via.lr->next->y2;
+		    viarect->y1 = lefl->info.via.lr->next->x1;
+		    viarect->y2 = lefl->info.via.lr->next->x2;
+		    viarect->next = altVia->info.via.lr;
+		    altVia->info.via.lr = viarect;
+
+		    /* Repeat in the opposite orientation */
+		    *(vianame + strlen(vianame) - 1) = '3';
+		    altVia = LefFindLayer(vianame);
+		    if (altVia != NULL) {
+			Fprintf(stderr, "Warning: Via name %s has already been "
+					"defined!\n", vianame);
+			continue;
+		    }
+
+		    altVia = LefNewVia(vianame);
+		    altVia->info.via.generated = TRUE;
+		    altVia->next = LefInfo;
+		    LefInfo = altVia;
+
+		    /* Copy all but lr geometry from original via */
+		    altVia->lefClass = lefl->lefClass;
+		    altVia->info.via.respervia = lefl->info.via.respervia;
+		    altVia->info.via.area = lefl->info.via.area;
+
+		    /* Create first lr geometry, rotated */
+		    viarect = (DSEG)malloc(sizeof(struct dseg_));
+		    *viarect = *lefl->info.via.lr;
+		    /* Swap X and Y to rotate */
+		    viarect->x1 = lefl->info.via.lr->y1;
+		    viarect->x2 = lefl->info.via.lr->y2;
+		    viarect->y1 = lefl->info.via.lr->x1;
+		    viarect->y2 = lefl->info.via.lr->x2;
+		    viarect->next = altVia->info.via.lr;
+		    altVia->info.via.lr = viarect;
+
+		    /* Create second lr geometry, not rotated */
+		    viarect = (DSEG)malloc(sizeof(struct dseg_));
+		    *viarect = *lefl->info.via.lr->next;
+		    viarect->next = altVia->info.via.lr;
+		    altVia->info.via.lr = viarect;
+		    free(vianame);
+		}
+	    }
+	}
+    }
+
+    /* Find the best via(s) to use per route layer and record it (them) */
     LefAssignLayerVias();
 
     return oprecis;

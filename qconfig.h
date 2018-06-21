@@ -13,9 +13,9 @@
 extern int     Num_layers;
 
 extern double  PathWidth[MAX_LAYERS];    // width of the paths
-extern int     GDSLayer[MAX_LAYERS];     // GDS layer number 
+extern int     GDSLayer[MAX_TYPES];     // GDS layer number 
 extern int     GDSCommentLayer;          // for dummy wires, etc.
-extern char    CIFLayer[MAX_LAYERS][50]; // CIF layer name 
+extern char    CIFLayer[MAX_TYPES][50]; // CIF layer name 
 extern double  PitchX[MAX_LAYERS];       // horizontal wire pitch of layer
 extern double  PitchY[MAX_LAYERS];       // vertical wire pitch of layer
 extern int     NumChannelsX[MAX_LAYERS];
@@ -23,7 +23,6 @@ extern int     NumChannelsY[MAX_LAYERS];
 extern int     Vert[MAX_LAYERS];        // 1 if verticle, 0 if horizontal
 extern int     Numpasses;               // number of times to iterate in route_segs
 extern char    StackedContacts;	  	// Number of vias that can be stacked together
-extern char    ViaPattern;		// Type of via patterning to use
 
 extern double  Xlowerbound;  // Bounding Box of routes
 extern double  Xupperbound;      
@@ -38,8 +37,14 @@ extern int     BlockCost;
 extern int     OffsetCost;
 extern int     ConflictCost;
 
-extern char    *ViaX[MAX_LAYERS];
-extern char    *ViaY[MAX_LAYERS];
+// If vias are non-square, then they can have up to four orientations,
+// with the top and/or bottom metal layers oriented with the longest
+// dimension along either the X or the Y axis.
+
+extern char    *ViaXX[MAX_LAYERS];	// Top and bottom horizontal
+extern char    *ViaXY[MAX_LAYERS];	// Bottom horizontal, top vertical
+extern char    *ViaYX[MAX_LAYERS];	// Bottom vertial, top horizontal
+extern char    *ViaYY[MAX_LAYERS];	// Top and bottom vertical
 
 int  read_config(FILE *configfileptr, int is_info);
 void post_config(void);
