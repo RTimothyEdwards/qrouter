@@ -236,10 +236,31 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 		if (lefl != NULL)
 		{
 		    if (lefl->lefClass == CLASS_VIA) {
+
+			// Note: layers may be defined in any order, metal or cut.
+			// Check both via.area and via.lr layers, and reject those
+			// that exceed the number of metal layers (those are cuts).
+
 			paintLayer = Num_layers - 1;
 			routeLayer = -1;
-			lr = lefl->info.via.lr;
-			while (lr != NULL) {
+			if (lefl->info.via.area.layer < Num_layers) {
+			   routeLayer = lefl->info.via.area.layer;
+			   if (routeLayer < paintLayer) paintLayer = routeLayer;
+			   if ((routeLayer >= 0) && (special == (char)1) &&
+					(valid == TRUE)) {
+				s = LefGetRouteSpacing(routeLayer); 
+				drect = (DSEG)malloc(sizeof(struct dseg_));
+				drect->x1 = x + lefl->info.via.area.x1 - s;
+				drect->x2 = x + lefl->info.via.area.x2 + s;
+				drect->y1 = y + lefl->info.via.area.y1 - s;
+				drect->y2 = y + lefl->info.via.area.y2 + s;
+				drect->layer = routeLayer;
+				drect->next = UserObs;
+				UserObs = drect;
+			   }
+			}
+			for (lr = lefl->info.via.lr; lr; lr = lr->next) {
+			   if (lr->layer >= Num_layers) continue;
 			   routeLayer = lr->layer;
 			   if (routeLayer < paintLayer) paintLayer = routeLayer;
 			   if ((routeLayer >= 0) && (special == (char)1) &&
@@ -254,7 +275,6 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 				drect->next = UserObs;
 				UserObs = drect;
 			   }
-			   lr = lr->next;
 			}
 			if (routeLayer == -1) paintLayer = lefl->type;
 		    }

@@ -155,6 +155,7 @@ struct string_ {
 #define	 ST_OFFSET_START	0x04	/* (x1, y1) is offset from grid */
 #define	 ST_OFFSET_END		0x08	/* (x2, y2) is offset from grid */
 #define  ST_SPECIAL		0x10	/* wide metal (special net)	*/
+#define  ST_MINMETAL		0x20	/* segment for min metal area	*/
 
 typedef struct seg_ *SEG;
 
@@ -250,6 +251,8 @@ struct nodeinfo_ {
 #define NI_OFFSET_MASK   0x0c	// Tap offset mask (N/S + E/W)
 #define NI_NO_VIAX   	 0x10	// Via in ViaX array is prohibited
 #define NI_NO_VIAY   	 0x20	// Via in ViaY array is prohibited
+#define NI_VIA_X 	 0x40	// Placed via is oriented horizontally
+#define NI_VIA_Y 	 0x80	// Placed via is oriented vertically
 
 struct node_ {
   NODE    next;

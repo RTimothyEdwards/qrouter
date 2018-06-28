@@ -503,6 +503,7 @@ get_route_area_forward_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
 	    /* antenna area forward and reverse from that segment.	*/
 
 	    rt2 = rt->end.route;
+	    if (rt2 == NULL) return;  /* This should not happen */
 
 	    for (rseg = rt2->segments; rseg; rseg = rseg->next) {
 		if (rseg->segtype & ST_WIRE) {

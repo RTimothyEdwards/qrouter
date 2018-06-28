@@ -883,7 +883,7 @@ int write_delays(char *filename)
 	    eptinfo[nroute].cap = 0.0;
 
 	    /* Look up node */
-	    if (nodeptr) {
+	    if (nodeptr && nodeptr->nodesav) {
 		g = FindGateNode(&NodeTable, nodeptr->nodesav, &i);
 		if (g && (g->gatetype->direction[i] == PORT_CLASS_OUTPUT)) {
 		    drivernodeidx = i;
@@ -923,7 +923,7 @@ int write_delays(char *filename)
 	    eptinfo[nroute].endnode = nodeptr ? nodeptr->nodesav : NULL;
 
 	    /* Look up node */
-	    if (nodeptr) {
+	    if (nodeptr && nodeptr->nodesav) {
 		g = FindGateNode(&NodeTable, nodeptr->nodesav, &i);
 		if (g && (g->gatetype->direction[i] == PORT_CLASS_OUTPUT)) {
 		    drivernodeidx = i;
