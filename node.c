@@ -1397,86 +1397,104 @@ void create_obstructions_outside_nodes(void)
 
 			        offd = OBSINFO(gridx, gridy, ds->layer);
 				if (orignet & OBSTRUCT_N) {
-				   if (sdistyy - offd > EPS) {
+				   if (sdistyy - offd > -EPS) {
 				      lnode->flags |= NI_NO_VIAY;
-				      if (sdistyx - offd > EPS) {
-			                 OBSVAL(gridx, gridy, ds->layer) |= OFFSET_TAP;
-				         lnode->offset = offd - sdistyx;
-				         lnode->flags |= NI_OFFSET_NS;
+				      if (sdistyx - offd > -EPS) {
+					 /* Cannot route cleanly, so use offset */
+				         if (offd - sdistyx > PitchX[ds->layer] / 2.0) 
+					    /* Offset distance is too large */
+					    maxerr = 1;
+					 else {
 
-				         /* If position above has obstruction, then */
-				         /* add up/down block to prevent vias.	 */
+			                    OBSVAL(gridx, gridy, ds->layer) |= OFFSET_TAP;
+				            lnode->offset = offd - sdistyx;
+				            lnode->flags |= NI_OFFSET_NS;
 
-				         if ((ds->layer < Num_layers - 1) &&
-						(gridy > 0) &&
-						(OBSVAL(gridx, gridy - 1, ds->layer + 1)
-						& OBSTRUCT_MASK))
-					    block_route(gridx, gridy, ds->layer, UP);
+				            /* If position above has obstruction, then */
+				            /* add up/down block to prevent vias.      */
+
+				            if ((ds->layer < Num_layers - 1) &&
+							(gridy > 0) &&
+							(OBSVAL(gridx, gridy - 1,
+							ds->layer + 1) & OBSTRUCT_MASK))
+					       block_route(gridx, gridy, ds->layer, UP);
+					 }
 				      }
 				   }
-				   else maxerr = 1;
 				}
 				else if (orignet & OBSTRUCT_S) {
-				   if (sdistyy - offd > EPS) {
+				   if (sdistyy - offd > -EPS) {
 				      lnode->flags |= NI_NO_VIAY;
-				      if (sdistyx - offd > EPS) {
-			                 OBSVAL(gridx, gridy, ds->layer) |= OFFSET_TAP;
-				         lnode->offset = sdistyx - offd;
-				         lnode->flags |= NI_OFFSET_NS;
+				      if (sdistyx - offd > -EPS) {
+				         if (offd - sdistyx > PitchX[ds->layer] / 2.0)
+					    /* Offset distance is too large */
+					    maxerr = 1;
+					 else {
+			                    OBSVAL(gridx, gridy, ds->layer) |= OFFSET_TAP;
+				            lnode->offset = sdistyx - offd;
+				            lnode->flags |= NI_OFFSET_NS;
 
-				         /* If position above has obstruction, then */
-				         /* add up/down block to prevent vias.	 */
+				            /* If position above has obstruction, then */
+				            /* add up/down block to prevent vias.      */
 
-				         if ((ds->layer < Num_layers - 1) &&
-						(gridy < NumChannelsY[ds->layer + 1]
-						- 1) &&
-						(OBSVAL(gridx, gridy + 1, ds->layer + 1)
-						& OBSTRUCT_MASK))
-					    block_route(gridx, gridy, ds->layer, UP);
+				             if ((ds->layer < Num_layers - 1) &&
+							(gridy < NumChannelsY[ds->layer
+							+ 1] - 1) &&
+						   	(OBSVAL(gridx, gridy + 1,
+							ds->layer + 1) & OBSTRUCT_MASK))
+					        block_route(gridx, gridy, ds->layer, UP);
+					 }
 				      }
 				   }
-				   else maxerr = 1;
 				}
 				else if (orignet & OBSTRUCT_E) {
-				   if (sdistxx - offd > EPS) {
+				   if (sdistxx - offd > -EPS) {
 				      lnode->flags |= NI_NO_VIAX;
-				      if (sdistxy - offd > EPS) {
-			                 OBSVAL(gridx, gridy, ds->layer) |= OFFSET_TAP;
-				         lnode->offset = offd - sdistxy;
-				         lnode->flags |= NI_OFFSET_EW;
+				      if (sdistxy - offd > -EPS) {
+				         if (offd - sdistxy > PitchY[ds->layer] / 2.0)
+					    /* Offset distance is too large */
+					    maxerr = 1;
+					 else {
+			                    OBSVAL(gridx, gridy, ds->layer) |= OFFSET_TAP;
+				            lnode->offset = offd - sdistxy;
+				            lnode->flags |= NI_OFFSET_EW;
 
-				         /* If position above has obstruction, then */
-				         /* add up/down block to prevent vias.	 */
+				            /* If position above has obstruction, then */
+				            /* add up/down block to prevent vias.      */
 
-				         if ((ds->layer < Num_layers - 1) &&
-						(gridx > 0) &&
-						(OBSVAL(gridx - 1, gridy, ds->layer + 1)
-						& OBSTRUCT_MASK))
-					    block_route(gridx, gridy, ds->layer, UP);
+				             if ((ds->layer < Num_layers - 1) &&
+							(gridx > 0) &&
+							(OBSVAL(gridx - 1, gridy,
+							ds->layer + 1) & OBSTRUCT_MASK))
+					        block_route(gridx, gridy, ds->layer, UP);
+					 }
 				      }
 				   }
-				   else maxerr = 1;
 				}
 				else if (orignet & OBSTRUCT_W) {
-				   if (sdistxx - offd > EPS) {
+				   if (sdistxx - offd > -EPS) {
 				      lnode->flags |= NI_NO_VIAX;
-				      if (sdistxy - offd > EPS) {
-			                 OBSVAL(gridx, gridy, ds->layer) |= OFFSET_TAP;
-				         lnode->offset = sdistxy - offd;
-				         lnode->flags |= NI_OFFSET_EW;
+				      if (sdistxy - offd > -EPS) {
+				         if (offd - sdistxy > PitchY[ds->layer] / 2.0)
+					    /* Offset distance is too large */
+					    maxerr = 1;
+					 else {
+			                    OBSVAL(gridx, gridy, ds->layer) |= OFFSET_TAP;
+				            lnode->offset = sdistxy - offd;
+				            lnode->flags |= NI_OFFSET_EW;
 
-				         /* If position above has obstruction, then */
-				         /* add up/down block to prevent vias.	 */
+				            /* If position above has obstruction, then */
+				            /* add up/down block to prevent vias.      */
 
-				         if ((ds->layer < Num_layers - 1) &&
-						(gridx < NumChannelsX[ds->layer]
-						- 1) &&
-						(OBSVAL(gridx + 1, gridy, ds->layer + 1)
-						& OBSTRUCT_MASK))
-					    block_route(gridx, gridy, ds->layer, UP);
+				            if ((ds->layer < Num_layers - 1) &&
+							(gridx < NumChannelsX[ds->layer]
+							- 1) &&
+							(OBSVAL(gridx + 1, gridy,
+							ds->layer + 1) & OBSTRUCT_MASK))
+					       block_route(gridx, gridy, ds->layer, UP);
+					 }
 				      }
 				   }
-				   else maxerr = 1;
 				}
 
 			        if (maxerr == 1)

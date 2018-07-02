@@ -938,6 +938,94 @@ void cleanup_net(NET net)
 	    }
 	 }
       }
+
+      /* One case not covered by the checks above:  If the second or	*/
+      /* penultimate segment is a via and the final segment is one	*/
+      /* track in length and connects to a via, then the same		*/
+      /* replacement can be made.  The other routes do not need to be	*/
+      /* checked, as it is sufficient to check that the grid is 	*/
+      /* occupied at that point on two metal layers with the same net.	*/
+
+      if ((fcheck == FALSE) && (lcheck == FALSE)) {
+	 int wlen, oval0, oval1, oval2;
+
+	 segf = rt->segments;
+	 if ((segf == NULL) || (segf->next == NULL)) continue;
+	 seg = segf->next;
+	 if ((segf->segtype == ST_WIRE) && (seg->segtype == ST_VIA)) {
+	    if ((segf->x1 - segf->x2) == 0) {
+		wlen = segf->y1 - segf->y2;
+	        if ((wlen == 1) || (wlen == -1)) {
+		    oval1 = OBSVAL(segf->x1, segf->y1, seg->layer) & ROUTED_NET_MASK;
+		    oval2 = OBSVAL(segf->x1, segf->y1, seg->layer + 1) & ROUTED_NET_MASK;
+		    if (oval1 == oval2) {
+			/* Remove via and change wire layer */
+			segf->next = seg->next;
+			segf->layer = (segf->layer == seg->layer) ? seg->layer + 1 :
+				seg->layer;
+			free(seg);
+		    }
+		}
+	    }
+	    else if ((segf->y1 - segf->y2) == 0) {
+		wlen = segf->x1 - segf->x2;
+	        if ((wlen == 1) || (wlen == -1)) {
+		    oval1 = OBSVAL(segf->x1, segf->y1, seg->layer) & ROUTED_NET_MASK;
+		    oval2 = OBSVAL(segf->x1, segf->y1, seg->layer + 1) & ROUTED_NET_MASK;
+		    if (oval1 == oval2) {
+			/* Remove via and change wire layer */
+			segf->next = seg->next;
+			segf->layer = (segf->layer == seg->layer) ? seg->layer + 1 :
+				seg->layer;
+			free(seg);
+		    }
+		}
+	    }
+	 }
+	 for (; seg && seg->next && seg->next->next; seg = seg->next);
+	 if ((seg == NULL) || (seg->next == NULL)) continue;
+	 segl = seg->next;
+	 if ((segl->segtype == ST_WIRE) && (seg->segtype == ST_VIA)) {
+	    if ((segl->x1 - segl->x2) == 0) {
+		wlen = segl->y1 - segl->y2;
+	        if ((wlen == 1) || (wlen == -1)) {
+		    oval1 = OBSVAL(segl->x2, segl->y2, seg->layer) & ROUTED_NET_MASK;
+		    oval2 = OBSVAL(segl->x2, segl->y2, seg->layer + 1) & ROUTED_NET_MASK;
+		    if (oval1 == oval2) {
+			/* Remove via and change wire layer */
+			seg->next = NULL;
+			seg->segtype = ST_WIRE;
+			seg->layer = (seg->layer == segl->layer) ? segl->layer + 1 :
+				segl->layer;
+			seg->x1 = segl->x1;
+			seg->y1 = segl->y1;
+			seg->x2 = segl->x2;
+			seg->y2 = segl->y2;
+			free(segl);
+		    }
+		}
+	    }
+	    else if ((segl->y1 - segl->y2) == 0) {
+		wlen = segl->x1 - segl->x2;
+	        if ((wlen == 1) || (wlen == -1)) {
+		    oval1 = OBSVAL(segl->x2, segl->y2, seg->layer) & ROUTED_NET_MASK;
+		    oval2 = OBSVAL(segl->x2, segl->y2, seg->layer + 1) & ROUTED_NET_MASK;
+		    if (oval1 == oval2) {
+			/* Remove via and change wire layer */
+			seg->next = NULL;
+			seg->segtype = ST_WIRE;
+			seg->layer = (seg->layer == segl->layer) ? segl->layer + 1 :
+				segl->layer;
+			seg->x1 = segl->x1;
+			seg->y1 = segl->y1;
+			seg->x2 = segl->x2;
+			seg->y2 = segl->y2;
+			free(segl);
+		    }
+		}
+	    }
+	 }
+      }
    }
    if (needfix == TRUE)
       for (rt = net->routes; rt; rt = rt->next)

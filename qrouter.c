@@ -725,17 +725,18 @@ static int post_def_setup()
 
    for (i = 0; i < Num_layers; i++) {
       needblock[i] = FALSE;
+
       sreq1 = LefGetRouteSpacing(i);
-
-      sreq2 = LefGetXYViaWidth(i, i, 0, 0) + sreq1;
-      sreq2t = LefGetXYViaWidth(i, i, 0, 1) + sreq1;
-      if (sreq2t < sreq2) sreq2 = sreq2t;
-      sreq2t = LefGetXYViaWidth(i, i, 0, 2) + sreq1;
-      if (sreq2t < sreq2) sreq2 = sreq2t;
-      sreq2t = LefGetXYViaWidth(i, i, 0, 3) + sreq1;
-      if (sreq2t < sreq2) sreq2 = sreq2t;
-
-      if ((sreq2 - EPS) > PitchX[i]) needblock[i] |= VIABLOCKX;
+      if (i < Num_layers - 1) {
+         sreq2 = LefGetXYViaWidth(i, i, 0, 0) + sreq1;
+         sreq2t = LefGetXYViaWidth(i, i, 0, 1) + sreq1;
+         if (sreq2t < sreq2) sreq2 = sreq2t;
+         sreq2t = LefGetXYViaWidth(i, i, 0, 2) + sreq1;
+         if (sreq2t < sreq2) sreq2 = sreq2t;
+         sreq2t = LefGetXYViaWidth(i, i, 0, 3) + sreq1;
+         if (sreq2t < sreq2) sreq2 = sreq2t;
+         if ((sreq2 - EPS) > PitchX[i]) needblock[i] |= VIABLOCKX;
+      }
       if (i != 0) {
 	 sreq2 = LefGetXYViaWidth(i - 1, i, 0, 0) + sreq1;
 	 sreq2t = LefGetXYViaWidth(i - 1, i, 0, 1) + sreq1;
@@ -747,14 +748,16 @@ static int post_def_setup()
          if ((sreq2 - EPS) > PitchX[i]) needblock[i] |= VIABLOCKX;
       }
 
-      sreq2 = LefGetXYViaWidth(i, i, 1, 0) + sreq1;
-      sreq2t = LefGetXYViaWidth(i, i, 1, 1) + sreq1;
-      if (sreq2t < sreq2) sreq2 = sreq2t;
-      sreq2t = LefGetXYViaWidth(i, i, 1, 2) + sreq1;
-      if (sreq2t < sreq2) sreq2 = sreq2t;
-      sreq2t = LefGetXYViaWidth(i, i, 1, 3) + sreq1;
-      if (sreq2t < sreq2) sreq2 = sreq2t;
-      if ((sreq2 - EPS) > PitchY[i]) needblock[i] |= VIABLOCKY;
+      if (i < Num_layers - 1) {
+         sreq2 = LefGetXYViaWidth(i, i, 1, 0) + sreq1;
+         sreq2t = LefGetXYViaWidth(i, i, 1, 1) + sreq1;
+         if (sreq2t < sreq2) sreq2 = sreq2t;
+         sreq2t = LefGetXYViaWidth(i, i, 1, 2) + sreq1;
+         if (sreq2t < sreq2) sreq2 = sreq2t;
+         sreq2t = LefGetXYViaWidth(i, i, 1, 3) + sreq1;
+         if (sreq2t < sreq2) sreq2 = sreq2t;
+         if ((sreq2 - EPS) > PitchY[i]) needblock[i] |= VIABLOCKY;
+      }
       if (i != 0) {
 	 sreq2 = LefGetXYViaWidth(i - 1, i, 1, 0) + sreq1;
 	 sreq2t = LefGetXYViaWidth(i - 1, i, 1, 1) + sreq1;
@@ -768,14 +771,16 @@ static int post_def_setup()
 
       sreq1 += 0.5 * LefGetRouteWidth(i);
 
-      sreq2 = sreq1 + 0.5 * LefGetXYViaWidth(i, i, 0, 0);
-      sreq2t = sreq1 + 0.5 * LefGetXYViaWidth(i, i, 0, 1);
-      if (sreq2t < sreq2) sreq2 = sreq2t;
-      sreq2t = sreq1 + 0.5 * LefGetXYViaWidth(i, i, 0, 2);
-      if (sreq2t < sreq2) sreq2 = sreq2t;
-      sreq2t = sreq1 + 0.5 * LefGetXYViaWidth(i, i, 0, 3);
-      if (sreq2t < sreq2) sreq2 = sreq2t;
-      if ((sreq2 - EPS) > PitchX[i]) needblock[i] |= ROUTEBLOCKX;
+      if (i < Num_layers - 1) {
+         sreq2 = sreq1 + 0.5 * LefGetXYViaWidth(i, i, 0, 0);
+         sreq2t = sreq1 + 0.5 * LefGetXYViaWidth(i, i, 0, 1);
+         if (sreq2t < sreq2) sreq2 = sreq2t;
+         sreq2t = sreq1 + 0.5 * LefGetXYViaWidth(i, i, 0, 2);
+         if (sreq2t < sreq2) sreq2 = sreq2t;
+         sreq2t = sreq1 + 0.5 * LefGetXYViaWidth(i, i, 0, 3);
+         if (sreq2t < sreq2) sreq2 = sreq2t;
+         if ((sreq2 - EPS) > PitchX[i]) needblock[i] |= ROUTEBLOCKX;
+      }
       if (i != 0) {
 	 sreq2 = sreq1 + 0.5 * LefGetXYViaWidth(i - 1, i, 0, 0);
 	 sreq2t = sreq1 + 0.5 * LefGetXYViaWidth(i - 1, i, 0, 1);
@@ -787,14 +792,16 @@ static int post_def_setup()
          if ((sreq2 - EPS) > PitchX[i]) needblock[i] |= ROUTEBLOCKX;
       }
 
-      sreq2 = sreq1 + 0.5 * LefGetXYViaWidth(i, i, 1, 0);
-      sreq2t = sreq1 + 0.5 * LefGetXYViaWidth(i, i, 1, 1);
-      if (sreq2t < sreq2) sreq2 = sreq2t;
-      sreq2t = sreq1 + 0.5 * LefGetXYViaWidth(i, i, 1, 2);
-      if (sreq2t < sreq2) sreq2 = sreq2t;
-      sreq2t = sreq1 + 0.5 * LefGetXYViaWidth(i, i, 1, 3);
-      if (sreq2t < sreq2) sreq2 = sreq2t;
-      if ((sreq2 - EPS) > PitchY[i]) needblock[i] |= ROUTEBLOCKY;
+      if (i < Num_layers - 1) {
+         sreq2 = sreq1 + 0.5 * LefGetXYViaWidth(i, i, 1, 0);
+         sreq2t = sreq1 + 0.5 * LefGetXYViaWidth(i, i, 1, 1);
+         if (sreq2t < sreq2) sreq2 = sreq2t;
+         sreq2t = sreq1 + 0.5 * LefGetXYViaWidth(i, i, 1, 2);
+         if (sreq2t < sreq2) sreq2 = sreq2t;
+         sreq2t = sreq1 + 0.5 * LefGetXYViaWidth(i, i, 1, 3);
+         if (sreq2t < sreq2) sreq2 = sreq2t;
+         if ((sreq2 - EPS) > PitchY[i]) needblock[i] |= ROUTEBLOCKY;
+      }
       if (i != 0) {
 	 sreq2 = sreq1 + 0.5 * LefGetXYViaWidth(i - 1, i, 1, 0);
 	 sreq2t = sreq1 + 0.5 * LefGetXYViaWidth(i - 1, i, 1, 1);
