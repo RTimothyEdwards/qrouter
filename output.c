@@ -982,7 +982,7 @@ void cleanup_net(NET net)
 		}
 	    }
 	 }
-	 for (; seg && seg->next && seg->next->next; seg = seg->next);
+	 for (seg = rt->segments; seg && seg->next && seg->next->next; seg = seg->next);
 	 if ((seg == NULL) || (seg->next == NULL)) continue;
 	 segl = seg->next;
 	 if ((segl->segtype == ST_WIRE) && (seg->segtype == ST_VIA)) {
