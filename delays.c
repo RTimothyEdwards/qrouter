@@ -512,9 +512,6 @@ int write_delays(char *filename)
 	for (rt = net->routes; rt; rt = rt->next) numroutes++;
 	if (numroutes == 0) continue;	/* Ignore nets with no routes */
 
-	/* Marked as one driver node.  Not handling more than one driver yet. */
-        fprintf(delayFile, "%s 1", net->netname);
-
 	/* Determine the driver node, as determined by the node with	*/
 	/* LEF direction 'OUTPUT'.  					*/
 	/* (For now, if a net has multiple tristate drivers, just use	*/
@@ -968,11 +965,11 @@ int write_delays(char *filename)
 			drivergate->gatetype->node[drivernodeidx]);
 	    */
 	    if (!strcmp(drivergate->gatetype->node[drivernodeidx], "pin"))
-		fprintf(delayFile, " PIN/%s %d ",
-			drivergate->gatename, net->numnodes - 1);
+		fprintf(delayFile, "%s 1 PIN/%s %d ",
+			net->netname, drivergate->gatename, net->numnodes - 1);
 	    else
-		fprintf(delayFile, " %s/%s %d ",
-			drivergate->gatename,
+		fprintf(delayFile, "%s 1 %s/%s %d ",
+			net->netname, drivergate->gatename,
 			drivergate->gatetype->node[drivernodeidx],
 			net->numnodes - 1);
 
