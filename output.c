@@ -235,15 +235,15 @@ pathvia(FILE *cmd, int layer, int x, int y, int lastx, int lasty,
 
     /* Check for other net on long side of via bottom */
 
-    thisnet = OBSVAL(gridx, gridy, layer) & ROUTED_NET_MASK;
+    thisnet = OBSVAL(gridx, gridy, layer) & MAX_NETNUMS;
     blocking = FALSE;
     if (ob == 0) {
 	if (gridy < NumChannelsY[layer] - 1) {
-	    othernet = OBSVAL(gridx, gridy + 1, layer) & ROUTED_NET_MASK;
+	    othernet = OBSVAL(gridx, gridy + 1, layer) & MAX_NETNUMS;
 	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
 	}
 	if ((blocking == FALSE) && (gridy > 0)) {
-	    othernet = OBSVAL(gridx, gridy - 1, layer) & ROUTED_NET_MASK;
+	    othernet = OBSVAL(gridx, gridy - 1, layer) & MAX_NETNUMS;
 	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
 	}
 	if (blocking && (checkersign == 1)) {
@@ -255,11 +255,11 @@ pathvia(FILE *cmd, int layer, int x, int y, int lastx, int lasty,
     }
     else {
 	if (gridx < NumChannelsX[layer] - 1) {
-	    othernet = OBSVAL(gridx + 1, gridy, layer) & ROUTED_NET_MASK;
+	    othernet = OBSVAL(gridx + 1, gridy, layer) & MAX_NETNUMS;
 	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
 	}
 	if ((blocking == FALSE) && (gridx > 0)) {
-	    othernet = OBSVAL(gridx - 1, gridy, layer) & ROUTED_NET_MASK;
+	    othernet = OBSVAL(gridx - 1, gridy, layer) & MAX_NETNUMS;
 	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
 	}
 	if (blocking && (checkersign == 1)) {
@@ -274,11 +274,11 @@ pathvia(FILE *cmd, int layer, int x, int y, int lastx, int lasty,
     blocking = FALSE;
     if (ot == 0) {
 	if (gridy < NumChannelsY[layer + 1] - 1) {
-	    othernet = OBSVAL(gridx, gridy + 1, layer + 1) & ROUTED_NET_MASK;
+	    othernet = OBSVAL(gridx, gridy + 1, layer + 1) & MAX_NETNUMS;
 	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
 	}
 	if ((blocking == FALSE) && (gridy > 0)) {
-	    othernet = OBSVAL(gridx, gridy - 1, layer + 1) & ROUTED_NET_MASK;
+	    othernet = OBSVAL(gridx, gridy - 1, layer + 1) & MAX_NETNUMS;
 	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
 	}
 	if (blocking && (checkersign == 1)) {
@@ -290,11 +290,11 @@ pathvia(FILE *cmd, int layer, int x, int y, int lastx, int lasty,
     }
     else {
 	if (gridx < NumChannelsX[layer + 1] - 1) {
-	    othernet = OBSVAL(gridx + 1, gridy, layer + 1) & ROUTED_NET_MASK;
+	    othernet = OBSVAL(gridx + 1, gridy, layer + 1) & MAX_NETNUMS;
 	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
 	}
 	if ((blocking == FALSE) && (gridx > 0)) {
-	    othernet = OBSVAL(gridx - 1, gridy, layer + 1) & ROUTED_NET_MASK;
+	    othernet = OBSVAL(gridx - 1, gridy, layer + 1) & MAX_NETNUMS;
 	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
 	}
 	if (blocking && (checkersign == 1)) {
@@ -714,7 +714,7 @@ void print_nlnets( char *filename )
 
 void cleanup_net(NET net)
 {
-   SEG segf, segl, seg;
+   SEG segf, segl, seg, segp;
    ROUTE rt, rt2;
    NODEINFO lnode;
    int lf, ll, lf2, ll2;
@@ -959,6 +959,10 @@ void cleanup_net(NET net)
 		    oval1 = OBSVAL(segf->x1, segf->y1, seg->layer) & ROUTED_NET_MASK;
 		    oval2 = OBSVAL(segf->x1, segf->y1, seg->layer + 1) & ROUTED_NET_MASK;
 		    if (oval1 == oval2) {
+			/* Check false case in which (layer + 1) is a min area stub */
+			segp = seg->next;
+			if (segp && (segp->x2 == segf->x1) && (segp->y2 == segf->y1))
+			    continue;
 			/* Remove via and change wire layer */
 			segf->next = seg->next;
 			segf->layer = (segf->layer == seg->layer) ? seg->layer + 1 :
@@ -973,6 +977,10 @@ void cleanup_net(NET net)
 		    oval1 = OBSVAL(segf->x1, segf->y1, seg->layer) & ROUTED_NET_MASK;
 		    oval2 = OBSVAL(segf->x1, segf->y1, seg->layer + 1) & ROUTED_NET_MASK;
 		    if (oval1 == oval2) {
+			/* Check false case in which (layer + 1) is a min area stub */
+			segp = seg->next;
+			if (segp && (segp->x2 == segf->x1) && (segp->y2 == segf->y1))
+			    continue;
 			/* Remove via and change wire layer */
 			segf->next = seg->next;
 			segf->layer = (segf->layer == seg->layer) ? seg->layer + 1 :
@@ -982,7 +990,9 @@ void cleanup_net(NET net)
 		}
 	    }
 	 }
-	 for (seg = rt->segments; seg && seg->next && seg->next->next; seg = seg->next);
+	 segp = NULL;
+	 for (seg = rt->segments; seg && seg->next && seg->next->next; seg = seg->next)
+	     segp = seg;
 	 if ((seg == NULL) || (seg->next == NULL)) continue;
 	 segl = seg->next;
 	 if ((segl->segtype == ST_WIRE) && (seg->segtype == ST_VIA)) {
@@ -992,11 +1002,14 @@ void cleanup_net(NET net)
 		    oval1 = OBSVAL(segl->x2, segl->y2, seg->layer) & ROUTED_NET_MASK;
 		    oval2 = OBSVAL(segl->x2, segl->y2, seg->layer + 1) & ROUTED_NET_MASK;
 		    if (oval1 == oval2) {
+			/* Check false case in which (layer + 1) is a min area stub */
+			if (segp && (segp->x1 == segl->x2) && (segp->y1 == segl->y2))
+			    continue;
 			/* Remove via and change wire layer */
 			seg->next = NULL;
 			seg->segtype = ST_WIRE;
-			seg->layer = (seg->layer == segl->layer) ? segl->layer + 1 :
-				segl->layer;
+			seg->layer = (seg->layer == segl->layer) ? seg->layer + 1 :
+				seg->layer;
 			seg->x1 = segl->x1;
 			seg->y1 = segl->y1;
 			seg->x2 = segl->x2;
@@ -1011,11 +1024,14 @@ void cleanup_net(NET net)
 		    oval1 = OBSVAL(segl->x2, segl->y2, seg->layer) & ROUTED_NET_MASK;
 		    oval2 = OBSVAL(segl->x2, segl->y2, seg->layer + 1) & ROUTED_NET_MASK;
 		    if (oval1 == oval2) {
+			/* Check false case in which (layer + 1) is a min area stub */
+			if (segp && (segp->x1 == segl->x2) && (segp->y1 == segl->y2))
+			    continue;
 			/* Remove via and change wire layer */
 			seg->next = NULL;
 			seg->segtype = ST_WIRE;
-			seg->layer = (seg->layer == segl->layer) ? segl->layer + 1 :
-				segl->layer;
+			seg->layer = (seg->layer == segl->layer) ? seg->layer + 1 :
+				seg->layer;
 			seg->x1 = segl->x1;
 			seg->y1 = segl->y1;
 			seg->x2 = segl->x2;
