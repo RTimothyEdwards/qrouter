@@ -213,123 +213,8 @@ pathto(FILE *cmd, int x, int y, int horizontal, int lastx, int lasty,
 
 static void
 pathvia(FILE *cmd, int layer, int x, int y, int lastx, int lasty,
-        int gridx, int gridy, double invscale)
+	char *vianame, double invscale)
 {
-    char *s;
-    char checkersign = (gridx + gridy) & 0x01;
-    int ob, ot, othernet, thisnet;
-    u_char blocking;
-    NODEINFO lnode;
-
-    /* Default orientation:  Via layers in the direction of the routes */
-    ob = LefGetRouteOrientation(layer);
-    ot = LefGetRouteOrientation(layer + 1);
-    if (ob == 0 && ot == 1)
-	s = ViaYX[layer];
-    else if (ob == 1 && ot == 0)
-	s = ViaXY[layer];
-    else if (ob == 0 && ot == 0)
-	s = ViaYY[layer];
-    else
-	s = ViaXX[layer];
-
-    /* Check for other net on long side of via bottom */
-
-    thisnet = OBSVAL(gridx, gridy, layer) & MAX_NETNUMS;
-    blocking = FALSE;
-    if (ob == 0) {
-	if (gridy < NumChannelsY[layer] - 1) {
-	    othernet = OBSVAL(gridx, gridy + 1, layer) & MAX_NETNUMS;
-	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
-	}
-	if ((blocking == FALSE) && (gridy > 0)) {
-	    othernet = OBSVAL(gridx, gridy - 1, layer) & MAX_NETNUMS;
-	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
-	}
-	if (blocking && (checkersign == 1)) {
-	    if (s == ViaYX[layer])
-		s = ViaXX[layer];
-	    else	/* s == ViaYY */
-		s = ViaXY[layer];
-	}
-    }
-    else {
-	if (gridx < NumChannelsX[layer] - 1) {
-	    othernet = OBSVAL(gridx + 1, gridy, layer) & MAX_NETNUMS;
-	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
-	}
-	if ((blocking == FALSE) && (gridx > 0)) {
-	    othernet = OBSVAL(gridx - 1, gridy, layer) & MAX_NETNUMS;
-	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
-	}
-	if (blocking && (checkersign == 1)) {
-	    if (s == ViaXY[layer])
-		s = ViaYY[layer];
-	    else	/* s == ViaXX */
-		s = ViaYX[layer];
-	}
-    }
-
-    /* And check if there is a via on the top in the long direction */
-    blocking = FALSE;
-    if (ot == 0) {
-	if (gridy < NumChannelsY[layer + 1] - 1) {
-	    othernet = OBSVAL(gridx, gridy + 1, layer + 1) & MAX_NETNUMS;
-	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
-	}
-	if ((blocking == FALSE) && (gridy > 0)) {
-	    othernet = OBSVAL(gridx, gridy - 1, layer + 1) & MAX_NETNUMS;
-	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
-	}
-	if (blocking && (checkersign == 1)) {
-	    if (s == ViaXY[layer])
-		s = ViaXX[layer];
-	    else if (s == ViaYY[layer])
-		s = ViaYX[layer];
-	}
-    }
-    else {
-	if (gridx < NumChannelsX[layer + 1] - 1) {
-	    othernet = OBSVAL(gridx + 1, gridy, layer + 1) & MAX_NETNUMS;
-	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
-	}
-	if ((blocking == FALSE) && (gridx > 0)) {
-	    othernet = OBSVAL(gridx - 1, gridy, layer + 1) & MAX_NETNUMS;
-	    if ((othernet != 0) && (othernet != thisnet)) blocking = TRUE;
-	}
-	if (blocking && (checkersign == 1)) {
-	    if (s == ViaYX[layer])
-		s = ViaYY[layer];
-	    else if (s == ViaXX[layer])
-		s = ViaXY[layer];
-	}
-    }
-
-    /* If the position is a node, then the via type may be switched if	*/
-    /* there is a prohibition declared in the flags.			*/
-
-    if (layer < Pinlayers) {
-	if ((lnode = NODEIPTR(gridx, gridy, layer)) != NULL) {
-	    if (lnode->flags & NI_NO_VIAX) {
-		if (s == ViaXY[layer])
-		    s = ViaYY[layer];
-		else if (s == ViaXX[layer])
-		    s = ViaYX[layer];
-	    }
-	    if (lnode->flags & NI_NO_VIAY) {
-		if (s == ViaYX[layer])
-		    s = ViaXX[layer];
-		else if (s == ViaYY[layer])
-		    s = ViaXY[layer];
-	    }
-	    /* Mark the node with which via direction was used */
-	    if ((s == ViaYY[layer]) || (s == ViaYX[layer]))
-		lnode->flags |= NI_VIA_Y;
-	    else
-		lnode->flags |= NI_VIA_X;
-	}
-    }
-
     if (Pathon <= 0) {
        if (Pathon == -1)
 	  fprintf(cmd, "+ ROUTED ");
@@ -350,7 +235,7 @@ pathvia(FILE *cmd, int layer, int x, int y, int lastx, int lasty,
        if (y != lasty)
 	  pathto(cmd, x, y, FALSE, x, lasty, invscale);
     }
-    fprintf(cmd, "%s ", s);
+    fprintf(cmd, "%s ", vianame);
     Pathon = 0;
 
 } /* pathvia() */
@@ -695,6 +580,59 @@ void print_nlnets( char *filename )
 } /* print_nlnets() */
 
 /*--------------------------------------------------------------*/
+/* link_up_seg ---						*/
+/*								*/
+/* As part of cleanup_net (below), when removing unneeded vias,	*/
+/* it may be necessary to check if a segment is being used to	*/
+/* connect to another route of a net, in which case removing	*/
+/* the segment would break the net.  If that is the case, then	*/
+/* keep the segment by linking it to the end of the route that	*/
+/* was connected to it.						*/
+/*								*/
+/* Return 1 (true) if the segment was linked to another route,	*/
+/* so the caller knows whether or not to free the segment.	*/
+/*								*/
+/* "rt" is the route that the segment was connected to.  For	*/
+/* the sake of efficiency, it does not need to be checked.	*/
+/*--------------------------------------------------------------*/
+
+u_char link_up_seg(NET net, SEG seg, ROUTE srt)
+{
+    ROUTE rt;
+    SEG segf, segl;
+    int x, y;
+
+    for (rt = net->routes; rt; rt = rt->next) {
+	if (rt == srt) continue;
+	segf = rt->segments;
+	if ((segf->x1 == seg->x1) && (segf->y1 == seg->y1) &&
+		(segf->layer == seg->layer)) {
+	    /* Reverse seg and prepend it to the route */
+	    seg->next = rt->segments;
+	    rt->segments = seg;
+	    x = seg->x1;
+	    y = seg->y1;
+	    seg->x1 = seg->x2;
+	    seg->y1 = seg->y2;
+	    seg->x2 = x;
+	    seg->y2 = y;
+	    return (u_char)1;
+	}
+
+	/* Move to the last segment of the route */
+	for (segl = segf; segl && segl->next; segl = segl->next);
+
+	if (segl && (segl->x2 == seg->x1) && (segl->y2 == seg->y1) &&
+		(segl->layer == seg->layer)) {
+	    /* Append seg to the route */
+	    segl->next = seg;
+	    return (u_char)1;
+	}
+    }
+    return (u_char)0;
+}
+
+/*--------------------------------------------------------------*/
 /* cleanup_net --						*/
 /*								*/
 /* Special handling for layers where needblock[] is non-zero,	*/
@@ -946,6 +884,10 @@ void cleanup_net(NET net)
       /* checked, as it is sufficient to check that the grid is 	*/
       /* occupied at that point on two metal layers with the same net.	*/
 
+      /* NOTE:  Another route could be connecting to the via on the	*/
+      /* penultimate segment, and removing it would cause an open net.	*/
+      /* Check for this case and resolve if needed.			*/
+
       if ((fcheck == FALSE) && (lcheck == FALSE)) {
 	 int wlen, oval0, oval1, oval2;
 
@@ -967,7 +909,7 @@ void cleanup_net(NET net)
 			segf->next = seg->next;
 			segf->layer = (segf->layer == seg->layer) ? seg->layer + 1 :
 				seg->layer;
-			free(seg);
+			if (!link_up_seg(net, seg, rt)) free(seg);
 		    }
 		}
 	    }
@@ -985,7 +927,7 @@ void cleanup_net(NET net)
 			segf->next = seg->next;
 			segf->layer = (segf->layer == seg->layer) ? seg->layer + 1 :
 				seg->layer;
-			free(seg);
+			if (!link_up_seg(net, seg, rt)) free(seg);
 		    }
 		}
 	    }
@@ -1014,7 +956,7 @@ void cleanup_net(NET net)
 			seg->y1 = segl->y1;
 			seg->x2 = segl->x2;
 			seg->y2 = segl->y2;
-			free(segl);
+			if (!link_up_seg(net, segl, rt)) free(segl);
 		    }
 		}
 	    }
@@ -1036,7 +978,7 @@ void cleanup_net(NET net)
 			seg->y1 = segl->y1;
 			seg->x2 = segl->x2;
 			seg->y2 = segl->y2;
-			free(segl);
+			if (!link_up_seg(net, segl, rt)) free(segl);
 		    }
 		}
 	    }
@@ -1085,125 +1027,6 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
    if ((special == (u_char)1) && (net->flags & NET_STUB)) {
       fprintf(Cmd, ";\n- %s\n", net->netname);
-   }
-
-   u_char viaCheckX[MAX_LAYERS];
-   u_char viaCheckY[MAX_LAYERS];
-   double viaOffsetX[MAX_LAYERS][3];
-   double viaOffsetY[MAX_LAYERS][3];
-
-   /* Compute via offsets, if needed for adjacent vias on different nets. */
-
-   /* A well-designed standard cell set should not have DRC errors	*/
-   /* between vias spaced on adjacent tracks.  But this can happen	*/
-   /* anyway, especially when using thick metal layers for routing.	*/
-   /* Measurements assume that vias will normally be checkerboard	*/
-   /* patterned, so that there are never two horizontal or two vertical	*/
-   /* vias in adjacent tracks (an assumption that may need revisiting.)	*/
-
-   /* NOTE:  This code assumes that horizontally- and vertically-	*/
-   /* oriented vias are just rotations of each other, which is true if	*/
-   /* they are generated using VIARULE but not necessarily if only	*/
-   /* fixed via types are used.  This is easily remedied by calculating	*/
-   /* both X-to-Y and Y-to-X distances and using the maximum.		*/
-
-   /* Example of offset measurements:					*/
-   /* viaOffsetX[layer][n]:  layer is the base layer of the via, n is	*/
-   /* 0 for the via one layer below, 1 for the same via, and 2 for the	*/
-   /* via one layer above.  Note that the n = 1 has interactions on two	*/
-   /* different metal layers.  The maximum distance is used.		*/
-
-   /* viaCheckX[1] is 0 if all of viaOffsetX[1][0-2] is zero.  This	*/
-   /*	 allows a quick determination if a check for neighboring vias	*/
-   /*    is required.							*/
-   /* viaOffsetX[1][0] is the additional spacing above the grid	width	*/
-   /*	 for via2-to-via1 (on metal2 only).				*/
-   /* viaOffsetX[1][1] is the additional spacing above the grid	width	*/
-   /*	 for via2-to-via2 (maximum for metal2 and metal3)		*/
-   /* viaOffsetX[1][2] is the additional spacing above the grid	width	*/
-   /*	 for via2-to-via3 (on metal3 only).				*/
-
-   viaOffsetX[0][0] = 0;		// nothing below the 1st via
-   viaOffsetY[0][0] = 0;
-   viaOffsetX[Num_layers - 1][2] = 0;	// nothing above the last via
-   viaOffsetY[Num_layers - 1][2] = 0;
-
-   for (layer = 0; layer < Num_layers - 1; layer++) {
-      double s1  = LefGetRouteSpacing(layer);
-      double s2  = LefGetRouteSpacing(layer + 1);
-      double p1x = PitchX[layer];
-      double p2x = PitchX[layer + 1];
-      double p1y = PitchY[layer];
-      double p2y = PitchY[layer + 1];
-      double w1xx = LefGetXYViaWidth(layer, layer, 0, 1);
-      double w1xy = LefGetXYViaWidth(layer, layer, 0, 2);
-      double w1yx = LefGetXYViaWidth(layer, layer, 1, 1);
-      double w1yy = LefGetXYViaWidth(layer, layer, 1, 2);
-      double w2xx = LefGetXYViaWidth(layer, layer + 1, 0, 1);
-      double w2xy = LefGetXYViaWidth(layer, layer + 1, 0, 2);
-      double w2yx = LefGetXYViaWidth(layer, layer + 1, 1, 1);
-      double w2yy = LefGetXYViaWidth(layer, layer + 1, 1, 2);
-    
-      double w0xx, w0xy, w0yx, w0yy;
-      double w3xx, w3xy, w3yx, w3yy;
-
-      viaCheckX[layer] = 0;
-      viaCheckY[layer] = 0;
-
-      if (layer > 0) {
-
-	 /* Space from via to (via - 1) */
-
-         w0xx = LefGetXYViaWidth(layer - 1, layer, 0, 1);
-         w0xy = LefGetXYViaWidth(layer - 1, layer, 0, 2);
-         w0yx = LefGetXYViaWidth(layer - 1, layer, 1, 1);
-         w0yy = LefGetXYViaWidth(layer - 1, layer, 1, 2);
-
-         dc = s1 + (w1xy + w0xy) / 2 - p1x;
-         viaOffsetX[layer][0] = (dc > 0.0) ? dc : 0.0;
-
-         dc = s1 + (w1yx + w0yx) / 2 - p1y;
-         viaOffsetY[layer][0] = (dc > 0.0) ? dc : 0.0;
-      }
-
-      /* Space from via to via (check both lower and upper metal layers) */
-
-      dc = s1 + (w1xx + w1xy) / 2 - p1x;
-      viaOffsetX[layer][1] = (dc > 0.0) ? dc : 0.0;
-
-      dc = s2 + (w2xx + w2xy) / 2 - p2x;
-      if (dc < 0.0) dc = 0.0;
-      if (dc > viaOffsetX[layer][1]) viaOffsetX[layer][1] = dc;
-
-      dc = s1 + (w1yx + w1yy) / 2 - p1y;
-      viaOffsetY[layer][1] = (dc > 0.0) ? dc : 0.0;
-
-      dc = s2 + (w2yx + w2yy) / 2 - p2y;
-      if (dc < 0.0) dc = 0.0;
-      if (dc > viaOffsetY[layer][1]) viaOffsetY[layer][1] = dc;
-
-      if (layer < Num_layers - 1) {
-
-	 /* Space from via to (via + 1) */
-
-         w3xx = LefGetXYViaWidth(layer + 1, layer + 1, 0, 1);
-         w3xy = LefGetXYViaWidth(layer + 1, layer + 1, 0, 2);
-         w3yx = LefGetXYViaWidth(layer + 1, layer + 1, 1, 1);
-         w3yy = LefGetXYViaWidth(layer + 1, layer + 1, 1, 2);
-
-         dc = s2 + (w2xx + w3xx) / 2 - p2x;
-         viaOffsetX[layer][2] = (dc > 0.0) ? dc : 0.0;
-
-         dc = s2 + (w2yx + w3yx) / 2 - p2y;
-         viaOffsetY[layer][2] = (dc > 0.0) ? dc : 0.0;
-      }
-
-      if (viaOffsetX[layer][0] > 0 || viaOffsetX[layer][1] > 0 ||
-		viaOffsetX[layer][2] > 0)
-	 viaCheckX[layer] = 1;
-      if (viaOffsetY[layer][0] > 0 || viaOffsetY[layer][1] > 0 ||
-		viaOffsetY[layer][2] > 0)
-	 viaCheckY[layer] = 1;
    }
 
    Pathon = -1;
@@ -1608,17 +1431,27 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		     }
 		  }
 		  break;
+
 	       case ST_VIA:
 		  rt->flags |= RT_OUTPUT;
 		  if (special == (u_char)0) {
 		     double viaoffx, viaoffy;
+		     double w0, w1, dc, altwx, altwy;
 		     int vx = 0;
 		     int vy = 0;
+		     int flags;
 		     u_int tdirpp, tdirp, tdirn;
 		     u_char viaNL, viaNM, viaNU;
 		     u_char viaSL, viaSM, viaSU;
 		     u_char viaEL, viaEM, viaEU;
 		     u_char viaWL, viaWM, viaWU;
+		     u_char rteNL, rteNU;
+		     u_char rteSL, rteSU;
+		     u_char rteEL, rteEU;
+		     u_char rteWL, rteWU;
+		     char *s;
+		     char checkersign;
+		     int ob, ot;
 
 		     if (lastseg == NULL) {
 			// Make sure last position is valid
@@ -1626,194 +1459,634 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			lasty = y;
 		     }
 
+		     // If vias need to be rotated then they do so on a
+		     // checkerboard pattern.
+		     checkersign = (char)((seg->x1 + seg->y1) & 0x01);
+
+		     // Get the default orientation of the via
+		     ob = LefGetRouteOrientation(layer);
+		     ot = LefGetRouteOrientation(layer + 1);
+		     if (ob == 0 && ot == 1)
+			s = ViaYX[layer];
+		     else if (ob == 1 && ot == 0)
+			s = ViaXY[layer];
+		     else if (ob == 0 && ot == 0)
+			s = ViaYY[layer];
+		     else
+			s = ViaXX[layer];
+
+		     // If via is on a pin and rotation is restricted, then
+		     // set the rotation accordingly.
+
+		     flags = 0;
+		     if (layer < Pinlayers) {
+			if ((lnode = NODEIPTR(seg->x1, seg->y1, layer)) != NULL) {
+			    if (lnode->flags & NI_NO_VIAX) {
+				flags = NI_NO_VIAX;
+				if (s == ViaXY[layer])
+				    s = ViaYY[layer];
+				else if (s == ViaXX[layer])
+				    s = ViaYX[layer];
+			    }
+			    if (lnode->flags & NI_NO_VIAY) {
+				flags = NI_NO_VIAY;
+				if (s == ViaYX[layer])
+				    s = ViaXX[layer];
+				else if (s == ViaYY[layer])
+				    s = ViaXY[layer];
+			    }
+			    /* Mark the node with which via direction was used */
+			    if ((s == ViaYY[layer]) || (s == ViaYX[layer]))
+				lnode->flags |= NI_VIA_Y;
+			    else
+				lnode->flags |= NI_VIA_X;
+			}
+		     }
+
 		     // Check for vias between adjacent but different nets
-		     // that need position offsets to avoid a DRC spacing error
+		     // that need rotation and/or position offsets to avoid
+		     // a DRC spacing error
 
-		     // viaCheckX[layer] indicates whether a check for
-		     // vias is needed.  If so, record what vias are to east
-		     // and west.
+		     viaEL = viaEM = viaEU = 0;
+		     viaWL = viaWM = viaWU = 0;
+		     viaNL = viaNM = viaNU = 0;
+		     viaSL = viaSM = viaSU = 0;
+		     rteEL = rteEU = rteWL = rteWU = 0;
+		     rteNL = rteNU = rteSL = rteSU = 0;
 
-		     if (viaCheckX[layer] > 0) {
-
-			viaEL = viaEM = viaEU = 0;
-			viaWL = viaWM = viaWU = 0;
-
-			// Check for via to west
-			if (seg->x1 > 0) {
-			   tdir = OBSVAL(seg->x1 - 1, seg->y1, layer)
+		     // Check for via/route to west
+		     if (seg->x1 > 0) {
+			tdir = OBSVAL(seg->x1 - 1, seg->y1, layer)
 					& ROUTED_NET_MASK;
 
-			   if (((tdir & NO_NET) == 0) && (tdir != 0) &&
+			if (((tdir & NO_NET) == 0) && (tdir != 0) &&
 				(tdir != (net->netnum | ROUTED_NET))) {
-
-			      if (layer < Num_layers - 1) {
-			         tdirp = OBSVAL(seg->x1 - 1, seg->y1, layer + 1)
+			   rteWL = 1;
+			   if (layer > 0) {
+			      tdirn = OBSVAL(seg->x1 - 1, seg->y1, layer - 1)
 					& ROUTED_NET_MASK;
-			         if (((tdirp & NO_NET) == 0) && (tdirp != 0) &&
-				     	(tdirp != (net->netnum | ROUTED_NET))) {
-
-			            if (layer < Num_layers - 2) {
-			               tdirpp = OBSVAL(seg->x1 - 1, seg->y1, layer + 2)
-						& ROUTED_NET_MASK;
-			               if (tdirp == tdirpp) viaWU = 1;
-				    }
-				 }
-			         if (tdir == tdirp) viaWM = 1;
-			      }
-			
-			      if (layer > 0) {
-			         tdirn = OBSVAL(seg->x1 - 1, seg->y1, layer - 1)
-					& ROUTED_NET_MASK;
-			         if (tdir == tdirn) viaWL = 1;
-			      }
+			      if (tdir == tdirn) viaWL = 1;
 			   }
 			}
 
-			// Check for via to east
-			if (seg->x1 < NumChannelsX[layer] - 1) {
-			   tdir = OBSVAL(seg->x1 + 1, seg->y1, layer)
+			if (layer < Num_layers - 1) {
+			   tdirp = OBSVAL(seg->x1 - 1, seg->y1, layer + 1)
 					& ROUTED_NET_MASK;
-
-			   if (((tdir & NO_NET) == 0) && (tdir != 0) &&
-				(tdir != (net->netnum | ROUTED_NET))) {
-
-			      if (layer < Num_layers - 1) {
-			         tdirp = OBSVAL(seg->x1 + 1, seg->y1, layer + 1)
-					& ROUTED_NET_MASK;
-			         if (((tdirp & NO_NET) == 0) && (tdirp != 0) &&
+			   if (((tdirp & NO_NET) == 0) && (tdirp != 0) &&
 				     	(tdirp != (net->netnum | ROUTED_NET))) {
-
-			            if (layer < Num_layers - 2) {
-			               tdirpp = OBSVAL(seg->x1 + 1, seg->y1, layer + 2)
+			      rteWU = 1;
+			      if (layer < Num_layers - 2) {
+			         tdirpp = OBSVAL(seg->x1 - 1, seg->y1, layer + 2)
 						& ROUTED_NET_MASK;
-			               if (tdirp == tdirpp) viaEU = 1;
-				    }
-				 }
-			         if (tdir == tdirp) viaEM = 1;
-			      }
-			
-			      if (layer > 0) {
-			         tdirn = OBSVAL(seg->x1 + 1, seg->y1, layer - 1)
-					& ROUTED_NET_MASK;
-			         if (tdir == tdirn) viaEL = 1;
+			         if (tdirp == tdirpp) viaWU = 1;
 			      }
 			   }
+			   if (rteWL && (tdir == tdirp)) viaWM = 1;
 			}
-
-			// Compute X offset
-			viaoffx = 0.0;
-
-			if (viaWL) viaoffx = viaOffsetX[layer][0];
-			else if (viaEL) viaoffx = -viaOffsetX[layer][0];
-
-			if (viaWM && viaOffsetX[layer][1] > viaoffx)
-			   viaoffx = viaOffsetX[layer][1];
-			else if (viaEM && -viaOffsetX[layer][1] < viaoffx)
-			   viaoffx = -viaOffsetX[layer][1];
-
-			if (viaWU && viaOffsetX[layer][2] > viaoffx)
-			   viaoffx = viaOffsetX[layer][2];
-			else if (viaEU && -viaOffsetX[layer][2] < viaoffx)
-			   viaoffx = -viaOffsetX[layer][2];
-
-		        vx = (int)((REPS(viaoffx)) * oscale);
 		     }
 
-		     // viaCheckY[layer] indicates whether a check for
-		     // vias is needed.  If so, record what vias are to north
-		     // and south.
-
-		     if (viaCheckY[layer] > 0) {
-
-			viaNL = viaNM = viaNU = 0;
-			viaSL = viaSM = viaSU = 0;
-
-			// Check for via to south
-			if (seg->y1 > 0) {
-			   tdir = OBSVAL(seg->x1, seg->y1 - 1, layer)
+		     // Check for via/route to east
+		     if (seg->x1 < NumChannelsX[layer] - 1) {
+			tdir = OBSVAL(seg->x1 + 1, seg->y1, layer)
 					& ROUTED_NET_MASK;
 
-			   if (((tdir & NO_NET) == 0) && (tdir != 0) &&
+			if (((tdir & NO_NET) == 0) && (tdir != 0) &&
 				(tdir != (net->netnum | ROUTED_NET))) {
-
-			      if (layer < Num_layers - 1) {
-			         tdirp = OBSVAL(seg->x1, seg->y1 - 1, layer + 1)
+			   rteEL = 1;
+			   if (layer > 0) {
+			      tdirn = OBSVAL(seg->x1 + 1, seg->y1, layer - 1)
 					& ROUTED_NET_MASK;
-			         if (((tdirp & NO_NET) == 0) && (tdirp != 0) &&
-				     	(tdirp != (net->netnum | ROUTED_NET))) {
-
-			            if (layer < Num_layers - 2) {
-			               tdirpp = OBSVAL(seg->x1, seg->y1 - 1, layer + 2)
-						& ROUTED_NET_MASK;
-			               if (tdirp == tdirpp) viaSU = 1;
-				    }
-				 }
-			         if (tdir == tdirp) viaSM = 1;
-			      }
-			
-			      if (layer > 0) {
-			         tdirn = OBSVAL(seg->x1, seg->y1 - 1, layer - 1)
-					& ROUTED_NET_MASK;
-			         if (tdir == tdirn) viaSL = 1;
-			      }
+			      if (tdir == tdirn) viaEL = 1;
 			   }
 			}
 
-			// Check for via to north
-			if (seg->y1 < NumChannelsY[layer] - 1) {
-			   tdir = OBSVAL(seg->x1, seg->y1 + 1, layer)
+			if (layer < Num_layers - 1) {
+			   tdirp = OBSVAL(seg->x1 + 1, seg->y1, layer + 1)
 					& ROUTED_NET_MASK;
-
-			   if (((tdir & NO_NET) == 0) && (tdir != 0) &&
-				(tdir != (net->netnum | ROUTED_NET))) {
-
-			      if (layer < Num_layers - 1) {
-			         tdirp = OBSVAL(seg->x1, seg->y1 + 1, layer + 1)
-					& ROUTED_NET_MASK;
-			         if (((tdirp & NO_NET) == 0) && (tdirp != 0) &&
+			   if (((tdirp & NO_NET) == 0) && (tdirp != 0) &&
 				     	(tdirp != (net->netnum | ROUTED_NET))) {
-
-			            if (layer < Num_layers - 2) {
-			               tdirpp = OBSVAL(seg->x1, seg->y1 + 1, layer + 2)
+			      rteEU = 1;
+			      if (layer < Num_layers - 2) {
+			         tdirpp = OBSVAL(seg->x1 + 1, seg->y1, layer + 2)
 						& ROUTED_NET_MASK;
-			               if (tdirp == tdirpp) viaNU = 1;
-				    }
-				 }
-			         if (tdir == tdirp) viaNM = 1;
-			      }
-			
-			      if (layer > 0) {
-			         tdirn = OBSVAL(seg->x1, seg->y1 + 1, layer - 1)
-					& ROUTED_NET_MASK;
-			         if (tdir == tdirn) viaNL = 1;
+			         if (tdirp == tdirpp) viaEU = 1;
 			      }
 			   }
+			   if (rteEL && (tdir == tdirp)) viaEM = 1;
 			}
-
-			// Compute Y offset
-			viaoffy = 0;
-
-			if (viaSL) viaoffy = viaOffsetY[layer][0];
-			else if (viaNL) viaoffy = -viaOffsetY[layer][0];
-
-			if (viaSM && viaOffsetY[layer][1] > viaoffy)
-			   viaoffy = viaOffsetY[layer][1];
-			else if (viaNM && -viaOffsetY[layer][1] < viaoffy)
-			   viaoffy = -viaOffsetY[layer][1];
-
-			if (viaSU && viaOffsetY[layer][2] > viaoffy)
-			   viaoffy = viaOffsetY[layer][2];
-			else if (viaNU && -viaOffsetY[layer][2] < viaoffy)
-			   viaoffy = -viaOffsetY[layer][2];
-
-		        vy = (int)((REPS(viaoffy)) * oscale);
 		     }
 
-		     // via-to-via interactions are symmetric, so move each
-		     // via half the distance (?)
+		     // Check for via/route to south
+		     if (seg->y1 > 0) {
+			tdir = OBSVAL(seg->x1, seg->y1 - 1, layer)
+					& ROUTED_NET_MASK;
 
-		     pathvia(Cmd, layer, x + vx, y + vy, lastx, lasty,
-					seg->x1, seg->y1, invscale);
+			if (((tdir & NO_NET) == 0) && (tdir != 0) &&
+				(tdir != (net->netnum | ROUTED_NET))) {
+			   rteSL = 1;
+			   if (layer > 0) {
+			      tdirn = OBSVAL(seg->x1, seg->y1 - 1, layer - 1)
+					& ROUTED_NET_MASK;
+			      if (tdir == tdirn) viaSL = 1;
+			   }
+			}
+
+			if (layer < Num_layers - 1) {
+			   tdirp = OBSVAL(seg->x1, seg->y1 - 1, layer + 1)
+					& ROUTED_NET_MASK;
+			   if (((tdirp & NO_NET) == 0) && (tdirp != 0) &&
+				     	(tdirp != (net->netnum | ROUTED_NET))) {
+			      rteSU = 1;
+			      if (layer < Num_layers - 2) {
+			         tdirpp = OBSVAL(seg->x1, seg->y1 - 1, layer + 2)
+						& ROUTED_NET_MASK;
+			         if (tdirp == tdirpp) viaSU = 1;
+			      }
+			   }
+			   if (rteSL && (tdir == tdirp)) viaSM = 1;
+			}
+		     }
+
+		     // Check for via/route to north
+		     if (seg->y1 < NumChannelsY[layer] - 1) {
+			tdir = OBSVAL(seg->x1, seg->y1 + 1, layer)
+					& ROUTED_NET_MASK;
+
+			if (((tdir & NO_NET) == 0) && (tdir != 0) &&
+				(tdir != (net->netnum | ROUTED_NET))) {
+			   rteNL = 1;
+			   if (layer > 0) {
+			      tdirn = OBSVAL(seg->x1, seg->y1 + 1, layer - 1)
+					& ROUTED_NET_MASK;
+			      if (tdir == tdirn) viaNL = 1;
+			   }
+			}
+
+			if (layer < Num_layers - 1) {
+			   tdirp = OBSVAL(seg->x1, seg->y1 + 1, layer + 1)
+					& ROUTED_NET_MASK;
+			   if (((tdirp & NO_NET) == 0) && (tdirp != 0) &&
+				     	(tdirp != (net->netnum | ROUTED_NET))) {
+			      rteNU = 1;
+			      if (layer < Num_layers - 2) {
+			         tdirpp = OBSVAL(seg->x1, seg->y1 + 1, layer + 2)
+						& ROUTED_NET_MASK;
+			         if (tdirp == tdirpp) viaNU = 1;
+			      }
+			   }
+			   if (rteNL && (tdir == tdirp)) viaNM = 1;
+			}
+		     }
+
+		     // Actions needed only if a via is on the long side and
+		     // has a spacing violation.
+
+		     viaoffx = viaoffy = 0.0;
+		     altwx = altwy = 0.0;
+		     if (ob == 1) {  /* bottom (layer) route is horizontal */
+			if (viaEM || viaWM) {
+			    /* Assume default rotations and calculate spacing */
+			    /* Only take action if there is a spacing violation */
+
+			    w1 = LefGetXYViaWidth(layer, layer, 0, 0);
+			    w0 = w1;
+		            dc = LefGetRouteSpacing(layer) + w1;
+			    if (dc > PitchX[layer] + EPS) {
+
+				/* via on checkerboard may be rotated */
+				if (checkersign && ((flags & NI_NO_VIAY) == 0)) {
+				    /* Check spacing violation to routes N and S */
+				    /* If via being checked is rotated */
+				    if (rteNL || rteSL)
+					dc = LefGetRouteSpacing(layer) +
+						(LefGetXYViaWidth(layer, layer, 1, 2) +
+						LefGetRouteWidth(layer)) / 2;
+				    if ((!(rteNL && rteSL))
+						|| (dc <= PitchY[layer] + EPS)) {
+					/* Okay to rotate the via bottom */
+					w0 = LefGetXYViaWidth(layer, layer, 0, 2);
+					s = (ot == 1) ? ViaYX[layer] : ViaYY[layer];
+				    }
+				    else if (rteNL || rteSL)
+					altwx = w1 -
+						LefGetXYViaWidth(layer, layer, 0, 2);
+
+				    /* Measure spacing violation to via */
+		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
+				    if (dc > PitchX[layer] + EPS) {
+					/* Calculate offset */
+					if (viaEM)
+					    viaoffx = PitchX[layer] - dc;
+					else
+					    viaoffx = dc - PitchX[layer];
+				    }
+				}
+				else {
+				    /* Measure spacing violation to rotated via */
+				    w0 = LefGetXYViaWidth(layer, layer, 0, 2);
+		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
+				    if (dc > PitchX[layer] + EPS) {
+					/* Calculate offset */
+					if (viaEM)
+					    viaoffx = PitchX[layer] - dc;
+					else
+					    viaoffx = dc - PitchX[layer];
+				    }
+				}
+			    }
+			}
+			else if (viaEL || viaWL) {
+			    /* Assume default rotations and calculate spacing */
+			    /* Only take action if there is a spacing violation */
+
+			    w0 = LefGetXYViaWidth(layer - 1, layer, 0, 0);
+			    w1 = LefGetXYViaWidth(layer, layer, 0, 0);
+		            dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
+			    if (dc > PitchX[layer] + EPS) {
+
+				/* via on checkerboard may be rotated */
+				if (checkersign && ((flags & NI_NO_VIAY) == 0)) {
+				    /* Check spacing violation to routes N and S */
+				    /* If via being checked is rotated */
+				    if (rteNL || rteSL)
+					dc = LefGetRouteSpacing(layer) +
+						(LefGetXYViaWidth(layer, layer, 1, 2) +
+						LefGetRouteWidth(layer)) / 2;
+				    if ((!(rteNL && rteSL))
+						|| (dc <= PitchY[layer] + EPS)) {
+					/* Okay to rotate the via bottom */
+					w1 = LefGetXYViaWidth(layer, layer, 0, 2);
+					s = (ot == 1) ? ViaYX[layer] : ViaYY[layer];
+				    }
+				    else if (rteNL || rteSL)
+					altwx = w1 -
+						LefGetXYViaWidth(layer, layer, 0, 2);
+
+				    /* Measure spacing violation to via */
+		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
+				    if (dc > PitchX[layer] + EPS) {
+					/* Calculate offset */
+					if (viaEL)
+					    viaoffx = PitchX[layer] - dc;
+					else
+					    viaoffx = dc - PitchX[layer];
+				    }
+				}
+				else {
+				    /* Measure spacing violation to rotated via */
+				    w0 = LefGetXYViaWidth(layer - 1, layer, 0, 1);
+		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
+				    if (dc > PitchX[layer] + EPS) {
+					/* Calculate offset */
+					if (viaEL)
+					    viaoffx = PitchX[layer] - dc;
+					else
+					    viaoffx = dc - PitchX[layer];
+				    }
+				}
+			    }
+			}
+		     } else {	     /* bottom route vertical */
+			if (viaNM || viaSM) {
+			    /* Assume default rotations and calculate spacing */
+			    /* Only take action if there is a spacing violation */
+
+			    w1 = LefGetXYViaWidth(layer, layer, 1, 3);
+			    w0 = w1;
+		            dc = LefGetRouteSpacing(layer) + w1;
+			    if (dc > PitchY[layer] + EPS) {
+
+				/* via on checkerboard may be rotated */
+				if (checkersign && ((flags & NI_NO_VIAX) == 0)) {
+				    /* Check spacing violation to routes E and W */
+				    /* If via being checked is rotated */
+				    if (rteEL || rteWL)
+					dc = LefGetRouteSpacing(layer) +
+						(LefGetXYViaWidth(layer, layer, 0, 1) +
+						LefGetRouteWidth(layer)) / 2;
+				    if ((!(rteEL && rteWL))
+						|| (dc <= PitchX[layer] + EPS)) {
+					/* Okay to rotate the via bottom */
+					w0 = LefGetXYViaWidth(layer, layer, 1, 1);
+					s = (ot == 1) ? ViaXX[layer] : ViaXY[layer];
+				    }
+				    else if (rteEL || rteWL)
+					altwy = w1 -
+						LefGetXYViaWidth(layer, layer, 1, 1);
+
+				    /* Measure spacing violation to via */
+		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
+				    if (dc > PitchY[layer] + EPS) {
+					/* Calculate offset */
+					if (viaNM)
+					    viaoffy = PitchY[layer] - dc;
+					else
+					    viaoffy = dc - PitchY[layer];
+				    }
+				}
+				else {
+				    /* Measure spacing violation to rotated via */
+				    w0 = LefGetXYViaWidth(layer, layer, 1, 1);
+		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
+				    if (dc > PitchY[layer] + EPS) {
+					/* Calculate offset */
+					if (viaNM)
+					    viaoffy = PitchY[layer] - dc;
+					else
+					    viaoffy = dc - PitchY[layer];
+				    }
+				}
+			    }
+			}
+			else if (viaNL || viaSL) {
+			    /* Assume default rotations and calculate spacing */
+			    /* Only take action if there is a spacing violation */
+
+			    w0 = LefGetXYViaWidth(layer - 1, layer, 1, 3);
+			    w1 = LefGetXYViaWidth(layer, layer, 1, 3);
+		            dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
+			    if (dc > PitchY[layer] + EPS) {
+
+				/* via on checkerboard may be rotated */
+				if (checkersign && ((flags & NI_NO_VIAX) == 0)) {
+				    /* Check spacing violation to routes E and W */
+				    /* If via being checked is rotated */
+				    if (rteEL || rteWL)
+					dc = LefGetRouteSpacing(layer) +
+						(LefGetXYViaWidth(layer, layer, 0, 1) +
+						LefGetRouteWidth(layer)) / 2;
+				    if ((!(rteEL && rteWL))
+						|| (dc <= PitchX[layer] + EPS)) {
+					/* Okay to rotate the via bottom */
+					w1 = LefGetXYViaWidth(layer, layer, 1, 1);
+					s = (ot == 1) ? ViaXX[layer] : ViaXY[layer];
+				    }
+				    else if (rteEL || rteWL)
+					altwy = w1 -
+						LefGetXYViaWidth(layer, layer, 1, 1);
+
+				    /* Measure spacing violation to via */
+		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
+				    if (dc > PitchY[layer] + EPS) {
+					/* Calculate offset */
+					if (viaNL)
+					    viaoffy = PitchY[layer] - dc;
+					else
+					    viaoffy = dc - PitchY[layer];
+				    }
+				}
+				else {
+				    /* Measure spacing violation to rotated via */
+				    w0 = LefGetXYViaWidth(layer - 1, layer, 1, 2);
+		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
+				    if (dc > PitchY[layer] + EPS) {
+					/* Calculate offset */
+					if (viaNL)
+					    viaoffy = PitchY[layer] - dc;
+					else
+					    viaoffy = dc - PitchY[layer];
+				    }
+				}
+			    }
+			}
+		     }
+
+		     if (ot == 1) {  /* top route horizontal */
+			if (viaEU || viaWU) {
+			    /* Assume default rotations and calculate spacing */
+			    /* Only take action if there is a spacing violation */
+
+			    w0 = LefGetXYViaWidth(layer + 1, layer + 1, 0, 0);
+			    w1 = LefGetXYViaWidth(layer, layer + 1, 0, 0);
+		            dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
+			    if (dc > PitchX[layer + 1] + EPS) {
+
+				/* via on checkerboard may be rotated */
+				if (checkersign) {
+				    /* Check spacing violation to routes N and S */
+				    /* If via being checked is rotated */
+				    if (rteNU || rteSU)
+					dc = LefGetRouteSpacing(layer + 1) +
+						(LefGetXYViaWidth(layer, layer + 1, 1, 1)
+						+ LefGetRouteWidth(layer + 1)) / 2;
+				    if ((!(rteNU && rteSU))
+						|| (dc <= PitchY[layer + 1] + EPS)) {
+					/* Okay to rotate the via top */
+					w1 = LefGetXYViaWidth(layer, layer + 1, 0, 1);
+					s = (s == ViaYX[layer]) ? ViaYY[layer] :
+							ViaXY[layer];
+				    }
+				    else if (rteNU || rteSU)
+					altwx = w1 -
+						LefGetXYViaWidth(layer, layer + 1, 0, 1);
+
+				    /* Measure spacing violation to via */
+		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
+				    if (dc > PitchX[layer + 1] + EPS) {
+					/* Calculate offset */
+					if (viaEU)
+					    viaoffx = PitchX[layer + 1] - dc;
+					else
+					    viaoffx = dc - PitchX[layer + 1];
+				    }
+				}
+				else {
+				    /* Measure spacing violation to rotated via */
+				    w0 = LefGetXYViaWidth(layer + 1, layer + 1, 0, 2);
+		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
+				    if (dc > PitchX[layer + 1] + EPS) {
+					/* Calculate offset */
+					if (viaEU)
+					    viaoffx = PitchX[layer + 1] - dc;
+					else
+					    viaoffx = dc - PitchX[layer + 1];
+				    }
+				}
+			    }
+			}
+			else if (viaEM || viaWM) {
+			    /* Assume default rotations and calculate spacing */
+			    /* Only take action if there is a spacing violation */
+
+			    w1 = LefGetXYViaWidth(layer, layer + 1, 0, 0);
+			    w0 = w1;
+		            dc = LefGetRouteSpacing(layer + 1) + w1;
+			    if (dc > PitchX[layer + 1] + EPS) {
+
+				/* via on checkerboard may be rotated */
+				if (checkersign) {
+				    /* Check spacing violation to routes N and S */
+				    /* If via being checked is rotated */
+				    if (rteNU || rteSU)
+					dc = LefGetRouteSpacing(layer) +
+						(LefGetXYViaWidth(layer, layer + 1, 1, 1)
+						+ LefGetRouteWidth(layer)) / 2;
+				    if ((!(rteNU && rteSU))
+						|| (dc <= PitchY[layer + 1] + EPS)) {
+					/* Okay to rotate the via top */
+					w0 = LefGetXYViaWidth(layer, layer + 1, 0, 1);
+					s = (s == ViaYX[layer]) ? ViaYY[layer] :
+							ViaXY[layer];
+				    }
+				    else if (rteNU || rteSU)
+					altwx = w1 -
+						LefGetXYViaWidth(layer, layer + 1, 0, 1);
+
+				    /* Measure spacing violation to via */
+		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
+				    if (dc > PitchX[layer + 1] + EPS) {
+					/* Calculate offset */
+					if (viaEM)
+					    viaoffx = PitchX[layer + 1] - dc;
+					else
+					    viaoffx = dc - PitchX[layer + 1];
+				    }
+				}
+				else {
+				    /* Measure spacing violation to rotated via */
+				    w0 = LefGetXYViaWidth(layer, layer + 1, 0, 1);
+		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
+				    if (dc > PitchX[layer + 1] + EPS) {
+					/* Calculate offset */
+					if (viaEM)
+					    viaoffx = PitchX[layer + 1] - dc;
+					else
+					    viaoffx = dc - PitchX[layer + 1];
+				    }
+				}
+			    }
+			}
+		     } else {	     /* top route vertical */
+			if (viaNU || viaSU) {
+			    /* Assume default rotations and calculate spacing */
+			    /* Only take action if there is a spacing violation */
+
+			    w0 = LefGetXYViaWidth(layer + 1, layer + 1, 1, 3);
+			    w1 = LefGetXYViaWidth(layer, layer + 1, 1, 3);
+		            dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
+			    if (dc > PitchY[layer + 1] + EPS) {
+
+				/* via on checkerboard may be rotated */
+				if (checkersign) {
+				    /* Check spacing violation to routes E and W */
+				    /* If via being checked is rotated */
+				    if (rteWU || rteWU)
+					dc = LefGetRouteSpacing(layer + 1) +
+						(LefGetXYViaWidth(layer, layer + 1, 0, 2)
+						+ LefGetRouteWidth(layer + 1)) / 2;
+				    if ((!(rteEU && rteWU))
+						|| (dc <= PitchX[layer + 1] + EPS)) {
+					/* Okay to rotate the via top */
+					w1 = LefGetXYViaWidth(layer, layer + 1, 1, 2);
+					s = (s == ViaYY[layer]) ? ViaYX[layer] :
+							ViaXX[layer];
+				    }
+				    else if (rteEU || rteWU)
+					altwy = w1 -
+						LefGetXYViaWidth(layer, layer + 1, 1, 2);
+
+				    /* Measure spacing violation to via */
+		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
+				    if (dc > PitchY[layer + 1] + EPS) {
+					/* Calculate offset */
+					if (viaNU)
+					    viaoffy = PitchY[layer + 1] - dc;
+					else
+					    viaoffy = dc - PitchY[layer + 1];
+				    }
+				}
+				else {
+				    /* Measure spacing violation to rotated via */
+				    w0 = LefGetXYViaWidth(layer + 1, layer + 1, 1, 1);
+		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
+				    if (dc > PitchY[layer + 1] + EPS) {
+					/* Calculate offset */
+					if (viaNU)
+					    viaoffy = PitchY[layer + 1] - dc;
+					else
+					    viaoffy = dc - PitchY[layer + 1];
+				    }
+				}
+			    }
+			}
+			else if (viaNM || viaSM) {
+			    /* Assume default rotations and calculate spacing */
+			    /* Only take action if there is a spacing violation */
+
+			    w1 = LefGetXYViaWidth(layer, layer + 1, 1, 3);
+			    w0 = w1;
+		            dc = LefGetRouteSpacing(layer + 1) + w1;
+			    if (dc > PitchY[layer + 1] + EPS) {
+
+				/* via on checkerboard may be rotated */
+				if (checkersign) {
+				    /* Check spacing violation to routes E and W */
+				    /* If via being checked is rotated */
+				    if (rteEU || rteWU)
+					dc = LefGetRouteSpacing(layer + 1) +
+						(LefGetXYViaWidth(layer, layer + 1, 0, 2)
+						+ LefGetRouteWidth(layer + 1)) / 2;
+				    if ((!(rteEU && rteWU))
+						|| (dc <= PitchX[layer + 1] + EPS)) {
+					/* Okay to rotate the via top */
+					w1 = LefGetXYViaWidth(layer, layer + 1, 1, 2);
+					s = (s == ViaYY[layer]) ? ViaYX[layer] :
+							ViaXX[layer];
+				    }
+				    else if (rteEU || rteWU)
+					altwy = w1 -
+						LefGetXYViaWidth(layer, layer + 1, 1, 2);
+
+				    /* Measure spacing violation to via */
+		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
+				    if (dc > PitchY[layer + 1] + EPS) {
+					/* Calculate offset */
+					if (viaNM)
+					    viaoffy = PitchY[layer + 1] - dc;
+					else
+					    viaoffy = dc - PitchY[layer + 1];
+				    }
+				}
+				else {
+				    /* Measure spacing violation to rotated via */
+				    w0 = LefGetXYViaWidth(layer, layer + 1, 1, 2);
+		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
+				    if (dc > PitchY[layer + 1] + EPS) {
+					/* Calculate offset */
+					if (viaNM)
+					    viaoffy = PitchY[layer] - dc;
+					else
+					    viaoffy = dc - PitchY[layer];
+				    }
+				}
+			    }
+			}
+		     }
+
+		     /* If a via is constrained by	*/
+		     /* routes on the side and cannot be rotated, then	*/
+		     /* the calculations on the via in the next track	*/
+		     /* will not take that into consideration, and not	*/
+		     /* leave enough space.  So this via must offset	*/
+		     /* more to make up the difference.			*/
+
+		     if (altwx > 0.0) {
+			if (viaoffx < 0) altwx = -altwx;
+			viaoffx += altwx;
+		     }
+		     if (altwy > 0.0) {
+			if (viaoffy < 0) altwy = -altwy;
+			viaoffy += altwy;
+		     }
+
+		     /* When offset, each via moves by half the distance. */
+		     viaoffx /= 2;
+		     viaoffy /= 2;
+	
+		     vx = (int)((REPS(viaoffx)) * oscale);
+		     vy = (int)((REPS(viaoffy)) * oscale);
+
+		     pathvia(Cmd, layer, x + vx, y + vy, lastx, lasty, s, invscale);
 
 		     lastx = x;
 		     lasty = y;

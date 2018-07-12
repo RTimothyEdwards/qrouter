@@ -1680,6 +1680,23 @@ void writeback_segment(SEG seg, int netnum)
       }
       if (i == seg->x2) break;
    }
+
+   /* Check top of route for vertical routes */
+
+   if (seg->y1 != seg->y2) {
+      dir = OBSVAL(seg->x2, seg->y2, seg->layer) & BLOCKED_MASK;
+      OBSVAL(seg->x2, seg->y2, seg->layer) = netnum | dir;
+      if (needblock[seg->layer] & ROUTEBLOCKY) {
+         if ((seg->y2 < (NumChannelsY[seg->layer] - 1)) &&
+		(OBSVAL(seg->x2, seg->y2 + 1, seg->layer) & NETNUM_MASK) == 0)
+	    OBSVAL(seg->x2, seg->y2 + 1, seg->layer) = DRC_BLOCKAGE;
+	 if ((seg->y2 > 0) &&
+		(OBSVAL(seg->x2, seg->y2 - 1, seg->layer) & NETNUM_MASK) == 0)
+	    OBSVAL(seg->x2, seg->y2 - 1, seg->layer) = DRC_BLOCKAGE;
+      }
+   }
+
+
    for (i = seg->y1; ; i += (seg->y2 > seg->y1) ? 1 : -1) {
       dir = OBSVAL(seg->x1, i, seg->layer) & BLOCKED_MASK;
       OBSVAL(seg->x1, i, seg->layer) = netnum | dir;
@@ -1721,6 +1738,21 @@ void writeback_segment(SEG seg, int netnum)
 	 }
       }
       if (i == seg->y2) break;
+   }
+
+   /* Check end of route for horizontal routes */
+
+   if (seg->x1 != seg->x2) {
+      dir = OBSVAL(seg->x2, seg->y2, seg->layer) & BLOCKED_MASK;
+      OBSVAL(seg->x2, seg->y2, seg->layer) = netnum | dir;
+      if (needblock[seg->layer] & ROUTEBLOCKX) {
+	 if ((seg->x2 < (NumChannelsX[seg->layer] - 1)) &&
+		(OBSVAL(seg->x2 + 1, seg->y2, seg->layer) & NETNUM_MASK) == 0)
+	    OBSVAL(seg->x2 + 1, seg->y2, seg->layer) = DRC_BLOCKAGE;
+	 if ((seg->x2 > 0) &&
+		(OBSVAL(seg->x2 - 1, seg->y2, seg->layer) & NETNUM_MASK) == 0)
+	    OBSVAL(seg->x2 - 1, seg->y2, seg->layer) = DRC_BLOCKAGE;
+      }
    }
 }
 
