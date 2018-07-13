@@ -885,7 +885,7 @@ NETLIST find_colliding(NET net, int *ripnum)
 	    while (1) {
 	       orignet = OBSVAL(x, y, lay) & ROUTED_NET_MASK;
 
-	       if (orignet == DRC_BLOCKAGE) {
+	       if ((orignet & DRC_BLOCKAGE) == DRC_BLOCKAGE) {
 
 		  /* If original position was a DRC-related blockage,	*/
 		  /* find out which net or nets would be in conflict.	*/
@@ -1127,6 +1127,44 @@ void remove_routes(ROUTE netroutes, u_char flagged)
 }
 
 /*--------------------------------------------------------------*/
+/* Clear a DRC blockage.  Normally, just remove the		*/
+/* DRC_BLOCKAGE flag from Obs[].  However, more than one net	*/
+/* may set a block on the position, so the lower four bits	*/
+/* (OBSTRUCT_MASK) holds the reference count.			*/
+/*--------------------------------------------------------------*/
+
+void clear_drc_blockage(x, y, lay)
+{
+    int blockcount;
+
+    blockcount = OBSVAL(x, y, lay) & OBSTRUCT_MASK;
+    OBSVAL(x, y, lay) &= ~OBSTRUCT_MASK;
+    if (blockcount > 0)
+	OBSVAL(x, y, lay) |= (blockcount - 1);
+    else
+	OBSVAL(x, y, lay) &= ~DRC_BLOCKAGE;
+}
+
+/*--------------------------------------------------------------*/
+/*--------------------------------------------------------------*/
+
+void set_drc_blockage(x, y, lay)
+{
+    int blockcount, obsval;
+
+    obsval = OBSVAL(x, y, lay);
+    if ((obsval & DRC_BLOCKAGE) == DRC_BLOCKAGE) {
+	blockcount = OBSVAL(x, y, lay) & OBSTRUCT_MASK;
+	OBSVAL(x, y, lay) &= ~OBSTRUCT_MASK;
+	OBSVAL(x, y, lay) |= (blockcount + 1);
+    }
+    else if ((obsval & NETNUM_MASK) == 0) {
+	OBSVAL(x, y, lay) &= ~OBSTRUCT_MASK;
+	OBSVAL(x, y, lay) |= DRC_BLOCKAGE;
+    }
+}
+
+/*--------------------------------------------------------------*/
 /* ripup_net ---						*/
 /*								*/
 /* Rip up the entire network located at position x, y, lay.	*/
@@ -1204,20 +1242,20 @@ u_char ripup_net(NET net, u_char restore, u_char flagged, u_char retain)
 		  if (needblock[lay] & (ROUTEBLOCKX | VIABLOCKX)) {
 		     if ((x > 0) && ((OBSVAL(x - 1, y, lay) &
 				DRC_BLOCKAGE) == DRC_BLOCKAGE))
-			OBSVAL(x - 1, y, lay) &= ~DRC_BLOCKAGE;
+			clear_drc_blockage(x - 1, y, lay);
 		     else if ((x < NumChannelsX[lay] - 1) &&
 				((OBSVAL(x + 1, y, lay) &
 				DRC_BLOCKAGE) == DRC_BLOCKAGE))
-			OBSVAL(x + 1, y, lay) &= ~DRC_BLOCKAGE;
+			clear_drc_blockage(x + 1, y, lay);
 		  }
 		  if (needblock[lay] & (ROUTEBLOCKY | VIABLOCKY)) {
 		     if ((y > 0) && ((OBSVAL(x, y - 1, lay) &
 				DRC_BLOCKAGE) == DRC_BLOCKAGE))
-			OBSVAL(x, y - 1, lay) &= ~DRC_BLOCKAGE;
+			clear_drc_blockage(x, y - 1, lay);
 		     else if ((y < NumChannelsY[lay] - 1) &&
 				((OBSVAL(x, y + 1, lay) &
 				DRC_BLOCKAGE) == DRC_BLOCKAGE))
-			OBSVAL(x, y + 1, lay) &= ~DRC_BLOCKAGE;
+			clear_drc_blockage(x, y + 1, lay);
 		  }
 	       }
 
@@ -1386,7 +1424,7 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	  Pr->prdata.cost = MAXRT;
 	  thiscost += ConflictCost;
        }
-       else if (stage && (netnum == DRC_BLOCKAGE)) {
+       else if (stage && ((netnum & DRC_BLOCKAGE) == DRC_BLOCKAGE)) {
 	  if ((newpt.lay < Pinlayers) && nodeptr && (nodeptr->nodesav != NULL))
 	     return NULL;		// But cannot route over terminals!
 
@@ -1585,20 +1623,16 @@ void writeback_segment(SEG seg, int netnum)
       dir = OBSVAL(seg->x1, seg->y1, seg->layer + 1) & (BLOCKED_MASK | PINOBSTRUCTMASK);
       OBSVAL(seg->x1, seg->y1, seg->layer + 1) = netnum | dir;
       if (needblock[seg->layer + 1] & VIABLOCKX) {
-	 if ((seg->x1 < (NumChannelsX[seg->layer + 1] - 1)) &&
-		(OBSVAL(seg->x1 + 1, seg->y1, seg->layer + 1) & NETNUM_MASK) == 0)
- 	    OBSVAL(seg->x1 + 1, seg->y1, seg->layer + 1) = DRC_BLOCKAGE;
-	 if ((seg->x1 > 0) && (OBSVAL(seg->x1 - 1, seg->y1, seg->layer + 1)
-			& NETNUM_MASK) == 0)
-	    OBSVAL(seg->x1 - 1, seg->y1, seg->layer + 1) = DRC_BLOCKAGE;
+	 if (seg->x1 < (NumChannelsX[seg->layer + 1] - 1))
+ 	    set_drc_blockage(seg->x1 + 1, seg->y1, seg->layer + 1);
+	 if (seg->x1 > 0)
+	    set_drc_blockage(seg->x1 - 1, seg->y1, seg->layer + 1);
       }
       if (needblock[seg->layer + 1] & VIABLOCKY) {
-	 if ((seg->y1 < (NumChannelsY[seg->layer + 1] - 1)) &&
-		(OBSVAL(seg->x1, seg->y1 + 1, seg->layer + 1) & NETNUM_MASK) == 0)
-	    OBSVAL(seg->x1, seg->y1 + 1, seg->layer + 1) = DRC_BLOCKAGE;
-	 if ((seg->y1 > 0) && (OBSVAL(seg->x1, seg->y1 - 1, seg->layer + 1)
-		& NETNUM_MASK) == 0)
-	    OBSVAL(seg->x1, seg->y1 - 1, seg->layer + 1) = DRC_BLOCKAGE;
+	 if (seg->y1 < (NumChannelsY[seg->layer + 1] - 1))
+	    set_drc_blockage(seg->x1, seg->y1 + 1, seg->layer + 1);
+	 if (seg->y1 > 0)
+	    set_drc_blockage(seg->x1, seg->y1 - 1, seg->layer + 1);
       }
 
       // If position itself is an offset route, then make the route position
@@ -1613,22 +1647,22 @@ void writeback_segment(SEG seg, int netnum)
 	 dist = lnode->offset;
 	 if (lnode->flags & NI_OFFSET_EW) {
 	    if ((dist > 0) && (seg->x1 < (NumChannelsX[seg->layer] - 1))) {
-	       OBSVAL(seg->x1 + 1, seg->y1, seg->layer) |= DRC_BLOCKAGE;
-	       OBSVAL(seg->x1 + 1, seg->y1, seg->layer + 1) |= DRC_BLOCKAGE;
+	       set_drc_blockage(seg->x1 + 1, seg->y1, seg->layer);
+	       set_drc_blockage(seg->x1 + 1, seg->y1, seg->layer + 1);
 	    }
 	    if ((dist < 0) && (seg->x1 > 0)) {
-	       OBSVAL(seg->x1 - 1, seg->y1, seg->layer) |= DRC_BLOCKAGE;
-	       OBSVAL(seg->x1 - 1, seg->y1, seg->layer + 1) |= DRC_BLOCKAGE;
+	       set_drc_blockage(seg->x1 - 1, seg->y1, seg->layer);
+	       set_drc_blockage(seg->x1 - 1, seg->y1, seg->layer + 1);
 	    }
 	 }
 	 else if (lnode->flags & NI_OFFSET_NS) {
 	    if ((dist > 0) && (seg->y1 < (NumChannelsY[seg->layer] - 1))) {
-	       OBSVAL(seg->x1, seg->y1 + 1, seg->layer) |= DRC_BLOCKAGE;
-	       OBSVAL(seg->x1, seg->y1 + 1, seg->layer + 1) |= DRC_BLOCKAGE;
+	       set_drc_blockage(seg->x1, seg->y1 + 1, seg->layer);
+	       set_drc_blockage(seg->x1, seg->y1 + 1, seg->layer + 1);
 	    }
 	    if ((dist < 0) && (seg->y1 > 0)) {
-	       OBSVAL(seg->x1, seg->y1 - 1, seg->layer) |= DRC_BLOCKAGE;
-	       OBSVAL(seg->x1, seg->y1 - 1, seg->layer + 1) |= DRC_BLOCKAGE;
+	       set_drc_blockage(seg->x1, seg->y1 - 1, seg->layer);
+	       set_drc_blockage(seg->x1, seg->y1 - 1, seg->layer + 1);
 	    }
 	 }
       }
@@ -1638,12 +1672,10 @@ void writeback_segment(SEG seg, int netnum)
       dir = OBSVAL(i, seg->y1, seg->layer) & (BLOCKED_MASK | PINOBSTRUCTMASK);
       OBSVAL(i, seg->y1, seg->layer) = netnum | dir;
       if (needblock[seg->layer] & ROUTEBLOCKY) {
-         if ((seg->y1 < (NumChannelsY[seg->layer] - 1)) &&
-		(OBSVAL(i, seg->y1 + 1, seg->layer) & NETNUM_MASK) == 0)
-	    OBSVAL(i, seg->y1 + 1, seg->layer) = DRC_BLOCKAGE;
-	 if ((seg->y1 > 0) &&
-		(OBSVAL(i, seg->y1 - 1, seg->layer) & NETNUM_MASK) == 0)
-	    OBSVAL(i, seg->y1 - 1, seg->layer) = DRC_BLOCKAGE;
+         if (seg->y1 < (NumChannelsY[seg->layer] - 1))
+	    set_drc_blockage(i, seg->y1 + 1, seg->layer);
+	 if (seg->y1 > 0)
+	    set_drc_blockage(i, seg->y1 - 1, seg->layer);
       }
 
       // Check position on each side for an offset tap on a different net, and
@@ -1661,7 +1693,7 @@ void writeback_segment(SEG seg, int netnum)
 	    if (lnode->flags & NI_OFFSET_NS) {
 	       dist = lnode->offset;
 	       if (dist < 0) {
-		  OBSVAL(i, seg->y1 + 1, layer) |= DRC_BLOCKAGE;
+		  set_drc_blockage(i, seg->y1 + 1, layer);
 	       }
 	    }
 	 }
@@ -1673,7 +1705,7 @@ void writeback_segment(SEG seg, int netnum)
 	    if (lnode->flags & NI_OFFSET_NS) {
 	       dist = lnode->offset;
 	       if (dist > 0) {
-		  OBSVAL(i, seg->y1 - 1, layer) |= DRC_BLOCKAGE;
+		  set_drc_blockage(i, seg->y1 - 1, layer);
 	       }
 	    }
 	 }
@@ -1687,12 +1719,10 @@ void writeback_segment(SEG seg, int netnum)
       dir = OBSVAL(seg->x2, seg->y2, seg->layer) & (BLOCKED_MASK | PINOBSTRUCTMASK);
       OBSVAL(seg->x2, seg->y2, seg->layer) = netnum | dir;
       if (needblock[seg->layer] & ROUTEBLOCKY) {
-         if ((seg->y2 < (NumChannelsY[seg->layer] - 1)) &&
-		(OBSVAL(seg->x2, seg->y2 + 1, seg->layer) & NETNUM_MASK) == 0)
-	    OBSVAL(seg->x2, seg->y2 + 1, seg->layer) = DRC_BLOCKAGE;
-	 if ((seg->y2 > 0) &&
-		(OBSVAL(seg->x2, seg->y2 - 1, seg->layer) & NETNUM_MASK) == 0)
-	    OBSVAL(seg->x2, seg->y2 - 1, seg->layer) = DRC_BLOCKAGE;
+         if (seg->y2 < (NumChannelsY[seg->layer] - 1))
+	    set_drc_blockage(seg->x2, seg->y2 + 1, seg->layer);
+	 if (seg->y2 > 0)
+	    set_drc_blockage(seg->x2, seg->y2 - 1, seg->layer);
       }
    }
 
@@ -1701,12 +1731,10 @@ void writeback_segment(SEG seg, int netnum)
       dir = OBSVAL(seg->x1, i, seg->layer) & (BLOCKED_MASK | PINOBSTRUCTMASK);
       OBSVAL(seg->x1, i, seg->layer) = netnum | dir;
       if (needblock[seg->layer] & ROUTEBLOCKX) {
-	 if ((seg->x1 < (NumChannelsX[seg->layer] - 1)) &&
-		(OBSVAL(seg->x1 + 1, i, seg->layer) & NETNUM_MASK) == 0)
-	    OBSVAL(seg->x1 + 1, i, seg->layer) = DRC_BLOCKAGE;
-	 if ((seg->x1 > 0) &&
-		(OBSVAL(seg->x1 - 1, i, seg->layer) & NETNUM_MASK) == 0)
-	    OBSVAL(seg->x1 - 1, i, seg->layer) = DRC_BLOCKAGE;
+	 if (seg->x1 < (NumChannelsX[seg->layer] - 1))
+	    set_drc_blockage(seg->x1 + 1, i, seg->layer);
+	 if (seg->x1 > 0)
+	    set_drc_blockage(seg->x1 - 1, i, seg->layer);
       }
 
       // Check position on each side for an offset tap on a different net, and
@@ -1720,7 +1748,7 @@ void writeback_segment(SEG seg, int netnum)
 	    if (lnode->flags & NI_OFFSET_EW) {
 	       dist = lnode->offset;
 	       if (dist < 0) {
-		  OBSVAL(seg->x1 + 1, i, layer) |= DRC_BLOCKAGE;
+		  set_drc_blockage(seg->x1 + 1, i, layer);
 	       }
 	    }
 	 }
@@ -1732,7 +1760,7 @@ void writeback_segment(SEG seg, int netnum)
 	    if (lnode->flags & NI_OFFSET_EW) {
 	       dist = lnode->offset;
 	       if (dist > 0) {
-		  OBSVAL(seg->x1 - 1, i, layer) |= DRC_BLOCKAGE;
+		  set_drc_blockage(seg->x1 - 1, i, layer);
 	       }
 	    }
 	 }
@@ -1746,12 +1774,10 @@ void writeback_segment(SEG seg, int netnum)
       dir = OBSVAL(seg->x2, seg->y2, seg->layer) & (BLOCKED_MASK | PINOBSTRUCTMASK);
       OBSVAL(seg->x2, seg->y2, seg->layer) = netnum | dir;
       if (needblock[seg->layer] & ROUTEBLOCKX) {
-	 if ((seg->x2 < (NumChannelsX[seg->layer] - 1)) &&
-		(OBSVAL(seg->x2 + 1, seg->y2, seg->layer) & NETNUM_MASK) == 0)
-	    OBSVAL(seg->x2 + 1, seg->y2, seg->layer) = DRC_BLOCKAGE;
-	 if ((seg->x2 > 0) &&
-		(OBSVAL(seg->x2 - 1, seg->y2, seg->layer) & NETNUM_MASK) == 0)
-	    OBSVAL(seg->x2 - 1, seg->y2, seg->layer) = DRC_BLOCKAGE;
+	 if (seg->x2 < (NumChannelsX[seg->layer] - 1))
+	    set_drc_blockage(seg->x2 + 1, seg->y2, seg->layer);
+	 if (seg->x2 > 0)
+	    set_drc_blockage(seg->x2 - 1, seg->y2, seg->layer);
       }
    }
 }

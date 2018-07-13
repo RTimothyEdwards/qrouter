@@ -1355,6 +1355,20 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 				oscale, invscale, vertical, lnode2);
 			   pathto(Cmd, x, y, vertical, lastx, lasty, invscale);
 			}
+			else if (lastseg && (lastseg->segtype & ST_VIA) &&
+				(lastx != x) && (lasty == y) &&
+				(LefGetRouteOrientation(seg->layer) == 1)) {
+			   /* Via offset in direction of route (horizontal) */
+			   pathstart(Cmd, seg->layer, lastx, y, special, oscale,
+				invscale, horizontal, lnode2);
+			}
+			else if (lastseg && (lastseg->segtype & ST_VIA) &&
+				(lastx == x) && (lasty != y) &&
+				(LefGetRouteOrientation(seg->layer) == 0)) {
+			   /* Via offset in direction of route (vertical) */
+			   pathstart(Cmd, seg->layer, x, lasty, special, oscale,
+				invscale, horizontal, lnode2);
+			}
 			else {
 			   pathstart(Cmd, seg->layer, x, y, special, oscale,
 				invscale, horizontal, lnode2);
@@ -2088,8 +2102,8 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
 		     pathvia(Cmd, layer, x + vx, y + vy, lastx, lasty, s, invscale);
 
-		     lastx = x;
-		     lasty = y;
+		     lastx = x + vx;
+		     lasty = y + vy;
 		     lastlay = -1;
 		  }
 		  break;

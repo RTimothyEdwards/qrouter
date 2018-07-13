@@ -1962,11 +1962,12 @@ int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
       iroute->glist[0] = gpoint->next;
 
       // Stop-gap:  Needs to be investigated.  Occasional gpoint has
-      // large negative (random?) value for y1.  Suggests a memory
-      // leak.  Only seen occurring during doantennaroute().  Check
-      // using valgrind.
+      // large (random?) value for y1.  Suggests a memory leak.  Only
+      // seen occurring during doantennaroute().  Check using valgrind.
 
-      if ((gpoint->x1 < 0) || (gpoint->y1 < 0)) {
+      if ((gpoint->x1 < 0) || (gpoint->y1 < 0) ||
+		(gpoint->x1 > NumChannelsX[gpoint->layer]) ||
+		(gpoint->y1 > NumChannelsY[gpoint->layer])) {
          Fprintf(stderr, "Internal memory error!\n");
 	 freePOINT(gpoint);
 	 continue;
