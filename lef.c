@@ -1962,7 +1962,8 @@ LefReadPort(lefMacro, f, pinName, pinNum, pinDir, pinUse, pinArea, oscale)
  *	Read a PIN statement from a LEF file.
  *
  * Results:
- *	None.
+ *	0 if the pin had a port (success), 1 if not (indicating
+ *	an unused pin that should be ignored).
  *
  * Side Effects:
  *	Reads input from file f;
@@ -1976,7 +1977,7 @@ enum lef_pin_keys {LEF_DIRECTION = 0, LEF_USE, LEF_PORT, LEF_CAPACITANCE,
 	LEF_ANTENNAPAR, LEF_ANTENNAPARSIDE, LEF_ANTENNAMAX, LEF_ANTENNAMAXSIDE,
 	LEF_SHAPE, LEF_NETEXPR, LEF_PIN_END};
 
-void
+int
 LefReadPin(lefMacro, f, pinname, pinNum, oscale)
    GATE lefMacro;
    FILE *f;
@@ -1989,6 +1990,7 @@ LefReadPin(lefMacro, f, pinname, pinNum, oscale)
     int pinDir = PORT_CLASS_DEFAULT;
     int pinUse = PORT_USE_DEFAULT;
     float pinArea = 0.0;
+    int retval = 1;
 
     static char *pin_keys[] = {
 	"DIRECTION",
@@ -2082,6 +2084,7 @@ LefReadPin(lefMacro, f, pinname, pinNum, oscale)
 		break;
 	    case LEF_PORT:
 		LefReadPort(lefMacro, f, pinname, pinNum, pinDir, pinUse, pinArea, oscale);
+		retval = 0;
 		break;
 	    case LEF_ANTENNAGATE:
 		/* Read off the next value as the pin's antenna gate area. */
@@ -2111,6 +2114,7 @@ LefReadPin(lefMacro, f, pinname, pinNum, oscale)
 	}
 	if (keyword == LEF_PIN_END) break;
     }
+    return retval;
 }
 
 /*
@@ -2333,7 +2337,8 @@ origin_error:
 		if (is_imported)
 		    LefSkipSection(f, tsave);
 		else
-		    LefReadPin(lefMacro, f, tsave, pinNum++, oscale);
+		    if (LefReadPin(lefMacro, f, tsave, pinNum, oscale) == 0)
+			pinNum++;
 		break;
 	    case LEF_OBS:
 		/* Diagnostic */

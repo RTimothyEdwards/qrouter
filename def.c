@@ -1602,13 +1602,15 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 			gate->taps[i] = (DSEG)NULL;
 
 			/* Global power/ground bus check */
-			if (vddnet && !strcmp(gate->node[i], vddnet)) {
+			if (vddnet && gate->node[i] &&
+					!strcmp(gate->node[i], vddnet)) {
 			   /* Create a placeholder node with no taps */
 			   gate->netnum[i] = VDD_NET;
 			   gate->noderec[i] = (NODE)calloc(1, sizeof(struct node_));
 			   gate->noderec[i]->netnum = VDD_NET;
 			}
-			else if (gndnet && !strcmp(gate->node[i], gndnet)) {
+			else if (gndnet && gate->node[i] &&
+					!strcmp(gate->node[i], gndnet)) {
 			   /* Create a placeholder node with no taps */
 			   gate->netnum[i] = GND_NET;
 			   gate->noderec[i] = (NODE)calloc(1, sizeof(struct node_));
