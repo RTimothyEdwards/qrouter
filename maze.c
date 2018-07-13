@@ -1582,7 +1582,7 @@ void writeback_segment(SEG seg, int netnum)
 
    if (seg->segtype & ST_VIA) {
       /* Preserve blocking information */
-      dir = OBSVAL(seg->x1, seg->y1, seg->layer + 1) & BLOCKED_MASK;
+      dir = OBSVAL(seg->x1, seg->y1, seg->layer + 1) & (BLOCKED_MASK | PINOBSTRUCTMASK);
       OBSVAL(seg->x1, seg->y1, seg->layer + 1) = netnum | dir;
       if (needblock[seg->layer + 1] & VIABLOCKX) {
 	 if ((seg->x1 < (NumChannelsX[seg->layer + 1] - 1)) &&
@@ -1635,7 +1635,7 @@ void writeback_segment(SEG seg, int netnum)
    }
 
    for (i = seg->x1; ; i += (seg->x2 > seg->x1) ? 1 : -1) {
-      dir = OBSVAL(i, seg->y1, seg->layer) & BLOCKED_MASK;
+      dir = OBSVAL(i, seg->y1, seg->layer) & (BLOCKED_MASK | PINOBSTRUCTMASK);
       OBSVAL(i, seg->y1, seg->layer) = netnum | dir;
       if (needblock[seg->layer] & ROUTEBLOCKY) {
          if ((seg->y1 < (NumChannelsY[seg->layer] - 1)) &&
@@ -1684,7 +1684,7 @@ void writeback_segment(SEG seg, int netnum)
    /* Check top of route for vertical routes */
 
    if (seg->y1 != seg->y2) {
-      dir = OBSVAL(seg->x2, seg->y2, seg->layer) & BLOCKED_MASK;
+      dir = OBSVAL(seg->x2, seg->y2, seg->layer) & (BLOCKED_MASK | PINOBSTRUCTMASK);
       OBSVAL(seg->x2, seg->y2, seg->layer) = netnum | dir;
       if (needblock[seg->layer] & ROUTEBLOCKY) {
          if ((seg->y2 < (NumChannelsY[seg->layer] - 1)) &&
@@ -1698,7 +1698,7 @@ void writeback_segment(SEG seg, int netnum)
 
 
    for (i = seg->y1; ; i += (seg->y2 > seg->y1) ? 1 : -1) {
-      dir = OBSVAL(seg->x1, i, seg->layer) & BLOCKED_MASK;
+      dir = OBSVAL(seg->x1, i, seg->layer) & (BLOCKED_MASK | PINOBSTRUCTMASK);
       OBSVAL(seg->x1, i, seg->layer) = netnum | dir;
       if (needblock[seg->layer] & ROUTEBLOCKX) {
 	 if ((seg->x1 < (NumChannelsX[seg->layer] - 1)) &&
@@ -1743,7 +1743,7 @@ void writeback_segment(SEG seg, int netnum)
    /* Check end of route for horizontal routes */
 
    if (seg->x1 != seg->x2) {
-      dir = OBSVAL(seg->x2, seg->y2, seg->layer) & BLOCKED_MASK;
+      dir = OBSVAL(seg->x2, seg->y2, seg->layer) & (BLOCKED_MASK | PINOBSTRUCTMASK);
       OBSVAL(seg->x2, seg->y2, seg->layer) = netnum | dir;
       if (needblock[seg->layer] & ROUTEBLOCKX) {
 	 if ((seg->x2 < (NumChannelsX[seg->layer] - 1)) &&
