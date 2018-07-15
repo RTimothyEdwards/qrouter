@@ -133,6 +133,33 @@ void revert_antenna_taps(netnum)
 {
     int x, y, lay;
     PROUTE *Pr;
+    NODEINFO lnode = NULL;
+    NODE node = NULL;
+
+    /* First find the antenna node that was just connected */
+
+    for (lay = 0; lay < Num_layers; lay++) {
+	for (x = 0; x < NumChannelsX[lay]; x++) {
+	    for (y = 0; y < NumChannelsY[lay]; y++) {
+		if ((OBSVAL(x, y, lay) & NETNUM_MASK) == netnum) {
+		    Pr = &OBS2VAL(x, y, lay);
+		    if (Pr->flags & PR_TARGET) {
+			if (Pr->prdata.cost != MAXRT) {
+			    lnode = NODEIPTR(x, y, lay);
+			    if (lnode != NULL) {
+				node = lnode->nodesav;
+				if (node != NULL) break;
+			    }
+			}
+		    }
+		}
+	    }
+	    if (node != NULL) break;
+	}
+	if (node != NULL) break;
+    }
+
+    /* Now clear all targets except for the one just connected */
 
     for (lay = 0; lay < Num_layers; lay++)
 	for (x = 0; x < NumChannelsX[lay]; x++)
@@ -140,7 +167,8 @@ void revert_antenna_taps(netnum)
 		if ((OBSVAL(x, y, lay) & NETNUM_MASK) == netnum) {
 		    Pr = &OBS2VAL(x, y, lay);
 		    if (Pr->flags & PR_TARGET) {
-			if (Pr->prdata.cost == MAXRT) {
+			lnode = NODEIPTR(x, y, lay);
+			if ((lnode == NULL) || (lnode->nodesav != node)) {
 			    OBSVAL(x, y, lay) &= ~NETNUM_MASK;
 			    OBSVAL(x, y, lay) |= ANTENNA_NET;
 			}
