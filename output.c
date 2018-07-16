@@ -30,6 +30,13 @@
 
 int  Pathon = -1;
 
+struct _savepath {
+    u_char active;
+    int x;
+    int y;
+    int orient;
+} path_delayed;
+
 /*--------------------------------------------------------------*/
 /* Output a list of failed nets.				*/
 /*--------------------------------------------------------------*/
@@ -168,7 +175,7 @@ pathstart(FILE *cmd, int layer, int x, int y, u_char special, double oscale,
 
 static void
 pathto(FILE *cmd, int x, int y, int horizontal, int lastx, int lasty,
-       double invscale)
+       double invscale, u_char nextvia)
 {
     if (Pathon <= 0) {
 	Fprintf(stderr, "pathto():  Major error.  Added to a "
@@ -183,9 +190,19 @@ pathto(FILE *cmd, int x, int y, int horizontal, int lastx, int lasty,
 
     if ((x != lastx) && (y != lasty)) {
 	if (horizontal)
-	   pathto(cmd, lastx, y, FALSE, lastx, lasty, invscale);
+	   pathto(cmd, lastx, y, FALSE, lastx, lasty, invscale, 0);
 	else
-	   pathto(cmd, x, lasty, TRUE, lastx, lasty, invscale);
+	   pathto(cmd, x, lasty, TRUE, lastx, lasty, invscale, 0);
+    }
+
+    if (nextvia) {
+	/* Punt on output until via is output, because via may have an	*/
+	/* offset position that needs to be applied to the route.	*/
+	path_delayed.active = 1;
+	path_delayed.x = x;
+	path_delayed.y = y;
+	path_delayed.orient = horizontal;
+	return;
     }
 
     fprintf(cmd, "( ");
@@ -215,6 +232,13 @@ static void
 pathvia(FILE *cmd, int layer, int x, int y, int lastx, int lasty,
 	char *vianame, double invscale)
 {
+    if (path_delayed.active == 1) {
+	/* Output the last path */
+	pathto(cmd, path_delayed.x, path_delayed.y, path_delayed.orient,
+		path_delayed.x, path_delayed.y, invscale, 0);
+	path_delayed.active = 0;
+    }
+
     if (Pathon <= 0) {
        if (Pathon == -1)
 	  fprintf(cmd, "+ ROUTED ");
@@ -231,9 +255,9 @@ pathvia(FILE *cmd, int layer, int x, int y, int lastx, int lasty,
        // route to the via.
 
        if (x != lastx)
-	  pathto(cmd, x, lasty, TRUE, lastx, lasty, invscale);
+	  pathto(cmd, x, lasty, TRUE, lastx, lasty, invscale, 0);
        if (y != lasty)
-	  pathto(cmd, x, y, FALSE, x, lasty, invscale);
+	  pathto(cmd, x, y, FALSE, x, lasty, invscale, 0);
     }
     fprintf(cmd, "%s ", vianame);
     Pathon = 0;
@@ -1019,7 +1043,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
    int lastx = -1, lasty = -1, lastlay;
    int horizontal;
    float offset1, offset2, stub, offset;
-   u_char cancel, segtype;
+   u_char cancel, segtype, nextvia;
    double invscale = (double)(1.0 / (double)iscale); 
 
    /* If the STUB flag is set, then we need to write out the net name	*/
@@ -1034,6 +1058,9 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
    /* Insert routed net here */
    for (rt = net->routes; rt; rt = rt->next) {
+
+      path_delayed.active = 0;
+
       if (rt->segments && !(rt->flags & RT_OUTPUT)) {
 	 horizontal = FALSE;
 	 cancel = FALSE;
@@ -1043,6 +1070,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 	 lastseg = saveseg = seg;
 	 layer = seg->layer;
 	 if (seg) {
+	    nextvia = (seg->next) ? ((seg->next->segtype == ST_VIA) ? 1 : 0) : 0;
 
 	    // It is rare but possible to have a stub route off of an
 	    // endpoint via, so check this case, and use the layer type
@@ -1198,7 +1226,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		  rt->flags |= RT_STUB;
 		  pathstart(Cmd, layer, x2, y2, special, oscale, invscale, horizontal,
 			lnode);
-		  pathto(Cmd, x, y, horizontal, x2, y2, invscale);
+		  pathto(Cmd, x, y, horizontal, x2, y2, invscale, nextvia);
 	       }
 	       lastx = x;
 	       lasty = y;
@@ -1209,6 +1237,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 	 prevseg = NULL;
 	 lastseg = NULL;
 	 for (seg = rt->segments; seg; seg = seg->next) {
+	    nextvia = (seg->next) ? ((seg->next->segtype == ST_VIA) ? 1 : 0) : 0;
 	    layer = seg->layer;
 
 	    // Check for offset terminals at either point
@@ -1353,7 +1382,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			   int vertical = (horizontal) ? FALSE : TRUE;
 			   pathstart(Cmd, seg->layer, lastx, lasty, special,
 				oscale, invscale, vertical, lnode2);
-			   pathto(Cmd, x, y, vertical, lastx, lasty, invscale);
+			   pathto(Cmd, x, y, vertical, lastx, lasty, invscale, nextvia);
 			}
 			else if (lastseg && (lastseg->segtype & ST_VIA) &&
 				(lastx != x) && (lasty == y) &&
@@ -1389,7 +1418,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		     horizontal = FALSE;
 		  }
 		  if (special == (u_char)0) {
-		     pathto(Cmd, x2, y2, horizontal, lastx, lasty, invscale);
+		     pathto(Cmd, x2, y2, horizontal, lastx, lasty, invscale, nextvia);
 		     lastx = x2;
 		     lasty = y2;
 		  }
@@ -1419,7 +1448,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			      if (Pathon != -1) Pathon = 0;
 			      pathstart(Cmd, layer, x, y, special, oscale,
 						invscale, horizontal, lnode2);
-			      pathto(Cmd, x2, y2, horizontal, x, y, invscale);
+			      pathto(Cmd, x2, y2, horizontal, x, y, invscale, nextvia);
 			      lastlay = layer;
 			   }
 			}
@@ -1438,7 +1467,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			      if (Pathon != -1) Pathon = 0;
 			      pathstart(Cmd, layer, x, y, special, oscale,
 						invscale, horizontal, lnode2);
-			      pathto(Cmd, x2, y2, horizontal, x, y, invscale);
+			      pathto(Cmd, x2, y2, horizontal, x, y, invscale, nextvia);
 			      lastlay = layer;
 			   }
 			}
@@ -1675,7 +1704,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 					dc = LefGetRouteSpacing(layer) +
 						(LefGetXYViaWidth(layer, layer, 1, 2) +
 						LefGetRouteWidth(layer)) / 2;
-				    if ((!(rteNL && rteSL))
+				    if ((!(rteNL || rteSL))
 						|| (dc <= PitchY[layer] + EPS)) {
 					/* Okay to rotate the via bottom */
 					w0 = LefGetXYViaWidth(layer, layer, 0, 2);
@@ -1726,7 +1755,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 					dc = LefGetRouteSpacing(layer) +
 						(LefGetXYViaWidth(layer, layer, 1, 2) +
 						LefGetRouteWidth(layer)) / 2;
-				    if ((!(rteNL && rteSL))
+				    if ((!(rteNL || rteSL))
 						|| (dc <= PitchY[layer] + EPS)) {
 					/* Okay to rotate the via bottom */
 					w1 = LefGetXYViaWidth(layer, layer, 0, 2);
@@ -1778,7 +1807,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 					dc = LefGetRouteSpacing(layer) +
 						(LefGetXYViaWidth(layer, layer, 0, 1) +
 						LefGetRouteWidth(layer)) / 2;
-				    if ((!(rteEL && rteWL))
+				    if ((!(rteEL || rteWL))
 						|| (dc <= PitchX[layer] + EPS)) {
 					/* Okay to rotate the via bottom */
 					w0 = LefGetXYViaWidth(layer, layer, 1, 1);
@@ -1829,7 +1858,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 					dc = LefGetRouteSpacing(layer) +
 						(LefGetXYViaWidth(layer, layer, 0, 1) +
 						LefGetRouteWidth(layer)) / 2;
-				    if ((!(rteEL && rteWL))
+				    if ((!(rteEL || rteWL))
 						|| (dc <= PitchX[layer] + EPS)) {
 					/* Okay to rotate the via bottom */
 					w1 = LefGetXYViaWidth(layer, layer, 1, 1);
@@ -1883,7 +1912,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 					dc = LefGetRouteSpacing(layer + 1) +
 						(LefGetXYViaWidth(layer, layer + 1, 1, 1)
 						+ LefGetRouteWidth(layer + 1)) / 2;
-				    if ((!(rteNU && rteSU))
+				    if ((!(rteNU || rteSU))
 						|| (dc <= PitchY[layer + 1] + EPS)) {
 					/* Okay to rotate the via top */
 					w1 = LefGetXYViaWidth(layer, layer + 1, 0, 1);
@@ -1935,7 +1964,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 					dc = LefGetRouteSpacing(layer) +
 						(LefGetXYViaWidth(layer, layer + 1, 1, 1)
 						+ LefGetRouteWidth(layer)) / 2;
-				    if ((!(rteNU && rteSU))
+				    if ((!(rteNU || rteSU))
 						|| (dc <= PitchY[layer + 1] + EPS)) {
 					/* Okay to rotate the via top */
 					w0 = LefGetXYViaWidth(layer, layer + 1, 0, 1);
@@ -1984,11 +2013,11 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 				if (checkersign) {
 				    /* Check spacing violation to routes E and W */
 				    /* If via being checked is rotated */
-				    if (rteWU || rteWU)
+				    if (rteEU || rteWU)
 					dc = LefGetRouteSpacing(layer + 1) +
 						(LefGetXYViaWidth(layer, layer + 1, 0, 2)
 						+ LefGetRouteWidth(layer + 1)) / 2;
-				    if ((!(rteEU && rteWU))
+				    if ((!(rteEU || rteWU))
 						|| (dc <= PitchX[layer + 1] + EPS)) {
 					/* Okay to rotate the via top */
 					w1 = LefGetXYViaWidth(layer, layer + 1, 1, 2);
@@ -2040,7 +2069,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 					dc = LefGetRouteSpacing(layer + 1) +
 						(LefGetXYViaWidth(layer, layer + 1, 0, 2)
 						+ LefGetRouteWidth(layer + 1)) / 2;
-				    if ((!(rteEU && rteWU))
+				    if ((!(rteEU || rteWU))
 						|| (dc <= PitchX[layer + 1] + EPS)) {
 					/* Okay to rotate the via top */
 					w1 = LefGetXYViaWidth(layer, layer + 1, 1, 2);
@@ -2099,6 +2128,17 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 	
 		     vx = (int)((REPS(viaoffx)) * oscale);
 		     vy = (int)((REPS(viaoffy)) * oscale);
+
+		     /* If via is offset in the direction of the last	*/
+		     /* route segment, then move the last route segment	*/
+		     /* position to the via center.			*/
+		     if ((path_delayed.active == 1) && (vy != 0) &&
+				(path_delayed.orient == 0))
+			path_delayed.y = y + vy;
+
+		     else if ((path_delayed.active == 1) && (vx != 0) &&
+				(path_delayed.orient == 1))
+			path_delayed.x = x + vx;
 
 		     pathvia(Cmd, layer, x + vx, y + vy, lastx, lasty, s, invscale);
 
@@ -2186,7 +2226,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			       else {
 				  pathstart(Cmd, lastseg->layer, x, y,
 					(u_char)1, oscale, invscale, 1, lnode);
-				  pathto(Cmd, x2, y2, 1, x, y, invscale);
+				  pathto(Cmd, x2, y2, 1, x, y, invscale, 0);
 		      		  lastx = x2;
 				  lasty = y2;
 			       }
@@ -2205,7 +2245,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			       else {
 				  pathstart(Cmd, lastseg->layer, x, y,
 					(u_char)1, oscale, invscale, 0, lnode);
-				  pathto(Cmd, x2, y2, 0, x, y, invscale);
+				  pathto(Cmd, x2, y2, 0, x, y, invscale, 0);
 		      		  lastx = x2;
 				  lasty = y2;
 			       }
@@ -2226,7 +2266,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			       else {
 				  pathstart(Cmd, lastseg->layer, x, y,
 					(u_char)1, oscale, invscale, 1, lnode);
-				  pathto(Cmd, x2, y2, 1, x, y, invscale);
+				  pathto(Cmd, x2, y2, 1, x, y, invscale, 0);
 		      		  lastx = x2;
 				  lasty = y2;
 			       }
@@ -2245,7 +2285,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			       else {
 				  pathstart(Cmd, lastseg->layer, x, y,
 					(u_char)1, oscale, invscale, 0, lnode);
-				  pathto(Cmd, x2, y2, 0, x, y, invscale);
+				  pathto(Cmd, x2, y2, 0, x, y, invscale, 0);
 		      		  lastx = x2;
 				  lasty = y2;
 			       }
@@ -2407,7 +2447,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		      lastx = x;
 		      lasty = y;
 		   }
-		   pathto(Cmd, x2, y2, horizontal, lastx, lasty, invscale);
+		   pathto(Cmd, x2, y2, horizontal, lastx, lasty, invscale, 0);
 		   lastx = x2;
 		   lasty = y2;
 		}

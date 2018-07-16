@@ -126,40 +126,16 @@ count_free_antenna_taps(char *antennacell)
 /* net number of the net just routed.  To make them free again,	*/
 /* change all but the one that was routed back to ANTENNA_NET.	*/
 /* Identify the unused taps by finding the OBSVAL record with	*/
-/* net set to netnum but with the cost still at MAXRT.		*/
+/* net set to netnum but not connected to the same node.	*/
 /*--------------------------------------------------------------*/
 
-void revert_antenna_taps(netnum)
+void revert_antenna_taps(int netnum, NODE node)
 {
     int x, y, lay;
     PROUTE *Pr;
     NODEINFO lnode = NULL;
-    NODE node = NULL;
 
-    /* First find the antenna node that was just connected */
-
-    for (lay = 0; lay < Num_layers; lay++) {
-	for (x = 0; x < NumChannelsX[lay]; x++) {
-	    for (y = 0; y < NumChannelsY[lay]; y++) {
-		if ((OBSVAL(x, y, lay) & NETNUM_MASK) == netnum) {
-		    Pr = &OBS2VAL(x, y, lay);
-		    if (Pr->flags & PR_TARGET) {
-			if (Pr->prdata.cost != MAXRT) {
-			    lnode = NODEIPTR(x, y, lay);
-			    if (lnode != NULL) {
-				node = lnode->nodesav;
-				if (node != NULL) break;
-			    }
-			}
-		    }
-		}
-	    }
-	    if (node != NULL) break;
-	}
-	if (node != NULL) break;
-    }
-
-    /* Now clear all targets except for the one just connected */
+    /* Clear all targets except for the one just routed */
 
     for (lay = 0; lay < Num_layers; lay++)
 	for (x = 0; x < NumChannelsX[lay]; x++)
@@ -169,7 +145,7 @@ void revert_antenna_taps(netnum)
 		    if (Pr->flags & PR_TARGET) {
 			lnode = NODEIPTR(x, y, lay);
 			if ((lnode == NULL) || (lnode->nodesav != node)) {
-			    OBSVAL(x, y, lay) &= ~NETNUM_MASK;
+			    OBSVAL(x, y, lay) &= ~(NETNUM_MASK | ROUTED_NET);
 			    OBSVAL(x, y, lay) |= ANTENNA_NET;
 			}
 		    }
@@ -1090,7 +1066,7 @@ int doantennaroute(ANTENNAINFO violation, Tcl_HashTable *NodeTable)
     free_glist(&iroute);
 
     /* Put free taps back to ANTENNA_NET */
-    revert_antenna_taps(net->netnum);
+    revert_antenna_taps(net->netnum, rt1->start.node);
 
     return result;
 }
