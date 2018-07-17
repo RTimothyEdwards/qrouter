@@ -1448,7 +1448,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			      if (Pathon != -1) Pathon = 0;
 			      pathstart(Cmd, layer, x, y, special, oscale,
 						invscale, horizontal, lnode2);
-			      pathto(Cmd, x2, y2, horizontal, x, y, invscale, nextvia);
+			      pathto(Cmd, x2, y2, horizontal, x, y, invscale, 0);
 			      lastlay = layer;
 			   }
 			}
@@ -1467,7 +1467,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			      if (Pathon != -1) Pathon = 0;
 			      pathstart(Cmd, layer, x, y, special, oscale,
 						invscale, horizontal, lnode2);
-			      pathto(Cmd, x2, y2, horizontal, x, y, invscale, nextvia);
+			      pathto(Cmd, x2, y2, horizontal, x, y, invscale, 0);
 			      lastlay = layer;
 			   }
 			}
@@ -1480,6 +1480,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		  if (special == (u_char)0) {
 		     double viaoffx, viaoffy;
 		     double w0, w1, dc, altwx, altwy;
+		     float offsetx, offsety;
 		     int vx = 0;
 		     int vy = 0;
 		     int flags;
@@ -1681,6 +1682,61 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			}
 		     }
 
+		     // Check for any tap offset on the neighboring via,
+		     // which needs to be accounted for in the calculations.
+		     offsetx = offsety = 0.0;
+		     if (viaEL)
+			lnode = (layer < Pinlayers && layer > 0) ?
+					NODEIPTR(seg->x1 + 1, seg->y1, layer - 1) : NULL;
+		     else if (viaWL)
+			lnode = (layer < Pinlayers && layer > 0) ?
+					NODEIPTR(seg->x1 - 1, seg->y1, layer - 1) : NULL;
+		     else if (viaEM)
+			lnode = (layer < Pinlayers) ?
+					NODEIPTR(seg->x1 + 1, seg->y1, layer) : NULL;
+		     else if (viaWM)
+			lnode = (layer < Pinlayers) ?
+					NODEIPTR(seg->x1 - 1, seg->y1, layer) : NULL;
+		     else if (viaEU)
+			lnode = (layer < Pinlayers - 1) ?
+					NODEIPTR(seg->x1 + 1, seg->y1, layer + 1) : NULL;
+		     else if (viaWU)
+			lnode = (layer < Pinlayers - 1) ?
+					NODEIPTR(seg->x1 - 1, seg->y1, layer + 1) : NULL;
+
+		     if (lnode && (lnode->flags & NI_OFFSET_EW)) {
+			offsetx = lnode->offset;
+			// offsetx defined as positive in the direction away from
+			// the via under consideration.
+			if (viaWL || viaWM || viaWU) offsetx = -offsetx;
+		     }
+
+		     if (viaNL)
+			lnode = (layer < Pinlayers && layer > 0) ?
+					NODEIPTR(seg->x1, seg->y1 + 1, layer - 1) : NULL;
+		     else if (viaSL)
+			lnode = (layer < Pinlayers && layer > 0) ?
+					NODEIPTR(seg->x1, seg->y1 - 1, layer - 1) : NULL;
+		     else if (viaNM)
+			lnode = (layer < Pinlayers) ?
+					NODEIPTR(seg->x1, seg->y1 + 1, layer) : NULL;
+		     else if (viaSM)
+			lnode = (layer < Pinlayers) ?
+					NODEIPTR(seg->x1, seg->y1 - 1, layer) : NULL;
+		     else if (viaNU)
+			lnode = (layer < Pinlayers - 1) ?
+					NODEIPTR(seg->x1, seg->y1 + 1, layer + 1) : NULL;
+		     else if (viaSU)
+			lnode = (layer < Pinlayers - 1) ?
+					NODEIPTR(seg->x1, seg->y1 - 1, layer + 1) : NULL;
+
+		     if (lnode && (lnode->flags & NI_OFFSET_NS)) {
+			offsety = lnode->offset;
+			// offsety defined as positive in the direction away from
+			// the via under consideration.
+			if (viaSL || viaSM || viaSU) offsety = -offsety;
+		     }	
+
 		     // Actions needed only if a via is on the long side and
 		     // has a spacing violation.
 
@@ -1694,7 +1750,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			    w1 = LefGetXYViaWidth(layer, layer, 0, 0);
 			    w0 = w1;
 		            dc = LefGetRouteSpacing(layer) + w1;
-			    if (dc > PitchX[layer] + EPS) {
+			    if (dc > PitchX[layer] + EPS + offsetx) {
 
 				/* via on checkerboard may be rotated */
 				if (checkersign && ((flags & NI_NO_VIAY) == 0)) {
@@ -1716,24 +1772,24 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
 				    /* Measure spacing violation to via */
 		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
-				    if (dc > PitchX[layer] + EPS) {
+				    if (dc > PitchX[layer] + EPS + offsetx) {
 					/* Calculate offset */
 					if (viaEM)
-					    viaoffx = PitchX[layer] - dc;
+					    viaoffx = PitchX[layer] + 2 * offsetx - dc;
 					else
-					    viaoffx = dc - PitchX[layer];
+					    viaoffx = dc - PitchX[layer] - 2 * offsetx;
 				    }
 				}
 				else {
 				    /* Measure spacing violation to rotated via */
 				    w0 = LefGetXYViaWidth(layer, layer, 0, 2);
 		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
-				    if (dc > PitchX[layer] + EPS) {
+				    if (dc > PitchX[layer] + EPS + offsetx) {
 					/* Calculate offset */
 					if (viaEM)
-					    viaoffx = PitchX[layer] - dc;
+					    viaoffx = PitchX[layer] + 2 * offsetx - dc;
 					else
-					    viaoffx = dc - PitchX[layer];
+					    viaoffx = dc - PitchX[layer] - 2 * offsetx;
 				    }
 				}
 			    }
@@ -1745,7 +1801,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			    w0 = LefGetXYViaWidth(layer - 1, layer, 0, 0);
 			    w1 = LefGetXYViaWidth(layer, layer, 0, 0);
 		            dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
-			    if (dc > PitchX[layer] + EPS) {
+			    if (dc > PitchX[layer] + EPS + offsetx) {
 
 				/* via on checkerboard may be rotated */
 				if (checkersign && ((flags & NI_NO_VIAY) == 0)) {
@@ -1767,24 +1823,24 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
 				    /* Measure spacing violation to via */
 		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
-				    if (dc > PitchX[layer] + EPS) {
+				    if (dc > PitchX[layer] + EPS + offsetx) {
 					/* Calculate offset */
 					if (viaEL)
-					    viaoffx = PitchX[layer] - dc;
+					    viaoffx = PitchX[layer] + 2 * offsetx - dc;
 					else
-					    viaoffx = dc - PitchX[layer];
+					    viaoffx = dc - PitchX[layer] - 2 * offsetx;
 				    }
 				}
 				else {
 				    /* Measure spacing violation to rotated via */
 				    w0 = LefGetXYViaWidth(layer - 1, layer, 0, 1);
 		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
-				    if (dc > PitchX[layer] + EPS) {
+				    if (dc > PitchX[layer] + EPS + offsetx) {
 					/* Calculate offset */
 					if (viaEL)
-					    viaoffx = PitchX[layer] - dc;
+					    viaoffx = PitchX[layer] + 2 * offsetx - dc;
 					else
-					    viaoffx = dc - PitchX[layer];
+					    viaoffx = dc - PitchX[layer] - 2 * offsetx;
 				    }
 				}
 			    }
@@ -1797,7 +1853,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			    w1 = LefGetXYViaWidth(layer, layer, 1, 3);
 			    w0 = w1;
 		            dc = LefGetRouteSpacing(layer) + w1;
-			    if (dc > PitchY[layer] + EPS) {
+			    if (dc > PitchY[layer] + EPS + offsety) {
 
 				/* via on checkerboard may be rotated */
 				if (checkersign && ((flags & NI_NO_VIAX) == 0)) {
@@ -1819,24 +1875,24 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
 				    /* Measure spacing violation to via */
 		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
-				    if (dc > PitchY[layer] + EPS) {
+				    if (dc > PitchY[layer] + EPS + offsety) {
 					/* Calculate offset */
 					if (viaNM)
-					    viaoffy = PitchY[layer] - dc;
+					    viaoffy = PitchY[layer] + 2 * offsety - dc;
 					else
-					    viaoffy = dc - PitchY[layer];
+					    viaoffy = dc - PitchY[layer] - 2 * offsety;
 				    }
 				}
 				else {
 				    /* Measure spacing violation to rotated via */
 				    w0 = LefGetXYViaWidth(layer, layer, 1, 1);
 		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
-				    if (dc > PitchY[layer] + EPS) {
+				    if (dc > PitchY[layer] + EPS + offsety) {
 					/* Calculate offset */
 					if (viaNM)
-					    viaoffy = PitchY[layer] - dc;
+					    viaoffy = PitchY[layer] + 2 * offsety - dc;
 					else
-					    viaoffy = dc - PitchY[layer];
+					    viaoffy = dc - PitchY[layer] - 2 * offsety;
 				    }
 				}
 			    }
@@ -1848,7 +1904,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			    w0 = LefGetXYViaWidth(layer - 1, layer, 1, 3);
 			    w1 = LefGetXYViaWidth(layer, layer, 1, 3);
 		            dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
-			    if (dc > PitchY[layer] + EPS) {
+			    if (dc > PitchY[layer] + EPS + offsety) {
 
 				/* via on checkerboard may be rotated */
 				if (checkersign && ((flags & NI_NO_VIAX) == 0)) {
@@ -1870,24 +1926,24 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
 				    /* Measure spacing violation to via */
 		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
-				    if (dc > PitchY[layer] + EPS) {
+				    if (dc > PitchY[layer] + EPS + offsety) {
 					/* Calculate offset */
 					if (viaNL)
-					    viaoffy = PitchY[layer] - dc;
+					    viaoffy = PitchY[layer] + 2 * offsety - dc;
 					else
-					    viaoffy = dc - PitchY[layer];
+					    viaoffy = dc - PitchY[layer] - 2 * offsety;
 				    }
 				}
 				else {
 				    /* Measure spacing violation to rotated via */
 				    w0 = LefGetXYViaWidth(layer - 1, layer, 1, 2);
 		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
-				    if (dc > PitchY[layer] + EPS) {
+				    if (dc > PitchY[layer] + EPS + offsety) {
 					/* Calculate offset */
 					if (viaNL)
-					    viaoffy = PitchY[layer] - dc;
+					    viaoffy = PitchY[layer] + 2 * offsety - dc;
 					else
-					    viaoffy = dc - PitchY[layer];
+					    viaoffy = dc - PitchY[layer] - 2 * offsety;
 				    }
 				}
 			    }
@@ -1902,7 +1958,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			    w0 = LefGetXYViaWidth(layer + 1, layer + 1, 0, 0);
 			    w1 = LefGetXYViaWidth(layer, layer + 1, 0, 0);
 		            dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
-			    if (dc > PitchX[layer + 1] + EPS) {
+			    if (dc > PitchX[layer + 1] + EPS + offsetx) {
 
 				/* via on checkerboard may be rotated */
 				if (checkersign) {
@@ -1925,24 +1981,28 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
 				    /* Measure spacing violation to via */
 		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
-				    if (dc > PitchX[layer + 1] + EPS) {
+				    if (dc > PitchX[layer + 1] + EPS + offsetx) {
 					/* Calculate offset */
 					if (viaEU)
-					    viaoffx = PitchX[layer + 1] - dc;
+					    viaoffx = PitchX[layer + 1] +
+							2 * offsetx - dc;
 					else
-					    viaoffx = dc - PitchX[layer + 1];
+					    viaoffx = dc - PitchX[layer + 1] -
+							2 * offsetx;
 				    }
 				}
 				else {
 				    /* Measure spacing violation to rotated via */
 				    w0 = LefGetXYViaWidth(layer + 1, layer + 1, 0, 2);
 		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
-				    if (dc > PitchX[layer + 1] + EPS) {
+				    if (dc > PitchX[layer + 1] + EPS + offsetx) {
 					/* Calculate offset */
 					if (viaEU)
-					    viaoffx = PitchX[layer + 1] - dc;
+					    viaoffx = PitchX[layer + 1] +
+							2 * offsetx - dc;
 					else
-					    viaoffx = dc - PitchX[layer + 1];
+					    viaoffx = dc - PitchX[layer + 1] -
+							2 * offsetx;
 				    }
 				}
 			    }
@@ -1954,7 +2014,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			    w1 = LefGetXYViaWidth(layer, layer + 1, 0, 0);
 			    w0 = w1;
 		            dc = LefGetRouteSpacing(layer + 1) + w1;
-			    if (dc > PitchX[layer + 1] + EPS) {
+			    if (dc > PitchX[layer + 1] + EPS + offsetx) {
 
 				/* via on checkerboard may be rotated */
 				if (checkersign) {
@@ -1977,24 +2037,28 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
 				    /* Measure spacing violation to via */
 		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
-				    if (dc > PitchX[layer + 1] + EPS) {
+				    if (dc > PitchX[layer + 1] + EPS + offsetx) {
 					/* Calculate offset */
 					if (viaEM)
-					    viaoffx = PitchX[layer + 1] - dc;
+					    viaoffx = PitchX[layer + 1] +
+							2 * offsetx - dc;
 					else
-					    viaoffx = dc - PitchX[layer + 1];
+					    viaoffx = dc - PitchX[layer + 1] -
+							2 * offsetx;
 				    }
 				}
 				else {
 				    /* Measure spacing violation to rotated via */
 				    w0 = LefGetXYViaWidth(layer, layer + 1, 0, 1);
 		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
-				    if (dc > PitchX[layer + 1] + EPS) {
+				    if (dc > PitchX[layer + 1] + EPS + offsetx) {
 					/* Calculate offset */
 					if (viaEM)
-					    viaoffx = PitchX[layer + 1] - dc;
+					    viaoffx = PitchX[layer + 1] +
+							2 * offsetx - dc;
 					else
-					    viaoffx = dc - PitchX[layer + 1];
+					    viaoffx = dc - PitchX[layer + 1] -
+							2 * offsetx;
 				    }
 				}
 			    }
@@ -2007,7 +2071,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			    w0 = LefGetXYViaWidth(layer + 1, layer + 1, 1, 3);
 			    w1 = LefGetXYViaWidth(layer, layer + 1, 1, 3);
 		            dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
-			    if (dc > PitchY[layer + 1] + EPS) {
+			    if (dc > PitchY[layer + 1] + EPS + offsety) {
 
 				/* via on checkerboard may be rotated */
 				if (checkersign) {
@@ -2030,24 +2094,28 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
 				    /* Measure spacing violation to via */
 		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
-				    if (dc > PitchY[layer + 1] + EPS) {
+				    if (dc > PitchY[layer + 1] + EPS + offsety) {
 					/* Calculate offset */
 					if (viaNU)
-					    viaoffy = PitchY[layer + 1] - dc;
+					    viaoffy = PitchY[layer + 1] +
+							2 * offsety - dc;
 					else
-					    viaoffy = dc - PitchY[layer + 1];
+					    viaoffy = dc - PitchY[layer + 1] -
+							2 * offsety;
 				    }
 				}
 				else {
 				    /* Measure spacing violation to rotated via */
 				    w0 = LefGetXYViaWidth(layer + 1, layer + 1, 1, 1);
 		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
-				    if (dc > PitchY[layer + 1] + EPS) {
+				    if (dc > PitchY[layer + 1] + EPS + offsety) {
 					/* Calculate offset */
 					if (viaNU)
-					    viaoffy = PitchY[layer + 1] - dc;
+					    viaoffy = PitchY[layer + 1] +
+							2 * offsety - dc;
 					else
-					    viaoffy = dc - PitchY[layer + 1];
+					    viaoffy = dc - PitchY[layer + 1] -
+							2 * offsety;
 				    }
 				}
 			    }
@@ -2059,7 +2127,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			    w1 = LefGetXYViaWidth(layer, layer + 1, 1, 3);
 			    w0 = w1;
 		            dc = LefGetRouteSpacing(layer + 1) + w1;
-			    if (dc > PitchY[layer + 1] + EPS) {
+			    if (dc > PitchY[layer + 1] + EPS + offsety) {
 
 				/* via on checkerboard may be rotated */
 				if (checkersign) {
@@ -2082,36 +2150,38 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
 				    /* Measure spacing violation to via */
 		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
-				    if (dc > PitchY[layer + 1] + EPS) {
+				    if (dc > PitchY[layer + 1] + EPS + offsety) {
 					/* Calculate offset */
 					if (viaNM)
-					    viaoffy = PitchY[layer + 1] - dc;
+					    viaoffy = PitchY[layer + 1] +
+							2 * offsety - dc;
 					else
-					    viaoffy = dc - PitchY[layer + 1];
+					    viaoffy = dc - PitchY[layer + 1] -
+							2 * offsety;
 				    }
 				}
 				else {
 				    /* Measure spacing violation to rotated via */
 				    w0 = LefGetXYViaWidth(layer, layer + 1, 1, 2);
 		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
-				    if (dc > PitchY[layer + 1] + EPS) {
+				    if (dc > PitchY[layer + 1] + EPS + offsety) {
 					/* Calculate offset */
 					if (viaNM)
-					    viaoffy = PitchY[layer] - dc;
+					    viaoffy = PitchY[layer] + 2 * offsety - dc;
 					else
-					    viaoffy = dc - PitchY[layer];
+					    viaoffy = dc - PitchY[layer] - 2 * offsety;
 				    }
 				}
 			    }
 			}
 		     }
 
-		     /* If a via is constrained by	*/
-		     /* routes on the side and cannot be rotated, then	*/
-		     /* the calculations on the via in the next track	*/
-		     /* will not take that into consideration, and not	*/
-		     /* leave enough space.  So this via must offset	*/
-		     /* more to make up the difference.			*/
+		     /* If a via is constrained by routes on the side	*/
+		     /* and cannot be rotated, then the calculations on	*/
+		     /* the via in the next track will not take that	*/
+		     /* into consideration, and not leave enough space.	*/
+		     /* So this via must offset	more to make up the	*/
+		     /* difference.					*/
 
 		     if (altwx > 0.0) {
 			if (viaoffx < 0) altwx = -altwx;
@@ -2125,7 +2195,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		     /* When offset, each via moves by half the distance. */
 		     viaoffx /= 2;
 		     viaoffy /= 2;
-	
+
 		     vx = (int)((REPS(viaoffx)) * oscale);
 		     vy = (int)((REPS(viaoffy)) * oscale);
 
