@@ -1707,8 +1707,8 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
 	  Pr = &Obs2[i][j];
 	  if (netnum != 0) {
 	      Pr->flags = 0;		// Clear all flags
-	      if (netnum == DRC_BLOCKAGE)
-	         Pr->prdata.net = netnum;
+	      if ((netnum & DRC_BLOCKAGE) == DRC_BLOCKAGE)
+	         Pr->prdata.net = DRC_BLOCKAGE;
 	      else
 	         Pr->prdata.net = netnum & NETNUM_MASK;
 	   } else {
