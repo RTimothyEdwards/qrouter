@@ -368,23 +368,27 @@ count_reachable_taps()
 void check_variable_pitch(int l, int *hptr, int *vptr)
 {
    int o, hnum, vnum;
-   double vpitch, hpitch, wvia;
-   int orient = 0;	/* Need to also check orient = 2! */
+   double vpitch, hpitch, wvia, wviax, wviay;
 
    o = LefGetRouteOrientation(l);
-
-   // Pick the best via size for the layer.  Usually this means the
-   // via whose base is at layer - 1, because the top metal layer
-   // will either have the same width or a larger width.  
 
    // Note that when "horizontal" (o = 1) is passed to LefGetXYViaWidth,
    // it returns the via width top-to-bottom (orient meaning is
    // reversed for LefGetXYViaWidth), which is what we want. . .
 
-   if (l == 0)
-	 wvia = LefGetXYViaWidth(l, l, o, orient);
-   else
-	 wvia = LefGetXYViaWidth(l - 1, l, o, orient);
+   // Try both via orientations and choose the best, assuming that it is
+   // a lot easier to rotate and shift vias around than it is to lose
+   // half the routing grid.
+
+   if (l == 0) {
+	 wviax = LefGetXYViaWidth(l, l, o, 0);
+	 wviay = LefGetXYViaWidth(l, l, o, 3);
+   }
+   else {
+	 wviax = LefGetXYViaWidth(l - 1, l, o, 0);
+	 wviay = LefGetXYViaWidth(l - 1, l, o, 3);
+   }
+   wvia = (wviax < wviay) ? wviax : wviay;
 
    if (o == 1) {	// Horizontal route
       vpitch = LefGetRoutePitch(l);
