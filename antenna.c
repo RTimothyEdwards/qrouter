@@ -481,6 +481,13 @@ get_route_area_forward_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
 	    }
 
 	    g = FindGateNode(NodeTable, node, &i);
+	    if (g == NULL) {
+		/* This should not happen, but occurred where an end	*/
+		/* route got marked as an end node---need to debug.	*/
+	 	Fprintf(stderr, "Error: net %s route end marked as node, but"
+			" no node found!\n", net->netname);
+		return 0.0;
+	    }
 	    if (g->area[i] == 0.0) {
 		/* There's a diffusion diode here! */
 		if (visited) visited[node->nodenum] = ANCHOR;

@@ -167,6 +167,7 @@ int    LefGetRouteRCvalues(int layer, double *areacap, double *edgecap,
 int    LefGetViaResistance(int layer, double *respervia);
 char  *LefGetRouteName(int layer);
 int    LefGetRouteOrientation(int layer);
+int    LefGetMaxRouteLayer(void);
 int    LefGetMaxLayer(void);
 
 GATE   LefFindInstance(char *name);

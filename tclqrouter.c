@@ -119,6 +119,9 @@ static int qrouter_congested(
 static int qrouter_layers(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_drc(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
 static int qrouter_passes(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
@@ -161,6 +164,7 @@ static cmdstruct qrouter_commands[] =
    {"resolution", qrouter_resolution},
    {"congested", qrouter_congested},
    {"layers", qrouter_layers},
+   {"drc", qrouter_drc},
    {"passes", qrouter_passes},
    {"vdd", qrouter_vdd},
    {"gnd", qrouter_gnd},
@@ -2369,6 +2373,82 @@ qrouter_resolution(ClientData clientData, Tcl_Interp *interp,
     return QrouterTagCallback(interp, objc, objv);
 }
 
+/*------------------------------------------------------*/
+/* Command "drc"					*/
+/*							*/
+/* Set qrouter options related to handling of DRC	*/
+/* violations.						*/
+/*							*/
+/* Options:						*/
+/*							*/
+/*	drc <layer>|all <dist> <dist>			*/
+/*							*/
+/* Allow exceptions to DRC handling.  Normally qrouter	*/
+/* enforces DRC distance between a via and route or	*/
+/* between two vias on adjacent tracks, forcing a 	*/
+/* keep-out area around a placed route if needed.	*/
+/* "layer" is the name of a route layer.  <dist> (value	*/
+/* in microns) will limit the enforcement if the DRC	*/
+/* violation is less than the indicated distance.	*/
+/* The first value is for via-to-via distance, and the	*/
+/* second value is for route-to-via distance.  A value	*/
+/* of zero means that the behavior is unchanged from	*/
+/* what is automatically calculated from defined	*/
+/* route and via width and spacing values.  A positive	*/
+/* distance value loosens the DRC rule, while a		*/
+/* negative distance value tightens it.			*/
+/*							*/
+/* Ignoring DRC errors is generally discouraged but	*/
+/* may be necessary in some cases if the pitch is tight	*/
+/* and assumes routes may be offset to clear vias,	*/
+/* which is something qrouter does not know how to do.	*/
+/* Only use this if routability is being impacted by	*/
+/* DRC enforcement.					*/
+/*------------------------------------------------------*/
+
+static int
+qrouter_drc(ClientData clientData, Tcl_Interp *interp,
+               int objc, Tcl_Obj *CONST objv[])
+{
+    char *layername;
+    int result, layer;
+    double routedist, viadist;
+
+    if (objc != 4) {
+	Tcl_WrongNumArgs(interp, 1, objv, "option ?arg?");
+	return TCL_ERROR;
+    }
+
+    layername = Tcl_GetString(objv[1]);
+    if (!strcasecmp(layername, "all")) {
+	layer = -1;
+    }
+    else {
+	layer = LefFindLayerNum(layername);
+	if (layer < 0) {
+	    result = Tcl_GetIntFromObj(interp, objv[1], &layer);
+	    if (result != TCL_OK) {
+		Tcl_SetResult(interp, "No such layer name.\n", NULL);
+		return result;
+	    }
+	}
+
+	if ((layer < -1) || (layer >= LefGetMaxRouteLayer())) {
+	    Tcl_SetResult(interp, "Layer number out of range.\n", NULL);
+	    return TCL_ERROR;
+	}
+    }
+
+    result = Tcl_GetDoubleFromObj(interp, objv[2], &viadist);
+    if (result != TCL_OK) return result;
+
+    result = Tcl_GetDoubleFromObj(interp, objv[3], &routedist);
+    if (result != TCL_OK) return result;
+
+    apply_drc_blocks(layer, viadist, routedist);
+
+    return QrouterTagCallback(interp, objc, objv);
+}
 
 /*------------------------------------------------------*/
 /* Command "layers"					*/
@@ -2396,10 +2476,10 @@ qrouter_layers(ClientData clientData, Tcl_Interp *interp,
     else if (objc == 2) {
 	result = Tcl_GetIntFromObj(interp, objv[1], &value);
 	if (result != TCL_OK) return result;
-	if (value <= 0 || value > LefGetMaxLayer()) {
+	if (value <= 0 || value > LefGetMaxRouteLayer()) {
 	    Tcl_SetResult(interp, "Number of layers out of range,"
 			" setting to max.", NULL);
-	    Num_layers = LefGetMaxLayer();
+	    Num_layers = LefGetMaxRouteLayer();
 	    return TCL_ERROR;
 	}
 	Num_layers = value;

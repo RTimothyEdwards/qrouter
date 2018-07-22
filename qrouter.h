@@ -496,6 +496,7 @@ int    allocate_obs_array(void);
 int    countlist(NETLIST net);
 int    runqrouter(int argc, char *argv[]);
 void   remove_failed();
+void   apply_drc_blocks(int, double, double);
 
 void   read_def(char *filename);
 

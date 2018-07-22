@@ -80,7 +80,7 @@ post_config(void)
     // routing layers defined by the LEF file (or the config
     // file).
 
-    i = LefGetMaxLayer();
+    i = LefGetMaxRouteLayer();
     if (i < Num_layers) Num_layers = i;
 
     h = v = -1;

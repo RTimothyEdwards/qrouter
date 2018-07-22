@@ -59,7 +59,7 @@ int write_failed(char *filename)
 	Fprintf(stderr, "Could not open file %s for writing.\n", filename);
 	return 1;
     }
-    fprintf(ffail, "%d nets failed to route:\n");
+    fprintf(ffail, "%d nets failed to route:\n", failcount);
 
     for (nl = FailedNets; nl; nl = nl->next) {
         net = nl->net;

@@ -626,7 +626,9 @@ LefFindLayerNum(char *token)
 
 /*
  *---------------------------------------------------------------
- * Find the maximum routing layer number defined by the LEF file
+ * Find the maximum layer number defined by the LEF file
+ * This includes layer numbers assigned to both routes and
+ * via cut layers.
  *---------------------------------------------------------------
  */
 
@@ -637,6 +639,26 @@ LefGetMaxLayer(void)
     LefList lefl;
 
     for (lefl = LefInfo; lefl; lefl = lefl->next) {
+	if (lefl->type > maxlayer)
+	    maxlayer = lefl->type;
+    }
+    return (maxlayer + 1);
+}
+
+/*
+ *---------------------------------------------------------------
+ * Find the maximum routing layer number defined by the LEF file
+ *---------------------------------------------------------------
+ */
+
+int
+LefGetMaxRouteLayer(void)
+{
+    int maxlayer = -1;
+    LefList lefl;
+
+    for (lefl = LefInfo; lefl; lefl = lefl->next) {
+	if (lefl->lefClass != CLASS_ROUTE) continue;
 	if (lefl->type > maxlayer)
 	    maxlayer = lefl->type;
     }
@@ -2688,7 +2710,7 @@ LefReadLayerSection(f, lname, mode, lefl)
 			/* is incorrectly written.			*/
 
 			if (lefl->type < 0) {
-			    lefl->type = LefGetMaxLayer();
+			    lefl->type = LefGetMaxRouteLayer();
 			}
 		    }
 		    else if (typekey == CLASS_CUT || typekey == CLASS_VIA) {
@@ -3750,6 +3772,9 @@ LefRead(inName)
 
     /* Find the best via(s) to use per route layer and record it (them) */
     LefAssignLayerVias();
+
+    /* Set DRC blockage behavior based on via and route widths */
+    apply_drc_blocks(-1, 0.0, 0.0);
 
     return oprecis;
 }
