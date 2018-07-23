@@ -1633,6 +1633,9 @@ qrouter_readlef(ClientData clientData, Tcl_Interp *interp,
 
     post_config();
 
+    /* Set DRC blockage behavior based on via and route widths */
+    apply_drc_blocks(-1, 0.0, 0.0);
+
     return QrouterTagCallback(interp, objc, objv);
 }
 

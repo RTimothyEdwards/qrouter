@@ -3773,8 +3773,5 @@ LefRead(inName)
     /* Find the best via(s) to use per route layer and record it (them) */
     LefAssignLayerVias();
 
-    /* Set DRC blockage behavior based on via and route widths */
-    apply_drc_blocks(-1, 0.0, 0.0);
-
     return oprecis;
 }
