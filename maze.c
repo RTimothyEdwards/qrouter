@@ -1806,7 +1806,7 @@ route_set_connections(net, route)
    found = FALSE;
    if (seg->layer < Pinlayers) {
       lnode = NODEIPTR(seg->x1, seg->y1, seg->layer);
-      if (lnode != NULL) {
+      if ((lnode != NULL) && (lnode->nodesav != NULL)) {
 	 route->start.node = lnode->nodesav;
 	 route->flags |= RT_START_NODE;
 	 found = TRUE;
@@ -1864,7 +1864,7 @@ route_set_connections(net, route)
       for (; seg->next; seg = seg->next);
       if (seg->layer < Pinlayers) {
          lnode = NODEIPTR(seg->x2, seg->y2, seg->layer);
-         if (lnode != NULL) {
+         if ((lnode != NULL) && (lnode->nodesav != NULL)) {
 	    route->end.node = lnode->nodesav;
 	    route->flags |= RT_END_NODE;
 	    found = TRUE;
