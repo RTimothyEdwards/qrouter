@@ -172,6 +172,10 @@ proc qrouter::standard_route {{filename ""} {doquit true}} {
     if {$result > 0} {
 	write_failed fail.out
     }
+
+    puts stdout "*** Writing RC file $filename"
+    write_delays
+
     if {(!$result) && $doquit} {quit}
 }
 

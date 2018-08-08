@@ -1429,7 +1429,7 @@ qrouter_cleanup(ClientData clientData, Tcl_Interp *interp,
 	for (i = 0; i < Num_layers; i++)
 	    if (needblock[i] & (VIABLOCKX | VIABLOCKY))
 		break;
-	if (i == Num_layers) return;        /* No cleanup needed */
+	if (i == Num_layers) return TCL_OK;        /* No cleanup needed */
 
 	switch (idx) {
 	    case AllIdx:
@@ -1781,6 +1781,7 @@ qrouter_writedelays(ClientData clientData, Tcl_Interp *interp,
 	Tcl_SetResult(interp, "No delay filename specified!", NULL);
 	return TCL_ERROR;
     }
+    else delayoutfile = delayfilename;
 
     write_delays(delayoutfile);
     return QrouterTagCallback(interp, objc, objv);
