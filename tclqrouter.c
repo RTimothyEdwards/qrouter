@@ -1678,6 +1678,7 @@ qrouter_writedef(ClientData clientData, Tcl_Interp *interp,
 	Tcl_SetResult(interp, "No DEF filename specified!", NULL);
 	return TCL_ERROR;
     }
+    else DEFoutfile = DEFfilename;
 
     write_def(DEFoutfile);
     return QrouterTagCallback(interp, objc, objv);

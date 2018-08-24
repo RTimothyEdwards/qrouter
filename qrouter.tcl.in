@@ -96,6 +96,10 @@ proc qrouter::write_congested {filename} {
 
 proc qrouter::standard_route {{filename ""} {doquit true}} {
     puts stdout "*** Running stage1 routing with defaults"
+    # Pull root name from filename
+    set rootname [file root $filename]
+    set deffilename ${rootname}.def
+    set rcfilename ${rootname}.rc
     set result [stage1]
     if {$result > 0} {
 	set msize 10
@@ -162,9 +166,9 @@ proc qrouter::standard_route {{filename ""} {doquit true}} {
 	    antenna fix
 	}
     }
-    if {$filename != ""} {
+    if {$deffilename != ""} {
         puts stdout "*** Writing DEF file $filename"
-	write_def $filename
+	write_def $deffilename
     } else {
         puts stdout "*** Writing DEF file (default)"
 	write_def
@@ -173,8 +177,13 @@ proc qrouter::standard_route {{filename ""} {doquit true}} {
 	write_failed fail.out
     }
 
-    puts stdout "*** Writing RC file $filename"
-    write_delays
+    if {$rcfilename != ""} {
+        puts stdout "*** Writing RC file $filename"
+	write_delays $rcfilename
+    } else {
+        puts stdout "*** Writing RC file (default)"
+	write_delays
+    }
 
     if {(!$result) && $doquit} {quit}
 }
