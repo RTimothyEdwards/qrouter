@@ -166,8 +166,8 @@ proc qrouter::standard_route {{filename ""} {doquit true}} {
 	    antenna fix
 	}
     }
-    if {$deffilename != ""} {
-        puts stdout "*** Writing DEF file $filename"
+    if {${rootname} != ""} {
+        puts stdout "*** Writing DEF file $deffilename"
 	write_def $deffilename
     } else {
         puts stdout "*** Writing DEF file (default)"
@@ -177,8 +177,8 @@ proc qrouter::standard_route {{filename ""} {doquit true}} {
 	write_failed fail.out
     }
 
-    if {$rcfilename != ""} {
-        puts stdout "*** Writing RC file $filename"
+    if {${rootname} != ""} {
+        puts stdout "*** Writing RC file $rcfilename"
 	write_delays $rcfilename
     } else {
         puts stdout "*** Writing RC file (default)"
