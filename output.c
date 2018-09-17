@@ -620,7 +620,7 @@ void print_nlnets( char *filename )
 /* the sake of efficiency, it does not need to be checked.	*/
 /*--------------------------------------------------------------*/
 
-u_char link_up_seg(NET net, SEG seg, ROUTE srt)
+u_char link_up_seg(NET net, SEG seg, int viabase, ROUTE srt)
 {
     ROUTE rt;
     SEG segf, segl;
@@ -630,7 +630,7 @@ u_char link_up_seg(NET net, SEG seg, ROUTE srt)
 	if (rt == srt) continue;
 	segf = rt->segments;
 	if ((segf->x1 == seg->x1) && (segf->y1 == seg->y1) &&
-		(segf->layer == seg->layer)) {
+		((segf->layer == viabase) || (segf->layer == viabase + 1))) {
 	    /* Reverse seg and prepend it to the route */
 	    seg->next = rt->segments;
 	    rt->segments = seg;
@@ -647,7 +647,7 @@ u_char link_up_seg(NET net, SEG seg, ROUTE srt)
 	for (segl = segf; segl && segl->next; segl = segl->next);
 
 	if (segl && (segl->x2 == seg->x1) && (segl->y2 == seg->y1) &&
-		(segl->layer == seg->layer)) {
+		((segl->layer == viabase) || (segl->layer == viabase + 1))) {
 	    /* Append seg to the route */
 	    segl->next = seg;
 	    return (u_char)1;
@@ -679,7 +679,7 @@ void cleanup_net(NET net)
    SEG segf, segl, seg, segp;
    ROUTE rt, rt2;
    NODEINFO lnode;
-   int lf, ll, lf2, ll2;
+   int lf, ll, lf2, ll2, viabase;
    u_char fcheck, lcheck, needfix;
    u_char xcheckf, ycheckf, xcheckl, ycheckl; 
 
@@ -931,9 +931,10 @@ void cleanup_net(NET net)
 			    continue;
 			/* Remove via and change wire layer */
 			segf->next = seg->next;
-			segf->layer = (segf->layer == seg->layer) ? seg->layer + 1 :
+			viabase = segf->layer;
+			segf->layer = (viabase == seg->layer) ? seg->layer + 1 :
 				seg->layer;
-			if (!link_up_seg(net, seg, rt)) free(seg);
+			if (!link_up_seg(net, seg, viabase, rt)) free(seg);
 		    }
 		}
 	    }
@@ -949,9 +950,10 @@ void cleanup_net(NET net)
 			    continue;
 			/* Remove via and change wire layer */
 			segf->next = seg->next;
-			segf->layer = (segf->layer == seg->layer) ? seg->layer + 1 :
+			viabase = segf->layer;
+			segf->layer = (viabase == seg->layer) ? seg->layer + 1 :
 				seg->layer;
-			if (!link_up_seg(net, seg, rt)) free(seg);
+			if (!link_up_seg(net, seg, viabase, rt)) free(seg);
 		    }
 		}
 	    }
@@ -974,13 +976,13 @@ void cleanup_net(NET net)
 			/* Remove via and change wire layer */
 			seg->next = NULL;
 			seg->segtype = ST_WIRE;
-			seg->layer = (seg->layer == segl->layer) ? seg->layer + 1 :
-				seg->layer;
+			viabase = seg->layer;
+			seg->layer = (viabase == segl->layer) ? viabase + 1 : viabase;
 			seg->x1 = segl->x1;
 			seg->y1 = segl->y1;
 			seg->x2 = segl->x2;
 			seg->y2 = segl->y2;
-			if (!link_up_seg(net, segl, rt)) free(segl);
+			if (!link_up_seg(net, segl, viabase, rt)) free(segl);
 		    }
 		}
 	    }
@@ -994,15 +996,15 @@ void cleanup_net(NET net)
 			if (segp && (segp->x1 == segl->x2) && (segp->y1 == segl->y2))
 			    continue;
 			/* Remove via and change wire layer */
+			viabase = seg->layer;
 			seg->next = NULL;
 			seg->segtype = ST_WIRE;
-			seg->layer = (seg->layer == segl->layer) ? seg->layer + 1 :
-				seg->layer;
+			seg->layer = (viabase == segl->layer) ? viabase + 1 : viabase;
 			seg->x1 = segl->x1;
 			seg->y1 = segl->y1;
 			seg->x2 = segl->x2;
 			seg->y2 = segl->y2;
-			if (!link_up_seg(net, segl, rt)) free(segl);
+			if (!link_up_seg(net, segl, viabase, rt)) free(segl);
 		    }
 		}
 	    }
@@ -2545,7 +2547,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 static void emit_routes(char *filename, double oscale, int iscale)
 {
     FILE *Cmd;
-    int i, j, numnets, stubroutes;
+    int i, j, numnets, numvias, stubroutes;
     char line[MAX_LINE_LEN + 1], *lptr = NULL;
     char netname[MAX_NAME_LEN];
     NET net = NULL;
@@ -2606,17 +2608,23 @@ static void emit_routes(char *filename, double oscale, int iscale)
 
     // Copy DEF file up to NETS line
     numnets = 0;
+    numvias = 0;
     while (fgets(line, MAX_LINE_LEN, fdef) != NULL) {
        lptr = line;
        while (isspace(*lptr)) lptr++;
        if (!strncmp(lptr, "NETS", 4)) {
-	  sscanf(lptr + 4, "%d", &numnets);
-	  break;
+	   sscanf(lptr + 4, "%d", &numnets);
+	   break;
        }
-       if (!strncmp(lptr, "PINS", 4)) {
+       if (!strncmp(lptr, "VIAS", 4)) {
+	   sscanf(lptr + 4, "%d", &numvias);
+	   LefWriteGeneratedVias(Cmd, (double)(oscale / (double)iscale), numvias);
+	   continue;	/* VIAS line already written;  do not output. */
+       }
+       if (!strncmp(lptr, "PINS", 4) && (numvias == 0)) {
 	   /* Check if there are any generated vias, and write them	*/
 	   /* prior to the PINS section.				*/
-	   LefWriteGeneratedVias(Cmd, (double)(oscale / (double)iscale));
+	   LefWriteGeneratedVias(Cmd, (double)(oscale / (double)iscale), 0);
        }
        fputs(line, Cmd);
     }
@@ -2731,16 +2739,25 @@ static void emit_routes(char *filename, double oscale, int iscale)
     // proper width.
     if (stubroutes > 0) {
 
-        fprintf(Cmd, "\nSPECIALNETS %d ", stubroutes);
+        fprintf(Cmd, "\nSPECIALNETS %d ", stubroutes + numSpecial);
 	for (i = 0; i < Numnets; i++) {
 	     net = Nlnets[i];
 	     emit_routed_net(Cmd, net, (u_char)1, oscale, iscale);
 	}
-	fprintf(Cmd, ";\nEND SPECIALNETS\n");
+	if (numSpecial == 0)
+	    fprintf(Cmd, ";\nEND SPECIALNETS\n");
+	else
+	    fprintf(Cmd, ";\n");
     }    
 
     // Finish copying the rest of the file
     while (fgets(line, MAX_LINE_LEN, fdef) != NULL) {
+       lptr = line;
+       while (isspace(*lptr)) lptr++;
+       if (!strncmp(lptr, "SPECIALNETS", 11)) {
+	   if (stubroutes > 0)
+	       continue;	/* SPECIALNETS line already written;  do not output. */
+       }
        fputs(line, Cmd);
     }
     fclose(fdef);

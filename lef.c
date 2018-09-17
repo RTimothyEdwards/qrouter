@@ -3050,10 +3050,15 @@ LefReadLayerSection(f, lname, mode, lefl)
 /* do not appear in the tech LEF and need to be defined in the	*/
 /* DEF file.  This routine finds all generated vias and writes	*/
 /* out the entries to the indicated file f.			*/
+/*								*/
+/* "defvias" is the number of vias found in the input DEF file.	*/
+/* If non-zero, they will be written out after the internally	*/
+/* generated vias, so add defvias to the count written after	*/
+/* the VIAS statement, and do not write the "END" statement.	*/
 /*--------------------------------------------------------------*/
 
 void
-LefWriteGeneratedVias(FILE *f, double oscale)
+LefWriteGeneratedVias(FILE *f, double oscale, int defvias)
 {
     double scale;
     int numvias;
@@ -3063,7 +3068,7 @@ LefWriteGeneratedVias(FILE *f, double oscale)
 
     /* 1st pass---check if any vias are generated. */
 
-    numvias = 0;
+    numvias = defvias;
     for (lefl = LefInfo; lefl; lefl = lefl->next)
 	if (lefl->lefClass == CLASS_VIA)
 	    if (lefl->info.via.generated)
@@ -3106,8 +3111,10 @@ LefWriteGeneratedVias(FILE *f, double oscale)
 		fprintf(f, " ;\n");	/* Finish record */
 	    }
 
-    fprintf(f, "END VIAS\n", numvias);
-    fprintf(f, "\n");
+    if (defvias == 0) {
+	fprintf(f, "END VIAS\n", numvias);
+	fprintf(f, "\n");
+    }
 }
 
 /*--------------------------------------------------------------*/

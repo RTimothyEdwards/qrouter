@@ -175,6 +175,8 @@ void   LefHashCell(GATE gateginfo);
 
 int    LefRead(char *inName);
 void   LefAssignLayerVias();
+void   LefWriteGeneratedVias(FILE *f, double oscale, int defvias);
+
 
 void LefError(int type, char *fmt, ...);	/* Variable argument procedure */
 						/* requires parameter list. */
