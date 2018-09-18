@@ -186,11 +186,13 @@ int read_config(FILE *fconfig, int is_info)
 	while (isspace(*lineptr)) lineptr++;
 
 	if (!strncasecmp(lineptr, "lef", 3) || !strncmp(lineptr, "read_lef", 8)) {
+	    int mscale;
 	    if ((i = sscanf(lineptr, "%*s %s\n", sarg)) == 1) {
 	       // Argument is a filename of a LEF file from which we
 	       // should get the information about gate pins & obstructions
 	       OK = 1;
-	       LefRead(sarg);
+	       mscale = LefRead(sarg);
+	       if (mscale > Scales.mscale) Scales.mscale = mscale;
 	    }
 	}
 

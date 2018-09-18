@@ -367,6 +367,9 @@ runqrouter(int argc, char *argv[])
 #else
       fprintf(infoFILEptr, "qrouter %s.%s\n", VERSION, REVISION);
 #endif
+      /* Output database units expected by the technology LEF file */
+      /* Note that this comes from MANUFACTURINGGRID, not UNITS DATABASE */
+      fprintf(infoFILEptr, "units scale %d\n", Scales.mscale);
 
       /* Resolve pitches.  This is normally done after reading	*/
       /* the DEF file, but the info file is usually generated	*/
