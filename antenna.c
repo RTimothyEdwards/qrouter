@@ -138,8 +138,8 @@ void revert_antenna_taps(int netnum, NODE node)
     /* Clear all targets except for the one just routed */
 
     for (lay = 0; lay < Num_layers; lay++)
-	for (x = 0; x < NumChannelsX[lay]; x++)
-	    for (y = 0; y < NumChannelsY[lay]; y++)
+	for (x = 0; x < NumChannelsX; x++)
+	    for (y = 0; y < NumChannelsY; y++)
 		if ((OBSVAL(x, y, lay) & NETNUM_MASK) == netnum) {
 		    Pr = &OBS2VAL(x, y, lay);
 		    if (Pr->flags & PR_TARGET) {
@@ -338,9 +338,9 @@ get_route_area_forward_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
 
 	    /* Note that "l" is a unitless grid dimension */
 	    if (x == 0)
-		length = (float)y * (float)PitchY[layer];
+		length = (float)y * (float)PitchY;
 	    else
-		length = (float)x * (float)PitchX[layer];
+		length = (float)x * (float)PitchX;
 
 	    /* area is either the total top surface of the metal, */
 	    /* or the total side surface of the metal (in um^2)	  */
@@ -913,8 +913,8 @@ int set_antenna_to_net(int newflags, struct routeinfo_ *iroute,
 
     rval = 0;
     for (lay = 0; lay < Num_layers; lay++)
-	for (x = 0; x < NumChannelsX[lay]; x++)
-	    for (y = 0; y < NumChannelsY[lay]; y++)
+	for (x = 0; x < NumChannelsX; x++)
+	    for (y = 0; y < NumChannelsY; y++)
 		if ((OBSVAL(x, y, lay) & NETNUM_MASK) == ANTENNA_NET) {
 		    Pr = &OBS2VAL(x, y, lay);
 		    // Skip locations that have been purposefully disabled
@@ -951,7 +951,7 @@ int antenna_setup(struct routeinfo_ *iroute, ANTENNAINFO violation,
     PROUTE *Pr;
 
     for (i = 0; i < Num_layers; i++) {
-	for (j = 0; j < NumChannelsX[i] * NumChannelsY[i]; j++) {
+	for (j = 0; j < NumChannelsX * NumChannelsY; j++) {
 	    netnum = Obs[i][j] & (~BLOCKED_MASK);
 	    Pr = &Obs2[i][j];
 	    if (netnum != 0) {
@@ -980,8 +980,8 @@ int antenna_setup(struct routeinfo_ *iroute, ANTENNAINFO violation,
     iroute->pwrbus_src = 0;
 
     iroute->bbox.x2 = iroute->bbox.y2 = 0;
-    iroute->bbox.x1 = NumChannelsX[0];
-    iroute->bbox.y1 = NumChannelsY[0];
+    iroute->bbox.x1 = NumChannelsX;
+    iroute->bbox.y1 = NumChannelsY;
 
     rval = set_antenna_to_net(PR_SOURCE, iroute, 0, violation, NodeTable);
 

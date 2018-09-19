@@ -153,8 +153,8 @@ int set_powerbus_to_net(int netnum)
     rval = 0;
     if ((netnum == VDD_NET) || (netnum == GND_NET) || (netnum == ANTENNA_NET)) {
        for (lay = 0; lay < Num_layers; lay++)
-          for (x = 0; x < NumChannelsX[lay]; x++)
-	     for (y = 0; y < NumChannelsY[lay]; y++)
+          for (x = 0; x < NumChannelsX; x++)
+	     for (y = 0; y < NumChannelsY; y++)
 		if ((OBSVAL(x, y, lay) & NETNUM_MASK) == netnum) {
 		   Pr = &OBS2VAL(x, y, lay);
 		   // Skip locations that have been purposefully disabled
@@ -891,7 +891,7 @@ NETLIST find_colliding(NET net, int *ripnum)
 		  /* find out which net or nets would be in conflict.	*/
 
 		  if (needblock[lay] & (ROUTEBLOCKX | VIABLOCKX)) {
-		     if (x < NumChannelsX[lay] - 1) {
+		     if (x < NumChannelsX - 1) {
 		        orignet = OBSVAL(x + 1, y, lay) & ROUTED_NET_MASK;
 		        if (!(orignet & NO_NET)) {
 			   orignet &= NETNUM_MASK;
@@ -909,7 +909,7 @@ NETLIST find_colliding(NET net, int *ripnum)
 		     }
 		  }
 		  if (needblock[lay] & (ROUTEBLOCKY | VIABLOCKY)) {
-		     if (y < NumChannelsY[lay] - 1) {
+		     if (y < NumChannelsY - 1) {
 		        orignet = OBSVAL(x, y + 1, lay) & ROUTED_NET_MASK;
 		        if (!(orignet & NO_NET)) {
 			   orignet &= NETNUM_MASK;
@@ -1018,11 +1018,11 @@ void analyze_route_overwrite(int x, int y, int lay, int netnum)
 
     /* Check on all sides to see if position is orphaned */
 
-    if ((x < NumChannelsX[0] - 1) && (OBSVAL(x + 1, y, lay) & NETNUM_MASK) == netnum)
+    if ((x < NumChannelsX - 1) && (OBSVAL(x + 1, y, lay) & NETNUM_MASK) == netnum)
 	is_valid = TRUE;
     else if ((x > 0) && (OBSVAL(x - 1, y, lay) & NETNUM_MASK) == netnum)
 	is_valid = TRUE;
-    else if ((y < NumChannelsY[0] - 1) && (OBSVAL(x, y + 1, lay) & NETNUM_MASK) == netnum)
+    else if ((y < NumChannelsY - 1) && (OBSVAL(x, y + 1, lay) & NETNUM_MASK) == netnum)
 	is_valid = TRUE;
     else if ((y > 0) && (OBSVAL(x, y - 1, lay) & NETNUM_MASK) == netnum)
 	is_valid = TRUE;
@@ -1243,7 +1243,7 @@ u_char ripup_net(NET net, u_char restore, u_char flagged, u_char retain)
 		     if ((x > 0) && ((OBSVAL(x - 1, y, lay) &
 				DRC_BLOCKAGE) == DRC_BLOCKAGE))
 			clear_drc_blockage(x - 1, y, lay);
-		     else if ((x < NumChannelsX[lay] - 1) &&
+		     else if ((x < NumChannelsX - 1) &&
 				((OBSVAL(x + 1, y, lay) &
 				DRC_BLOCKAGE) == DRC_BLOCKAGE))
 			clear_drc_blockage(x + 1, y, lay);
@@ -1252,7 +1252,7 @@ u_char ripup_net(NET net, u_char restore, u_char flagged, u_char retain)
 		     if ((y > 0) && ((OBSVAL(x, y - 1, lay) &
 				DRC_BLOCKAGE) == DRC_BLOCKAGE))
 			clear_drc_blockage(x, y - 1, lay);
-		     else if ((y < NumChannelsY[lay] - 1) &&
+		     else if ((y < NumChannelsY - 1) &&
 				((OBSVAL(x, y + 1, lay) &
 				DRC_BLOCKAGE) == DRC_BLOCKAGE))
 			clear_drc_blockage(x, y + 1, lay);
@@ -1435,7 +1435,7 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	  // route here if any of them are on the noripup list.
 
 	  if (needblock[newpt.lay] & (ROUTEBLOCKX | VIABLOCKX)) {
-	     if (newpt.x < NumChannelsX[newpt.lay] - 1) {
+	     if (newpt.x < NumChannelsX - 1) {
 	        netnum = OBSVAL(newpt.x + 1, newpt.y, newpt.lay) & ROUTED_NET_MASK;
 	        if (!(netnum & NO_NET)) {
 		   netnum &= NETNUM_MASK;
@@ -1460,7 +1460,7 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	     }
 	  } 
 	  if (needblock[newpt.lay] & (ROUTEBLOCKY | VIABLOCKY)) {
-	     if (newpt.y < NumChannelsY[newpt.lay] - 1) {
+	     if (newpt.y < NumChannelsY - 1) {
 	        netnum = OBSVAL(newpt.x, newpt.y + 1, newpt.lay) & ROUTED_NET_MASK;
 	        if (!(netnum & NO_NET)) {
 		   netnum &= NETNUM_MASK;
@@ -1623,13 +1623,13 @@ void writeback_segment(SEG seg, int netnum)
       dir = OBSVAL(seg->x1, seg->y1, seg->layer + 1) & (BLOCKED_MASK | PINOBSTRUCTMASK);
       OBSVAL(seg->x1, seg->y1, seg->layer + 1) = netnum | dir;
       if (needblock[seg->layer + 1] & VIABLOCKX) {
-	 if (seg->x1 < (NumChannelsX[seg->layer + 1] - 1))
+	 if (seg->x1 < (NumChannelsX - 1))
  	    set_drc_blockage(seg->x1 + 1, seg->y1, seg->layer + 1);
 	 if (seg->x1 > 0)
 	    set_drc_blockage(seg->x1 - 1, seg->y1, seg->layer + 1);
       }
       if (needblock[seg->layer + 1] & VIABLOCKY) {
-	 if (seg->y1 < (NumChannelsY[seg->layer + 1] - 1))
+	 if (seg->y1 < (NumChannelsY - 1))
 	    set_drc_blockage(seg->x1, seg->y1 + 1, seg->layer + 1);
 	 if (seg->y1 > 0)
 	    set_drc_blockage(seg->x1, seg->y1 - 1, seg->layer + 1);
@@ -1646,7 +1646,7 @@ void writeback_segment(SEG seg, int netnum)
 	 lnode = NODEIPTR(seg->x1, seg->y1, seg->layer);
 	 dist = lnode->offset;
 	 if (lnode->flags & NI_OFFSET_EW) {
-	    if ((dist > 0) && (seg->x1 < (NumChannelsX[seg->layer] - 1))) {
+	    if ((dist > 0) && (seg->x1 < (NumChannelsX - 1))) {
 	       set_drc_blockage(seg->x1 + 1, seg->y1, seg->layer);
 	       set_drc_blockage(seg->x1 + 1, seg->y1, seg->layer + 1);
 	    }
@@ -1656,7 +1656,7 @@ void writeback_segment(SEG seg, int netnum)
 	    }
 	 }
 	 else if (lnode->flags & NI_OFFSET_NS) {
-	    if ((dist > 0) && (seg->y1 < (NumChannelsY[seg->layer] - 1))) {
+	    if ((dist > 0) && (seg->y1 < (NumChannelsY - 1))) {
 	       set_drc_blockage(seg->x1, seg->y1 + 1, seg->layer);
 	       set_drc_blockage(seg->x1, seg->y1 + 1, seg->layer + 1);
 	    }
@@ -1672,7 +1672,7 @@ void writeback_segment(SEG seg, int netnum)
       dir = OBSVAL(i, seg->y1, seg->layer) & (BLOCKED_MASK | PINOBSTRUCTMASK);
       OBSVAL(i, seg->y1, seg->layer) = netnum | dir;
       if (needblock[seg->layer] & ROUTEBLOCKY) {
-         if (seg->y1 < (NumChannelsY[seg->layer] - 1))
+         if (seg->y1 < (NumChannelsY - 1))
 	    set_drc_blockage(i, seg->y1 + 1, seg->layer);
 	 if (seg->y1 > 0)
 	    set_drc_blockage(i, seg->y1 - 1, seg->layer);
@@ -1686,7 +1686,7 @@ void writeback_segment(SEG seg, int netnum)
       // cause a DRC error.  Could be refined. . .
 
       layer = (seg->layer == 0) ? 0 : seg->layer - 1;
-      if (seg->y1 < (NumChannelsY[layer] - 1)) {
+      if (seg->y1 < (NumChannelsY - 1)) {
 	 sobs = OBSVAL(i, seg->y1 + 1, layer);
 	 if ((sobs & OFFSET_TAP) && !(sobs & ROUTED_NET)) {
 	    lnode = NODEIPTR(i, seg->y1 + 1, layer);
@@ -1719,7 +1719,7 @@ void writeback_segment(SEG seg, int netnum)
       dir = OBSVAL(seg->x2, seg->y2, seg->layer) & (BLOCKED_MASK | PINOBSTRUCTMASK);
       OBSVAL(seg->x2, seg->y2, seg->layer) = netnum | dir;
       if (needblock[seg->layer] & ROUTEBLOCKY) {
-         if (seg->y2 < (NumChannelsY[seg->layer] - 1))
+         if (seg->y2 < (NumChannelsY - 1))
 	    set_drc_blockage(seg->x2, seg->y2 + 1, seg->layer);
 	 if (seg->y2 > 0)
 	    set_drc_blockage(seg->x2, seg->y2 - 1, seg->layer);
@@ -1731,7 +1731,7 @@ void writeback_segment(SEG seg, int netnum)
       dir = OBSVAL(seg->x1, i, seg->layer) & (BLOCKED_MASK | PINOBSTRUCTMASK);
       OBSVAL(seg->x1, i, seg->layer) = netnum | dir;
       if (needblock[seg->layer] & ROUTEBLOCKX) {
-	 if (seg->x1 < (NumChannelsX[seg->layer] - 1))
+	 if (seg->x1 < (NumChannelsX - 1))
 	    set_drc_blockage(seg->x1 + 1, i, seg->layer);
 	 if (seg->x1 > 0)
 	    set_drc_blockage(seg->x1 - 1, i, seg->layer);
@@ -1741,7 +1741,7 @@ void writeback_segment(SEG seg, int netnum)
       // mark the position unroutable (see above).
 
       layer = (seg->layer == 0) ? 0 : seg->layer - 1;
-      if (seg->x1 < (NumChannelsX[layer] - 1)) {
+      if (seg->x1 < (NumChannelsX - 1)) {
 	 sobs = OBSVAL(seg->x1 + 1, i, layer);
 	 if ((sobs & OFFSET_TAP) && !(sobs & ROUTED_NET)) {
 	    lnode = NODEIPTR(seg->x1 + 1, i, layer);
@@ -1774,7 +1774,7 @@ void writeback_segment(SEG seg, int netnum)
       dir = OBSVAL(seg->x2, seg->y2, seg->layer) & (BLOCKED_MASK | PINOBSTRUCTMASK);
       OBSVAL(seg->x2, seg->y2, seg->layer) = netnum | dir;
       if (needblock[seg->layer] & ROUTEBLOCKX) {
-	 if (seg->x2 < (NumChannelsX[seg->layer] - 1))
+	 if (seg->x2 < (NumChannelsX - 1))
 	    set_drc_blockage(seg->x2 + 1, seg->y2, seg->layer);
 	 if (seg->x2 > 0)
 	    set_drc_blockage(seg->x2 - 1, seg->y2, seg->layer);
@@ -2045,7 +2045,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	       // lowest cost, and make sure the position below that
 	       // is available.
 
-	       if (cx < NumChannelsX[cl] - 1) {
+	       if (cx < NumChannelsX - 1) {
 	          dx = cx + 1;	// Check to the right
 	          pri = &OBS2VAL(dx, cy, cl);
 	          pflags = pri->flags;
@@ -2114,7 +2114,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 		  }
 	       }
 
-	       if (cy < NumChannelsY[cl] - 1) {
+	       if (cy < NumChannelsY - 1) {
 	          dy = cy + 1;	// Check north
 	          pri = &OBS2VAL(cx, dy, cl);
 	          pflags = pri->flags;
@@ -2236,7 +2236,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	          mincost = MAXRT;
 	          dl = lrprev->layer;
 
-		  if (cx < NumChannelsX[cl] - 1) {
+		  if (cx < NumChannelsX - 1) {
 	             dx = cx + 1;	// Check to the right
 	             pri = &OBS2VAL(dx, cy, cl);
 	             pflags = pri->flags;
@@ -2282,7 +2282,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 		     }
 	          }
 
-		  if (cy < NumChannelsY[cl] - 1) {
+		  if (cy < NumChannelsY - 1) {
 	             dy = cy + 1;	// Check north
 	             pri = &OBS2VAL(cx, dy, cl);
 	             pflags = pri->flags;
@@ -2484,7 +2484,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	       o = LefGetRouteOrientation(cl);
 	       for (orient = 0; orient < 2; orient++) {
 		  if (o == orient) {
-		     if (cy < NumChannelsY[cl] - 1) {
+		     if (cy < NumChannelsY - 1) {
 			dy = cy + 1;	// Check north
 			pri = &OBS2VAL(cx, dy, cl);
 			pflags = pri->flags;
@@ -2527,7 +2527,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 		     }
 		  }
 		  else {
-		     if (cx < NumChannelsX[cl] - 1) {
+		     if (cx < NumChannelsX - 1) {
 			dx = cx + 1;	// Check to the right
 			pri = &OBS2VAL(dx, cy, cl);
 			pflags = pri->flags;

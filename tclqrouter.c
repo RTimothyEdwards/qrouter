@@ -1625,10 +1625,15 @@ qrouter_readlef(ClientData clientData, Tcl_Interp *interp,
  
     for (i = 0; i < Num_layers; i++) {
 
-       /* Set Vert and PitchX from route info */
+       /* Set Vert, PitchX, and PitchY from route info */
 
        Vert[i] = (1 - LefGetRouteOrientation(i));
-       PitchX[i] = LefGetRoutePitch(i);
+       if (Vert[i]) {
+	  if (LefGetRoutePitch(i) < PitchX) PitchX = LefGetRoutePitch(i);
+       }
+       else {
+	  if (LefGetRoutePitch(i) < PitchY) PitchY = LefGetRoutePitch(i);
+       }
     }
 
     post_config();
@@ -2789,7 +2794,7 @@ qrouter_congested(ClientData clientData, Tcl_Interp *interp,
     else
 	entries = 0;
 
-    Congestion = (float *)calloc(NumChannelsX[0] * NumChannelsY[0],
+    Congestion = (float *)calloc(NumChannelsX * NumChannelsY,
 			sizeof(float));
 
     // Use net bounding boxes to estimate congestion
@@ -2809,8 +2814,8 @@ qrouter_congested(ClientData clientData, Tcl_Interp *interp,
 
 	for (x = net->xmin; x < net->xmax; x++)
 	    for (y = net->ymin; y < net->ymax; y++)
-		if (x >= 0 && x < NumChannelsX[0] &&
-			y >= 0 && y < NumChannelsY[0])
+		if (x >= 0 && x < NumChannelsX &&
+			y >= 0 && y < NumChannelsY)
 		    CONGEST(x, y) += density;
     }
 
@@ -2835,12 +2840,12 @@ qrouter_congested(ClientData clientData, Tcl_Interp *interp,
 	cgates[i] = (CLIST)malloc(sizeof(Clist));
 	dx = gsrch->placedX;
 	dy = gsrch->placedY;
-	bbox.x1 = (int)((dx - Xlowerbound) / PitchX[0]) - 1;
-	bbox.y1 = (int)((dy - Ylowerbound) / PitchY[0]) - 1;
+	bbox.x1 = (int)((dx - Xlowerbound) / PitchX) - 1;
+	bbox.y1 = (int)((dy - Ylowerbound) / PitchY) - 1;
 	dx = gsrch->placedX + gsrch->width;
 	dy = gsrch->placedY + gsrch->height;
-	bbox.x2 = (int)((dx - Xlowerbound) / PitchX[0]) - 1;
-	bbox.y2 = (int)((dy - Ylowerbound) / PitchY[0]) - 1;
+	bbox.x2 = (int)((dx - Xlowerbound) / PitchX) - 1;
+	bbox.y2 = (int)((dy - Ylowerbound) / PitchY) - 1;
 
 	cavg = 0.0;
 	for (x = bbox.x1; x <= bbox.x2; x++) {

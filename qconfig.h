@@ -16,10 +16,10 @@ extern double  PathWidth[MAX_LAYERS];    // width of the paths
 extern int     GDSLayer[MAX_TYPES];     // GDS layer number 
 extern int     GDSCommentLayer;          // for dummy wires, etc.
 extern char    CIFLayer[MAX_TYPES][50]; // CIF layer name 
-extern double  PitchX[MAX_LAYERS];       // horizontal wire pitch of layer
-extern double  PitchY[MAX_LAYERS];       // vertical wire pitch of layer
-extern int     NumChannelsX[MAX_LAYERS];
-extern int     NumChannelsY[MAX_LAYERS];
+extern double  PitchX;       		// base horizontal wire pitch
+extern double  PitchY;       		// base vertical wire pitch
+extern int     NumChannelsX;
+extern int     NumChannelsY;
 extern int     Vert[MAX_LAYERS];        // 1 if verticle, 0 if horizontal
 extern int     Numpasses;               // number of times to iterate in route_segs
 extern char    StackedContacts;	  	// Number of vias that can be stacked together

@@ -63,7 +63,7 @@ int write_failed(char *filename)
 
     for (nl = FailedNets; nl; nl = nl->next) {
         net = nl->net;
-        Fprintf(ffail, " %s\n", net->netname);
+        fprintf(ffail, " %s\n", net->netname);
     }
 
     fclose(ffail);
@@ -1090,12 +1090,12 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 				" at %d %d (%d)\n", stub,
 				seg->x1, seg->y1, layer);
 
-	       dc = Xlowerbound + (double)seg->x1 * PitchX[layer];
+	       dc = Xlowerbound + (double)seg->x1 * PitchX;
 	       x = (int)((REPS(dc)) * oscale);
 	       if (lnode->flags & NI_STUB_EW)
 		  dc += stub;
 	       x2 = (int)((REPS(dc)) * oscale);
-	       dc = Ylowerbound + (double)seg->y1 * PitchY[layer];
+	       dc = Ylowerbound + (double)seg->y1 * PitchY;
 	       y = (int)((REPS(dc)) * oscale);
 	       if (lnode->flags & NI_STUB_NS)
 		  dc += stub;
@@ -1115,13 +1115,12 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		  // ones.  If necessary, a flag can be added to
 		  // distinguish routes from taps.
 
-		  if ((x < x2) && (seg->x1 < (NumChannelsX[layer] - 1))) {
+		  if ((x < x2) && (seg->x1 < (NumChannelsX - 1))) {
 		     tdir = OBSVAL(seg->x1 + 1, seg->y1, layer);
 		     if ((tdir & ROUTED_NET_MASK) ==
 					(net->netnum | ROUTED_NET)) {
-			if (stub + LefGetRouteKeepout(layer) >= PitchX[layer]) {
-		      	   dc = Xlowerbound + (double)(seg->x1 + 1)
-					* PitchX[layer];
+			if (stub + LefGetRouteKeepout(layer) >= PitchX) {
+		      	   dc = Xlowerbound + (double)(seg->x1 + 1) * PitchX;
 		      	   x2 = (int)((REPS(dc)) * oscale);
 			}
 		     }
@@ -1130,9 +1129,8 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		     tdir = OBSVAL(seg->x1 - 1, seg->y1, layer);
 		     if ((tdir & ROUTED_NET_MASK) ==
 					(net->netnum | ROUTED_NET)) {
-			if (-stub + LefGetRouteKeepout(layer) >= PitchX[layer]) {
-		      	   dc = Xlowerbound + (double)(seg->x1 - 1)
-					* PitchX[layer];
+			if (-stub + LefGetRouteKeepout(layer) >= PitchX) {
+		      	   dc = Xlowerbound + (double)(seg->x1 - 1) * PitchX;
 		      	   x2 = (int)((REPS(dc)) * oscale);
 			}
 		     }
@@ -1173,13 +1171,12 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		  // other route, then lengthen it to close up the
 		  // distance and resolve the error.
 
-		  if ((y < y2) && (seg->y1 < (NumChannelsY[layer] - 1))) {
+		  if ((y < y2) && (seg->y1 < (NumChannelsY - 1))) {
 		     tdir = OBSVAL(seg->x1, seg->y1 + 1, layer);
 		     if ((tdir & ROUTED_NET_MASK) ==
 						(net->netnum | ROUTED_NET)) {
-			if (stub + LefGetRouteKeepout(layer) >= PitchY[layer]) {
-		      	   dc = Ylowerbound + (double)(seg->y1 + 1)
-					* PitchY[layer];
+			if (stub + LefGetRouteKeepout(layer) >= PitchY) {
+		      	   dc = Ylowerbound + (double)(seg->y1 + 1) * PitchY;
 		      	   y2 = (int)((REPS(dc)) * oscale);
 			}
 		     }
@@ -1188,9 +1185,8 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		     tdir = OBSVAL(seg->x1, seg->y1 - 1, layer);
 		     if ((tdir & ROUTED_NET_MASK) ==
 						(net->netnum | ROUTED_NET)) {
-			if (-stub + LefGetRouteKeepout(layer) >= PitchY[layer]) {
-		      	   dc = Ylowerbound + (double)(seg->y1 - 1)
-					* PitchY[layer];
+			if (-stub + LefGetRouteKeepout(layer) >= PitchY) {
+		      	   dc = Ylowerbound + (double)(seg->y1 - 1) * PitchY;
 		      	   y2 = (int)((REPS(dc)) * oscale);
 			}
 		     }
@@ -1334,16 +1330,16 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 	    // and are redundant between CIFLayer[] from the
 	    // config file and lefInfo.
 
-	    dc = Xlowerbound + (double)seg->x1 * PitchX[layer];
+	    dc = Xlowerbound + (double)seg->x1 * PitchX;
 	    if ((dir1 & OFFSET_TAP) && (lnode1->flags & NI_OFFSET_EW)) dc += offset1;
 	    x = (int)((REPS(dc)) * oscale);
-	    dc = Ylowerbound + (double)seg->y1 * PitchY[layer];
+	    dc = Ylowerbound + (double)seg->y1 * PitchY;
 	    if ((dir1 & OFFSET_TAP) && (lnode1->flags & NI_OFFSET_NS)) dc += offset1;
 	    y = (int)((REPS(dc)) * oscale);
-	    dc = Xlowerbound + (double)seg->x2 * PitchX[layer];
+	    dc = Xlowerbound + (double)seg->x2 * PitchX;
 	    if ((dir2 & OFFSET_TAP) && (lnode2->flags & NI_OFFSET_EW)) dc += offset2;
 	    x2 = (int)((REPS(dc)) * oscale);
-	    dc = Ylowerbound + (double)seg->y2 * PitchY[layer];
+	    dc = Ylowerbound + (double)seg->y2 * PitchY;
 	    if ((dir2 & OFFSET_TAP) && (lnode2->flags & NI_OFFSET_NS)) dc += offset2;
 	    y2 = (int)((REPS(dc)) * oscale);
 	    segtype = seg->segtype & ~(ST_OFFSET_START | ST_OFFSET_END);
@@ -1592,7 +1588,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		     }
 
 		     // Check for via/route to east
-		     if (seg->x1 < NumChannelsX[layer] - 1) {
+		     if (seg->x1 < NumChannelsX - 1) {
 			tdir = OBSVAL(seg->x1 + 1, seg->y1, layer)
 					& ROUTED_NET_MASK;
 
@@ -1654,7 +1650,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		     }
 
 		     // Check for via/route to north
-		     if (seg->y1 < NumChannelsY[layer] - 1) {
+		     if (seg->y1 < NumChannelsY - 1) {
 			tdir = OBSVAL(seg->x1, seg->y1 + 1, layer)
 					& ROUTED_NET_MASK;
 
@@ -1752,7 +1748,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			    w1 = LefGetXYViaWidth(layer, layer, 0, 0);
 			    w0 = w1;
 		            dc = LefGetRouteSpacing(layer) + w1;
-			    if (dc > PitchX[layer] + EPS + offsetx) {
+			    if (dc > PitchX + EPS + offsetx) {
 
 				/* via on checkerboard may be rotated */
 				if (checkersign && ((flags & NI_NO_VIAY) == 0)) {
@@ -1763,7 +1759,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 						(LefGetXYViaWidth(layer, layer, 1, 2) +
 						LefGetRouteWidth(layer)) / 2;
 				    if ((!(rteNL || rteSL))
-						|| (dc <= PitchY[layer] + EPS)) {
+						|| (dc <= PitchY + EPS)) {
 					/* Okay to rotate the via bottom */
 					w0 = LefGetXYViaWidth(layer, layer, 0, 2);
 					s = (ot == 1) ? ViaYX[layer] : ViaYY[layer];
@@ -1774,24 +1770,24 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
 				    /* Measure spacing violation to via */
 		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
-				    if (dc > PitchX[layer] + EPS + offsetx) {
+				    if (dc > PitchX + EPS + offsetx) {
 					/* Calculate offset */
 					if (viaEM)
-					    viaoffx = PitchX[layer] + 2 * offsetx - dc;
+					    viaoffx = PitchX + 2 * offsetx - dc;
 					else
-					    viaoffx = dc - PitchX[layer] - 2 * offsetx;
+					    viaoffx = dc - PitchX - 2 * offsetx;
 				    }
 				}
 				else {
 				    /* Measure spacing violation to rotated via */
 				    w0 = LefGetXYViaWidth(layer, layer, 0, 2);
 		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
-				    if (dc > PitchX[layer] + EPS + offsetx) {
+				    if (dc > PitchX + EPS + offsetx) {
 					/* Calculate offset */
 					if (viaEM)
-					    viaoffx = PitchX[layer] + 2 * offsetx - dc;
+					    viaoffx = PitchX + 2 * offsetx - dc;
 					else
-					    viaoffx = dc - PitchX[layer] - 2 * offsetx;
+					    viaoffx = dc - PitchX - 2 * offsetx;
 				    }
 				}
 			    }
@@ -1803,7 +1799,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			    w0 = LefGetXYViaWidth(layer - 1, layer, 0, 0);
 			    w1 = LefGetXYViaWidth(layer, layer, 0, 0);
 		            dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
-			    if (dc > PitchX[layer] + EPS + offsetx) {
+			    if (dc > PitchX + EPS + offsetx) {
 
 				/* via on checkerboard may be rotated */
 				if (checkersign && ((flags & NI_NO_VIAY) == 0)) {
@@ -1814,7 +1810,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 						(LefGetXYViaWidth(layer, layer, 1, 2) +
 						LefGetRouteWidth(layer)) / 2;
 				    if ((!(rteNL || rteSL))
-						|| (dc <= PitchY[layer] + EPS)) {
+						|| (dc <= PitchY + EPS)) {
 					/* Okay to rotate the via bottom */
 					w1 = LefGetXYViaWidth(layer, layer, 0, 2);
 					s = (ot == 1) ? ViaYX[layer] : ViaYY[layer];
@@ -1825,24 +1821,24 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
 				    /* Measure spacing violation to via */
 		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
-				    if (dc > PitchX[layer] + EPS + offsetx) {
+				    if (dc > PitchX + EPS + offsetx) {
 					/* Calculate offset */
 					if (viaEL)
-					    viaoffx = PitchX[layer] + 2 * offsetx - dc;
+					    viaoffx = PitchX + 2 * offsetx - dc;
 					else
-					    viaoffx = dc - PitchX[layer] - 2 * offsetx;
+					    viaoffx = dc - PitchX - 2 * offsetx;
 				    }
 				}
 				else {
 				    /* Measure spacing violation to rotated via */
 				    w0 = LefGetXYViaWidth(layer - 1, layer, 0, 1);
 		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
-				    if (dc > PitchX[layer] + EPS + offsetx) {
+				    if (dc > PitchX + EPS + offsetx) {
 					/* Calculate offset */
 					if (viaEL)
-					    viaoffx = PitchX[layer] + 2 * offsetx - dc;
+					    viaoffx = PitchX + 2 * offsetx - dc;
 					else
-					    viaoffx = dc - PitchX[layer] - 2 * offsetx;
+					    viaoffx = dc - PitchX - 2 * offsetx;
 				    }
 				}
 			    }
@@ -1855,7 +1851,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			    w1 = LefGetXYViaWidth(layer, layer, 1, 3);
 			    w0 = w1;
 		            dc = LefGetRouteSpacing(layer) + w1;
-			    if (dc > PitchY[layer] + EPS + offsety) {
+			    if (dc > PitchY + EPS + offsety) {
 
 				/* via on checkerboard may be rotated */
 				if (checkersign && ((flags & NI_NO_VIAX) == 0)) {
@@ -1866,7 +1862,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 						(LefGetXYViaWidth(layer, layer, 0, 1) +
 						LefGetRouteWidth(layer)) / 2;
 				    if ((!(rteEL || rteWL))
-						|| (dc <= PitchX[layer] + EPS)) {
+						|| (dc <= PitchX + EPS)) {
 					/* Okay to rotate the via bottom */
 					w0 = LefGetXYViaWidth(layer, layer, 1, 1);
 					s = (ot == 1) ? ViaXX[layer] : ViaXY[layer];
@@ -1877,24 +1873,24 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
 				    /* Measure spacing violation to via */
 		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
-				    if (dc > PitchY[layer] + EPS + offsety) {
+				    if (dc > PitchY + EPS + offsety) {
 					/* Calculate offset */
 					if (viaNM)
-					    viaoffy = PitchY[layer] + 2 * offsety - dc;
+					    viaoffy = PitchY + 2 * offsety - dc;
 					else
-					    viaoffy = dc - PitchY[layer] - 2 * offsety;
+					    viaoffy = dc - PitchY - 2 * offsety;
 				    }
 				}
 				else {
 				    /* Measure spacing violation to rotated via */
 				    w0 = LefGetXYViaWidth(layer, layer, 1, 1);
 		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
-				    if (dc > PitchY[layer] + EPS + offsety) {
+				    if (dc > PitchY + EPS + offsety) {
 					/* Calculate offset */
 					if (viaNM)
-					    viaoffy = PitchY[layer] + 2 * offsety - dc;
+					    viaoffy = PitchY + 2 * offsety - dc;
 					else
-					    viaoffy = dc - PitchY[layer] - 2 * offsety;
+					    viaoffy = dc - PitchY - 2 * offsety;
 				    }
 				}
 			    }
@@ -1906,7 +1902,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			    w0 = LefGetXYViaWidth(layer - 1, layer, 1, 3);
 			    w1 = LefGetXYViaWidth(layer, layer, 1, 3);
 		            dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
-			    if (dc > PitchY[layer] + EPS + offsety) {
+			    if (dc > PitchY + EPS + offsety) {
 
 				/* via on checkerboard may be rotated */
 				if (checkersign && ((flags & NI_NO_VIAX) == 0)) {
@@ -1917,7 +1913,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 						(LefGetXYViaWidth(layer, layer, 0, 1) +
 						LefGetRouteWidth(layer)) / 2;
 				    if ((!(rteEL || rteWL))
-						|| (dc <= PitchX[layer] + EPS)) {
+						|| (dc <= PitchX + EPS)) {
 					/* Okay to rotate the via bottom */
 					w1 = LefGetXYViaWidth(layer, layer, 1, 1);
 					s = (ot == 1) ? ViaXX[layer] : ViaXY[layer];
@@ -1928,24 +1924,24 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
 				    /* Measure spacing violation to via */
 		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
-				    if (dc > PitchY[layer] + EPS + offsety) {
+				    if (dc > PitchY + EPS + offsety) {
 					/* Calculate offset */
 					if (viaNL)
-					    viaoffy = PitchY[layer] + 2 * offsety - dc;
+					    viaoffy = PitchY + 2 * offsety - dc;
 					else
-					    viaoffy = dc - PitchY[layer] - 2 * offsety;
+					    viaoffy = dc - PitchY - 2 * offsety;
 				    }
 				}
 				else {
 				    /* Measure spacing violation to rotated via */
 				    w0 = LefGetXYViaWidth(layer - 1, layer, 1, 2);
 		        	    dc = LefGetRouteSpacing(layer) + (w1 + w0) / 2;
-				    if (dc > PitchY[layer] + EPS + offsety) {
+				    if (dc > PitchY + EPS + offsety) {
 					/* Calculate offset */
 					if (viaNL)
-					    viaoffy = PitchY[layer] + 2 * offsety - dc;
+					    viaoffy = PitchY + 2 * offsety - dc;
 					else
-					    viaoffy = dc - PitchY[layer] - 2 * offsety;
+					    viaoffy = dc - PitchY - 2 * offsety;
 				    }
 				}
 			    }
@@ -1960,7 +1956,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			    w0 = LefGetXYViaWidth(layer + 1, layer + 1, 0, 0);
 			    w1 = LefGetXYViaWidth(layer, layer + 1, 0, 0);
 		            dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
-			    if (dc > PitchX[layer + 1] + EPS + offsetx) {
+			    if (dc > PitchX + EPS + offsetx) {
 
 				/* via on checkerboard may be rotated */
 				if (checkersign) {
@@ -1971,7 +1967,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 						(LefGetXYViaWidth(layer, layer + 1, 1, 1)
 						+ LefGetRouteWidth(layer + 1)) / 2;
 				    if ((!(rteNU || rteSU))
-						|| (dc <= PitchY[layer + 1] + EPS)) {
+						|| (dc <= PitchY + EPS)) {
 					/* Okay to rotate the via top */
 					w1 = LefGetXYViaWidth(layer, layer + 1, 0, 1);
 					s = (s == ViaYX[layer]) ? ViaYY[layer] :
@@ -1983,28 +1979,24 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
 				    /* Measure spacing violation to via */
 		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
-				    if (dc > PitchX[layer + 1] + EPS + offsetx) {
+				    if (dc > PitchX + EPS + offsetx) {
 					/* Calculate offset */
 					if (viaEU)
-					    viaoffx = PitchX[layer + 1] +
-							2 * offsetx - dc;
+					    viaoffx = PitchX + 2 * offsetx - dc;
 					else
-					    viaoffx = dc - PitchX[layer + 1] -
-							2 * offsetx;
+					    viaoffx = dc - PitchX - 2 * offsetx;
 				    }
 				}
 				else {
 				    /* Measure spacing violation to rotated via */
 				    w0 = LefGetXYViaWidth(layer + 1, layer + 1, 0, 2);
 		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
-				    if (dc > PitchX[layer + 1] + EPS + offsetx) {
+				    if (dc > PitchX + EPS + offsetx) {
 					/* Calculate offset */
 					if (viaEU)
-					    viaoffx = PitchX[layer + 1] +
-							2 * offsetx - dc;
+					    viaoffx = PitchX + 2 * offsetx - dc;
 					else
-					    viaoffx = dc - PitchX[layer + 1] -
-							2 * offsetx;
+					    viaoffx = dc - PitchX - 2 * offsetx;
 				    }
 				}
 			    }
@@ -2016,7 +2008,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			    w1 = LefGetXYViaWidth(layer, layer + 1, 0, 0);
 			    w0 = w1;
 		            dc = LefGetRouteSpacing(layer + 1) + w1;
-			    if (dc > PitchX[layer + 1] + EPS + offsetx) {
+			    if (dc > PitchX + EPS + offsetx) {
 
 				/* via on checkerboard may be rotated */
 				if (checkersign) {
@@ -2026,8 +2018,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 					dc = LefGetRouteSpacing(layer) +
 						(LefGetXYViaWidth(layer, layer + 1, 1, 1)
 						+ LefGetRouteWidth(layer)) / 2;
-				    if ((!(rteNU || rteSU))
-						|| (dc <= PitchY[layer + 1] + EPS)) {
+				    if ((!(rteNU || rteSU)) || (dc <= PitchY + EPS)) {
 					/* Okay to rotate the via top */
 					w0 = LefGetXYViaWidth(layer, layer + 1, 0, 1);
 					s = (s == ViaYX[layer]) ? ViaYY[layer] :
@@ -2039,28 +2030,24 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
 				    /* Measure spacing violation to via */
 		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
-				    if (dc > PitchX[layer + 1] + EPS + offsetx) {
+				    if (dc > PitchX + EPS + offsetx) {
 					/* Calculate offset */
 					if (viaEM)
-					    viaoffx = PitchX[layer + 1] +
-							2 * offsetx - dc;
+					    viaoffx = PitchX + 2 * offsetx - dc;
 					else
-					    viaoffx = dc - PitchX[layer + 1] -
-							2 * offsetx;
+					    viaoffx = dc - PitchX - 2 * offsetx;
 				    }
 				}
 				else {
 				    /* Measure spacing violation to rotated via */
 				    w0 = LefGetXYViaWidth(layer, layer + 1, 0, 1);
 		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
-				    if (dc > PitchX[layer + 1] + EPS + offsetx) {
+				    if (dc > PitchX + EPS + offsetx) {
 					/* Calculate offset */
 					if (viaEM)
-					    viaoffx = PitchX[layer + 1] +
-							2 * offsetx - dc;
+					    viaoffx = PitchX + 2 * offsetx - dc;
 					else
-					    viaoffx = dc - PitchX[layer + 1] -
-							2 * offsetx;
+					    viaoffx = dc - PitchX - 2 * offsetx;
 				    }
 				}
 			    }
@@ -2073,7 +2060,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			    w0 = LefGetXYViaWidth(layer + 1, layer + 1, 1, 3);
 			    w1 = LefGetXYViaWidth(layer, layer + 1, 1, 3);
 		            dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
-			    if (dc > PitchY[layer + 1] + EPS + offsety) {
+			    if (dc > PitchY + EPS + offsety) {
 
 				/* via on checkerboard may be rotated */
 				if (checkersign) {
@@ -2084,7 +2071,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 						(LefGetXYViaWidth(layer, layer + 1, 0, 2)
 						+ LefGetRouteWidth(layer + 1)) / 2;
 				    if ((!(rteEU || rteWU))
-						|| (dc <= PitchX[layer + 1] + EPS)) {
+						|| (dc <= PitchX + EPS)) {
 					/* Okay to rotate the via top */
 					w1 = LefGetXYViaWidth(layer, layer + 1, 1, 2);
 					s = (s == ViaYY[layer]) ? ViaYX[layer] :
@@ -2096,28 +2083,24 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
 				    /* Measure spacing violation to via */
 		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
-				    if (dc > PitchY[layer + 1] + EPS + offsety) {
+				    if (dc > PitchY + EPS + offsety) {
 					/* Calculate offset */
 					if (viaNU)
-					    viaoffy = PitchY[layer + 1] +
-							2 * offsety - dc;
+					    viaoffy = PitchY + 2 * offsety - dc;
 					else
-					    viaoffy = dc - PitchY[layer + 1] -
-							2 * offsety;
+					    viaoffy = dc - PitchY - 2 * offsety;
 				    }
 				}
 				else {
 				    /* Measure spacing violation to rotated via */
 				    w0 = LefGetXYViaWidth(layer + 1, layer + 1, 1, 1);
 		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
-				    if (dc > PitchY[layer + 1] + EPS + offsety) {
+				    if (dc > PitchY + EPS + offsety) {
 					/* Calculate offset */
 					if (viaNU)
-					    viaoffy = PitchY[layer + 1] +
-							2 * offsety - dc;
+					    viaoffy = PitchY + 2 * offsety - dc;
 					else
-					    viaoffy = dc - PitchY[layer + 1] -
-							2 * offsety;
+					    viaoffy = dc - PitchY - 2 * offsety;
 				    }
 				}
 			    }
@@ -2129,7 +2112,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			    w1 = LefGetXYViaWidth(layer, layer + 1, 1, 3);
 			    w0 = w1;
 		            dc = LefGetRouteSpacing(layer + 1) + w1;
-			    if (dc > PitchY[layer + 1] + EPS + offsety) {
+			    if (dc > PitchY + EPS + offsety) {
 
 				/* via on checkerboard may be rotated */
 				if (checkersign) {
@@ -2140,7 +2123,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 						(LefGetXYViaWidth(layer, layer + 1, 0, 2)
 						+ LefGetRouteWidth(layer + 1)) / 2;
 				    if ((!(rteEU || rteWU))
-						|| (dc <= PitchX[layer + 1] + EPS)) {
+						|| (dc <= PitchX + EPS)) {
 					/* Okay to rotate the via top */
 					w1 = LefGetXYViaWidth(layer, layer + 1, 1, 2);
 					s = (s == ViaYY[layer]) ? ViaYX[layer] :
@@ -2152,26 +2135,24 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
 				    /* Measure spacing violation to via */
 		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
-				    if (dc > PitchY[layer + 1] + EPS + offsety) {
+				    if (dc > PitchY + EPS + offsety) {
 					/* Calculate offset */
 					if (viaNM)
-					    viaoffy = PitchY[layer + 1] +
-							2 * offsety - dc;
+					    viaoffy = PitchY + 2 * offsety - dc;
 					else
-					    viaoffy = dc - PitchY[layer + 1] -
-							2 * offsety;
+					    viaoffy = dc - PitchY - 2 * offsety;
 				    }
 				}
 				else {
 				    /* Measure spacing violation to rotated via */
 				    w0 = LefGetXYViaWidth(layer, layer + 1, 1, 2);
 		        	    dc = LefGetRouteSpacing(layer + 1) + (w1 + w0) / 2;
-				    if (dc > PitchY[layer + 1] + EPS + offsety) {
+				    if (dc > PitchY + EPS + offsety) {
 					/* Calculate offset */
 					if (viaNM)
-					    viaoffy = PitchY[layer] + 2 * offsety - dc;
+					    viaoffy = PitchY + 2 * offsety - dc;
 					else
-					    viaoffy = dc - PitchY[layer] - 2 * offsety;
+					    viaoffy = dc - PitchY - 2 * offsety;
 				    }
 				}
 			    }
@@ -2273,20 +2254,20 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
 		      if (prevseg->segtype & ST_VIA) {
 
-		 	 dc = Xlowerbound + (double)seg->x1 * PitchX[layer];
+		 	 dc = Xlowerbound + (double)seg->x1 * PitchX;
 			 x = (int)((REPS(dc)) * oscale);
-			 dc = Ylowerbound + (double)seg->y1 * PitchY[layer];
+			 dc = Ylowerbound + (double)seg->y1 * PitchY;
 			 y = (int)((REPS(dc)) * oscale);
 
-			 dc = Xlowerbound + (double)prevseg->x1 * PitchX[layer];
+			 dc = Xlowerbound + (double)prevseg->x1 * PitchX;
 			 x2 = (int)((REPS(dc)) * oscale);
-			 dc = Ylowerbound + (double)prevseg->y1 * PitchY[layer];
+			 dc = Ylowerbound + (double)prevseg->y1 * PitchY;
 			 y2 = (int)((REPS(dc)) * oscale);
 
 			 // Setup is (via, 1 track route, via with offset)
 
 			 if (prevseg->x1 != seg->x1) {
-			    if ((PitchX[lastseg->layer] -
+			    if ((PitchX -
 				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 1) -
 				0.5 * LefGetViaWidth(prevseg->layer, lastseg->layer, 1) -
 				(prevseg->x1 - seg->x1) * offset)
@@ -2305,7 +2286,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			    }
 			 }
 			 else if (prevseg->y1 != seg->y1) {
-			    if ((PitchY[lastseg->layer] -
+			    if ((PitchY -
 				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 0) -
 				0.5 * LefGetViaWidth(prevseg->layer, lastseg->layer, 0)
 				- (prevseg->y1 - seg->y1) * offset)
@@ -2326,7 +2307,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		      }
 		      else {	// Metal route bends at next track
 			 if (prevseg->x1 != seg->x1) {
-			    if ((PitchX[lastseg->layer] -
+			    if ((PitchX -
 				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 1) -
 				0.5 * LefGetRouteWidth(prevseg->layer) -
 				(prevseg->x1 - seg->x1) * offset)
@@ -2345,7 +2326,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			    }
 			 }
 			 else if (prevseg->y1 != seg->y1) {
-			    if ((PitchY[lastseg->layer] -
+			    if ((PitchY -
 				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 0) -
 				0.5 * LefGetRouteWidth(prevseg->layer) -
 				(prevseg->y1 - seg->y1) * offset)
@@ -2380,14 +2361,14 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 				" at %d %d (%d)\n",
 				stub, seg->x2, seg->y2, layer);
 
-		dc = Xlowerbound + (double)seg->x2 * PitchX[layer];
+		dc = Xlowerbound + (double)seg->x2 * PitchX;
 		if (lnode->flags & NI_OFFSET_EW)
 		   dc += offset;
 		x = (int)((REPS(dc)) * oscale);
 		if (lnode->flags & NI_STUB_EW)
 		   dc += stub;
 		x2 = (int)((REPS(dc)) * oscale);
-		dc = Ylowerbound + (double)seg->y2 * PitchY[layer];
+		dc = Ylowerbound + (double)seg->y2 * PitchY;
 		if (lnode->flags & NI_OFFSET_NS)
 		   dc += offset;
 		y = (int)((REPS(dc)) * oscale);
@@ -2403,13 +2384,12 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		   // other route, then lengthen it to close up the
 		   // distance and resolve the error.
 
-		   if ((x < x2) && (seg->x2 < (NumChannelsX[layer] - 1))) {
+		   if ((x < x2) && (seg->x2 < (NumChannelsX - 1))) {
 		      tdir = OBSVAL(seg->x2 + 1, seg->y2, layer);
 		      if ((tdir & ROUTED_NET_MASK) ==
 						(net->netnum | ROUTED_NET)) {
-			 if (stub + LefGetRouteKeepout(layer) >= PitchX[layer]) {
-		      	    dc = Xlowerbound + (double)(seg->x2 + 1)
-					* PitchX[layer];
+			 if (stub + LefGetRouteKeepout(layer) >= PitchX) {
+		      	    dc = Xlowerbound + (double)(seg->x2 + 1) * PitchX;
 		      	    x2 = (int)((REPS(dc)) * oscale);
 			 }
 		      }
@@ -2418,9 +2398,8 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		      tdir = OBSVAL(seg->x2 - 1, seg->y2, layer);
 		      if ((tdir & ROUTED_NET_MASK) ==
 						(net->netnum | ROUTED_NET)) {
-			 if (-stub + LefGetRouteKeepout(layer) >= PitchX[layer]) {
-		      	    dc = Xlowerbound + (double)(seg->x2 - 1)
-					* PitchX[layer];
+			 if (-stub + LefGetRouteKeepout(layer) >= PitchX) {
+		      	    dc = Xlowerbound + (double)(seg->x2 - 1) * PitchX;
 		      	    x2 = (int)((REPS(dc)) * oscale);
 			 }
 		      }
@@ -2461,13 +2440,12 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		   // other route, then lengthen it to close up the
 		   // distance and resolve the error.
 
-		   if ((y < y2) && (seg->y2 < (NumChannelsY[layer] - 1))) {
+		   if ((y < y2) && (seg->y2 < (NumChannelsY - 1))) {
 		      tdir = OBSVAL(seg->x2, seg->y2 + 1, layer);
 		      if ((tdir & ROUTED_NET_MASK) ==
 						(net->netnum | ROUTED_NET)) {
-			 if (stub + LefGetRouteKeepout(layer) >= PitchY[layer]) {
-		      	    dc = Ylowerbound + (double)(seg->y2 + 1)
-					* PitchY[layer];
+			 if (stub + LefGetRouteKeepout(layer) >= PitchY) {
+		      	    dc = Ylowerbound + (double)(seg->y2 + 1) * PitchY;
 		      	    y2 = (int)((REPS(dc)) * oscale);
 			 }
 		      }
@@ -2476,9 +2454,8 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		      tdir = OBSVAL(seg->x2, seg->y2 - 1, layer);
 		      if ((tdir & ROUTED_NET_MASK) ==
 						(net->netnum | ROUTED_NET)) {
-			 if (-stub + LefGetRouteKeepout(layer) >= PitchY[layer]) {
-		      	    dc = Ylowerbound + (double)(seg->y2 - 1)
-					* PitchY[layer];
+			 if (-stub + LefGetRouteKeepout(layer) >= PitchY) {
+		      	    dc = Ylowerbound + (double)(seg->y2 - 1) * PitchY;
 		      	    y2 = (int)((REPS(dc)) * oscale);
 			 }
 		      }

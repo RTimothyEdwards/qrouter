@@ -250,10 +250,10 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 					(valid == TRUE)) {
 				s = LefGetRouteSpacing(routeLayer); 
 				drect = (DSEG)malloc(sizeof(struct dseg_));
-				drect->x1 = x + lefl->info.via.area.x1 - s;
-				drect->x2 = x + lefl->info.via.area.x2 + s;
-				drect->y1 = y + lefl->info.via.area.y1 - s;
-				drect->y2 = y + lefl->info.via.area.y2 + s;
+				drect->x1 = x + (lefl->info.via.area.x1 / 2.0) - s;
+				drect->x2 = x + (lefl->info.via.area.x2 / 2.0) + s;
+				drect->y1 = y + (lefl->info.via.area.y1 / 2.0) - s;
+				drect->y2 = y + (lefl->info.via.area.y2 / 2.0) + s;
 				drect->layer = routeLayer;
 				drect->next = UserObs;
 				UserObs = drect;
@@ -267,10 +267,10 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 					(valid == TRUE)) {
 				s = LefGetRouteSpacing(routeLayer); 
 				drect = (DSEG)malloc(sizeof(struct dseg_));
-				drect->x1 = x + lr->x1 - s;
-				drect->x2 = x + lr->x2 + s;
-				drect->y1 = y + lr->y1 - s;
-				drect->y2 = y + lr->y2 + s;
+				drect->x1 = x + (lr->x1 / 2.0) - s;
+				drect->x2 = x + (lr->x2 / 2.0) + s;
+				drect->y1 = y + (lr->y1 / 2.0) - s;
+				drect->y2 = y + (lr->y2 / 2.0) + s;
 				drect->layer = routeLayer;
 				drect->next = UserObs;
 				UserObs = drect;
@@ -352,7 +352,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    else if (sscanf(token, "%lg", &x) == 1)
 	    {
 		x /= oscale;		// In microns
-		refp.x1 = (int)((x - Xlowerbound + EPS) / PitchX[paintLayer]);
+		refp.x1 = (int)((x - Xlowerbound + EPS) / PitchX);
 	    }
 	    else
 	    {
@@ -375,7 +375,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    else if (sscanf(token, "%lg", &y) == 1)
 	    {
 		y /= oscale;		// In microns
-		refp.y1 = (int)((y - Ylowerbound + EPS) / PitchY[paintLayer]);
+		refp.y1 = (int)((y - Ylowerbound + EPS) / PitchY);
 	    }
 	    else
 	    {
@@ -534,23 +534,21 @@ DefReadGatePin(NET net, NODE node, char *instname, char *pinname, double *home)
 		    // but not centered on gridpoints should be marked
 		    // in some way, and handled appropriately.
 
-		    gridx = (int)((drect->x1 - Xlowerbound) /
-				PitchX[drect->layer]) - 1;
+		    gridx = (int)((drect->x1 - Xlowerbound) / PitchX) - 1;
 
 		    if (gridx < 0) gridx = 0;
 		    while (1) {
-			dx = (gridx * PitchX[drect->layer]) + Xlowerbound;
+			dx = (gridx * PitchX) + Xlowerbound;
 			if (dx > drect->x2 + home[drect->layer] - EPS) break;
 			if (dx < drect->x1 - home[drect->layer] + EPS) {
 			    gridx++;
 			    continue;
 			}
-			gridy = (int)((drect->y1 - Ylowerbound) /
-					PitchY[drect->layer]) - 1;
+			gridy = (int)((drect->y1 - Ylowerbound) / PitchY) - 1;
 
 			if (gridy < 0) gridy = 0;
 			while (1) {
-			    dy = (gridy * PitchY[drect->layer]) + Ylowerbound;
+			    dy = (gridy * PitchY) + Ylowerbound;
 			    if (dy > drect->y2 + home[drect->layer] - EPS) break;
 			    if (dy < drect->y1 - home[drect->layer] + EPS) {
 				gridy++;
@@ -1787,7 +1785,7 @@ DefRead(char *inName)
     int v, h, i;
     float oscale;
     double start, step;
-    double llx, lly, urx, ury;
+    double llx, lly, urx, ury, locpitch;
     double dXlowerbound, dYlowerbound, dXupperbound, dYupperbound;
     char corient = '.';
     DSEG diearea;
@@ -1878,24 +1876,20 @@ DefRead(char *inName)
 	    if (h == -1) h = v;
 	    if (v == -1) v = h;
 
-	    /* This code copied from qconfig.c.  Preferably, all	*/
-	    /* information available in the DEF file should be taken	*/
-	    /* from the DEF file.					*/
-
 	    for (i = 0; i < Num_layers; i++)
 	    {
-		if (PitchX[i] != 0.0 && PitchX[i] != PitchX[v] && Verbose > 0)
+		if (PitchX != 0.0 && PitchX != LefGetRoutePitch(i) && Verbose > 0)
 		    Fprintf(stderr, "Multiple vertical route layers at different"
-				" pitches.  Using pitch %g and routing on 1-of-N"
-				" tracks for larger pitches.\n",
-				PitchX[v]);
-		PitchX[i] = PitchX[v];
-		if (PitchY[i] != 0.0 && PitchY[i] != PitchY[h] && Verbose > 0)
+				" pitches.  Using pitch %g and routing on 1-of-%d"
+				" tracks for layer %s.\n",
+				PitchX, (int)ceil(LefGetRoutePitch(i) / PitchX),
+				LefGetRouteName(i));
+		if (PitchY != 0.0 && PitchY != LefGetRoutePitch(i) && Verbose > 0)
 		    Fprintf(stderr, "Multiple horizontal route layers at different"
-				" pitches.  Using pitch %g and routing on 1-of-N"
-				" tracks for larger pitches.\n",
-				PitchY[h]);
-		PitchY[i] = PitchY[h];
+				" pitches.  Using pitch %g and routing on 1-of-%d"
+				" tracks for layer %s.\n",
+				PitchY, (int)ceil(LefGetRoutePitch(i) / PitchY),
+				LefGetRouteName(i));
 
 		corient = '.';	// So we don't run this code again.
 	    }
@@ -1975,10 +1969,10 @@ DefRead(char *inName)
 		}
 		if (corient == 'x') {
 		    Vert[curlayer] = 1;
-		    PitchX[curlayer] = step / oscale;
-		    if ((v == -1) || (PitchX[curlayer] < PitchX[v])) v = curlayer;
-		    if ((curlayer < Num_layers - 1) && PitchX[curlayer + 1] == 0.0)
-			PitchX[curlayer + 1] = PitchX[curlayer];
+		    locpitch = step / oscale;
+		    if ((PitchX == 0.0) || (locpitch < PitchX))
+			PitchX = locpitch;
+		    if (v == -1) v = curlayer;
 		    llx = start;
 		    urx = start + step * channels;
 		    if ((llx / oscale) < Xlowerbound)
@@ -1988,10 +1982,10 @@ DefRead(char *inName)
 		}
 		else {
 		    Vert[curlayer] = 0;
-		    PitchY[curlayer] = step / oscale;
-		    if ((h == -1) || (PitchY[curlayer] < PitchX[h])) h = curlayer;
-		    if ((curlayer < Num_layers - 1) && PitchY[curlayer + 1] == 0.0)
-			PitchY[curlayer + 1] = PitchY[curlayer];
+		    locpitch = step / oscale;
+		    if ((PitchY == 0.0) || (locpitch < PitchY))
+			PitchY = locpitch;
+		    if (h == -1) h = curlayer;
 		    lly = start;
 		    ury = start + step * channels;
 		    if ((lly / oscale) < Ylowerbound)

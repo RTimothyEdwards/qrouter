@@ -158,6 +158,8 @@ double LefGetViaWidth(int base, int layer, int dir);
 double LefGetRouteSpacing(int layer);
 double LefGetRouteWideSpacing(int layer, double width);
 double LefGetRoutePitch(int layer);
+double LefGetRoutePitchX(int layer);
+double LefGetRoutePitchY(int layer);
 double LefGetRouteOffset(int layer);
 double LefGetRouteThickness(int layer);
 double LefGetRouteAreaRatio(int layer);

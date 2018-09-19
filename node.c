@@ -86,7 +86,7 @@ count_reachable_taps()
     double dx, dy;
 
     for (l = 0; l < Num_layers; l++) {
-	for (j = 0; j < NumChannelsX[l] * NumChannelsY[l]; j++) {
+	for (j = 0; j < NumChannelsX * NumChannelsY; j++) {
 	    if (Nodeinfo[l][j]) {
 		node = Nodeinfo[l][j]->nodeloc;
 		if (node != NULL) {
@@ -115,18 +115,18 @@ count_reachable_taps()
 			deltax = 0.5 * LefGetXYViaWidth(ds->layer, ds->layer, 0, orient);
 			deltay = 0.5 * LefGetXYViaWidth(ds->layer, ds->layer, 1, orient);
 
-			gridx = (int)((ds->x1 - Xlowerbound) / PitchX[ds->layer]) - 1;
+			gridx = (int)((ds->x1 - Xlowerbound) / PitchX) - 1;
 			while (1) {
-			    dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
-			    if (dx > ds->x2 || gridx >= NumChannelsX[ds->layer]) break;
+			    dx = (gridx * PitchX) + Xlowerbound;
+			    if (dx > ds->x2 || gridx >= NumChannelsX) break;
 
 			    if (((dx - ds->x1 + EPS) > deltax) &&
 					((ds->x2 - dx + EPS) > deltax)) {
 				gridy = (int)((ds->y1 - Ylowerbound)
-					/ PitchY[ds->layer]) - 1;
+					/ PitchY) - 1;
 				while (1) {
-				    dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
-				    if (dy > ds->y2 || gridy >= NumChannelsY[ds->layer])
+				    dy = (gridy * PitchY) + Ylowerbound;
+				    if (dy > ds->y2 || gridy >= NumChannelsY)
 					break;
 
 				    if (((dy - ds->y1 + EPS) > deltay) &&
@@ -187,26 +187,25 @@ count_reachable_taps()
 
 		    /* Initialize mindist to a large value */
 		    mask = 0;
-		    mindist = PitchX[Num_layers - 1] + PitchY[Num_layers - 1];
+		    mindist = PitchX + PitchY;
 		    dir = 0;	/* Indicates no solution found */
 
 		    for (ds = g->taps[i]; ds; ds = ds->next) {
 			deltax = 0.5 * LefGetXYViaWidth(ds->layer, ds->layer, 0, orient);
 			deltay = 0.5 * LefGetXYViaWidth(ds->layer, ds->layer, 1, orient);
 
-			gridx = (int)((ds->x1 - Xlowerbound) / PitchX[ds->layer]) - 1;
+			gridx = (int)((ds->x1 - Xlowerbound) / PitchX) - 1;
 			while (1) {
-			    dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
-			    if (dx > ds->x2 || gridx >= NumChannelsX[ds->layer]) break;
+			    dx = (gridx * PitchX) + Xlowerbound;
+			    if (dx > ds->x2 || gridx >= NumChannelsX) break;
 
 			    if (((dx - ds->x1 + EPS) > -deltax) &&
 					((ds->x2 - dx + EPS) > -deltax)) {
-				gridy = (int)((ds->y1 - Ylowerbound)
-					/ PitchY[ds->layer]) - 1;
+				gridy = (int)((ds->y1 - Ylowerbound) / PitchY) - 1;
 
 				while (1) {
-				    dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
-				    if (dy > ds->y2 || gridy >= NumChannelsY[ds->layer])
+				    dy = (gridy * PitchY) + Ylowerbound;
+				    if (dy > ds->y2 || gridy >= NumChannelsY)
 					break;
 
 				    // Check that the grid position is inside the
@@ -405,12 +404,12 @@ void check_variable_pitch(int l, int *hptr, int *vptr)
    }
 
    vnum = 1;
-   while (vpitch > PitchY[l] + EPS) {
+   while (vpitch > PitchY + EPS) {
       vpitch /= 2.0;
       vnum++;
    }
    hnum = 1;
-   while (hpitch > PitchX[l] + EPS) {
+   while (hpitch > PitchX + EPS) {
       hpitch /= 2.0;
       hnum++;
    }
@@ -454,9 +453,9 @@ void create_obstructions_from_variable_pitch(void)
       if (hnum > 1 && vnum == 1) vnum++;
 
       if (vnum > 1 || hnum > 1) {
-	 for (x = 0; x < NumChannelsX[l]; x++) {
+	 for (x = 0; x < NumChannelsX; x++) {
 	    if (x % hnum == 0) continue;
-	    for (y = 0; y < NumChannelsY[l]; y++) {
+	    for (y = 0; y < NumChannelsY; y++) {
 	       if (y % vnum == 0) continue;
 
 	       // If the grid position itself is a node, don't restrict
@@ -473,11 +472,11 @@ void create_obstructions_from_variable_pitch(void)
 	       else if ((y > 0) && ((lnode = NODEIPTR(x , y - 1, l)) != NULL) &&
 			(lnode->nodeloc != NULL))
 		  OBSVAL(x, y, l) = BLOCKED_MASK & ~BLOCKED_S;
-	       else if ((x < NumChannelsX[l] - 1)
+	       else if ((x < NumChannelsX - 1)
 			&& ((lnode = NODEIPTR(x + 1, y, l)) != NULL) &&
 			(lnode->nodeloc != NULL))
 		  OBSVAL(x, y, l) = BLOCKED_MASK & ~BLOCKED_E;
-	       else if ((y < NumChannelsY[l] - 1)
+	       else if ((y < NumChannelsY - 1)
 			&& ((lnode = NODEIPTR(x, y + 1, l)) != NULL) &&
 			(lnode->nodeloc != NULL))
 		  OBSVAL(x, y, l) = BLOCKED_MASK & ~BLOCKED_N;
@@ -499,7 +498,7 @@ void create_obstructions_from_variable_pitch(void)
 static void
 disable_gridpos(int x, int y, int lay)
 {
-    int apos = OGRID(x, y, lay);
+    int apos = OGRID(x, y);
 
     Obs[lay][apos] = (u_int)(NO_NET | OBSTRUCT_MASK);
     if (Nodeinfo[lay][apos]) {
@@ -523,7 +522,7 @@ count_pinlayers(void)
 
    Pinlayers = 0;
    for (l = 0; l < Num_layers; l++) {
-      for (j = 0; j < NumChannelsX[l] * NumChannelsY[l]; j++) {
+      for (j = 0; j < NumChannelsX * NumChannelsY; j++) {
 	 if (Nodeinfo[l][j]) {
 	    Pinlayers = l + 1;
 	    break;
@@ -677,8 +676,8 @@ void clip_gate_taps(void)
 		lay = dp->layer;
 
 		if (dp->gridx < 0 || dp->gridy < 0 ||
-			dp->gridx >= NumChannelsX[lay] ||
-			dp->gridy >= NumChannelsY[lay]) {
+			dp->gridx >= NumChannelsX ||
+			dp->gridy >= NumChannelsY) {
 		    Fprintf(stderr, "Tap of port of node %d of net %s"
 			" is outside of route area\n",
 			node->nodenum, node->netname);
@@ -748,20 +747,18 @@ void create_obstructions_from_gates(void)
 	  }
 
 	  deltax = get_via_clear(ds->layer, 1, orient, ds);
-	  gridx = (int)((ds->x1 - Xlowerbound - deltax)
-			/ PitchX[ds->layer]) - 1;
+	  gridx = (int)((ds->x1 - Xlowerbound - deltax) / PitchX) - 1;
 	  while (1) {
-	     dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
+	     dx = (gridx * PitchX) + Xlowerbound;
 	     if ((dx + EPS) > (ds->x2 + deltax)
-			|| gridx >= NumChannelsX[ds->layer]) break;
+			|| gridx >= NumChannelsX) break;
 	     else if ((dx - EPS) > (ds->x1 - deltax) && gridx >= 0) {
 		deltay = get_via_clear(ds->layer, 0, orient, ds);
-	        gridy = (int)((ds->y1 - Ylowerbound - deltay)
-			/ PitchY[ds->layer]) - 1;
+	        gridy = (int)((ds->y1 - Ylowerbound - deltay) / PitchY) - 1;
 	        while (1) {
-		   dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
+		   dy = (gridy * PitchY) + Ylowerbound;
 	           if ((dy + EPS) > (ds->y2 + deltay)
-				|| gridy >= NumChannelsY[ds->layer]) break;
+				|| gridy >= NumChannelsY) break;
 		   if ((dy - EPS) > (ds->y1 - deltay) && gridy >= 0) {
 		      double s, edist, xp, yp;
 
@@ -817,20 +814,18 @@ void create_obstructions_from_gates(void)
              for (ds = g->taps[i]; ds; ds = ds->next) {
 
 		deltax = get_via_clear(ds->layer, 1, orient, ds);
-		gridx = (int)((ds->x1 - Xlowerbound - deltax)
-			/ PitchX[ds->layer]) - 1;
+		gridx = (int)((ds->x1 - Xlowerbound - deltax) / PitchX) - 1;
 		while (1) {
-		   dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
+		   dx = (gridx * PitchX) + Xlowerbound;
 		   if (dx > (ds->x2 + deltax)
-				|| gridx >= NumChannelsX[ds->layer]) break;
+				|| gridx >= NumChannelsX) break;
 		   else if (dx >= (ds->x1 - deltax) && gridx >= 0) {
 		      deltay = get_via_clear(ds->layer, 0, orient, ds);
-		      gridy = (int)((ds->y1 - Ylowerbound - deltay)
-				/ PitchY[ds->layer]) - 1;
+		      gridy = (int)((ds->y1 - Ylowerbound - deltay) / PitchY) - 1;
 		      while (1) {
-		         dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
+		         dy = (gridy * PitchY) + Ylowerbound;
 		         if ((dy + EPS) > (ds->y2 + deltay)
-					|| gridy >= NumChannelsY[ds->layer]) break;
+					|| gridy >= NumChannelsY) break;
 		         if ((dy - EPS) >= (ds->y1 - deltay) && gridy >= 0) {
 
 		            double s, edist = 0.0, xp, yp;
@@ -881,19 +876,17 @@ void create_obstructions_from_gates(void)
     }
 
     for (ds = UserObs; ds; ds = ds->next) {
-	gridx = (int)((ds->x1 - Xlowerbound - delta[ds->layer])
-			/ PitchX[ds->layer]) - 1;
+	gridx = (int)((ds->x1 - Xlowerbound - delta[ds->layer]) / PitchX) - 1;
 	while (1) {
-	    dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
+	    dx = (gridx * PitchX) + Xlowerbound;
 	    if (dx > (ds->x2 + delta[ds->layer])
-			|| gridx >= NumChannelsX[ds->layer]) break;
+			|| gridx >= NumChannelsX) break;
 	    else if (dx >= (ds->x1 - delta[ds->layer]) && gridx >= 0) {
-		gridy = (int)((ds->y1 - Ylowerbound - delta[ds->layer])
-				/ PitchY[ds->layer]) - 1;
+		gridy = (int)((ds->y1 - Ylowerbound - delta[ds->layer]) / PitchY) - 1;
 		while (1) {
-		    dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
+		    dy = (gridy * PitchY) + Ylowerbound;
 		    if (dy > (ds->y2 + delta[ds->layer])
-				|| gridy >= NumChannelsY[ds->layer]) break;
+				|| gridy >= NumChannelsY) break;
 		    if (dy >= (ds->y1 - delta[ds->layer]) && gridy >= 0)
 		       check_obstruct(gridx, gridy, ds, dx, dy, delta[i]);
 
@@ -1036,15 +1029,15 @@ void create_obstructions_inside_nodes(void)
 	     // First mark all areas inside node geometry boundary.
 
              for (ds = g->taps[i]; ds; ds = ds->next) {
-		gridx = (int)((ds->x1 - Xlowerbound) / PitchX[ds->layer]) - 1;
+		gridx = (int)((ds->x1 - Xlowerbound) / PitchX) - 1;
 		while (1) {
-		   dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
-		   if (dx > ds->x2 || gridx >= NumChannelsX[ds->layer]) break;
+		   dx = (gridx * PitchX) + Xlowerbound;
+		   if (dx > ds->x2 || gridx >= NumChannelsX) break;
 		   else if (dx >= ds->x1 && gridx >= 0) {
-		      gridy = (int)((ds->y1 - Ylowerbound) / PitchY[ds->layer]) - 1;
+		      gridy = (int)((ds->y1 - Ylowerbound) / PitchY) - 1;
 		      while (1) {
-		         dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
-		         if (dy > ds->y2 || gridy >= NumChannelsY[ds->layer]) break;
+		         dy = (gridy * PitchY) + Ylowerbound;
+		         if (dy > ds->y2 || gridy >= NumChannelsY) break;
 
 			 // Area inside defined pin geometry
 
@@ -1311,11 +1304,10 @@ void create_obstructions_outside_nodes(void)
 		// restrictive case, as was done above.
  
 		deltax = get_via_clear(ds->layer, 1, orient, ds);
-		gridx = (int)((ds->x1 - Xlowerbound - deltax)
-			/ PitchX[ds->layer]) - 1;
+		gridx = (int)((ds->x1 - Xlowerbound - deltax) / PitchX) - 1;
 
 		while (1) {
-		   dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
+		   dx = (gridx * PitchX) + Xlowerbound;
 
 		   // Check if obstruction position is too close for
 		   // a via in either orientation.  The position can
@@ -1323,19 +1315,18 @@ void create_obstructions_outside_nodes(void)
 		   // other.
 
 		   if (((dx + EPS) > (ds->x2 + deltax)) ||
-				(gridx >= NumChannelsX[ds->layer]))
+				(gridx >= NumChannelsX))
 		      break;
 
 		   else if ((dx - EPS) > (ds->x1 - deltax) && gridx >= 0) {
 		      deltay = get_via_clear(ds->layer, 0, orient, ds);
-		      gridy = (int)((ds->y1 - Ylowerbound - deltay)
-				/ PitchY[ds->layer]) - 1;
+		      gridy = (int)((ds->y1 - Ylowerbound - deltay) / PitchY) - 1;
 
 		      while (1) {
-		         dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
+		         dy = (gridy * PitchY) + Ylowerbound;
 
 		         if (((dy + EPS) > (ds->y2 + deltay)) ||
-				(gridy >= NumChannelsY[ds->layer]))
+				(gridy >= NumChannelsY))
 			    break;
 
 			 // 2nd pass on area inside defined pin geometry,
@@ -1401,11 +1392,11 @@ void create_obstructions_outside_nodes(void)
 
 			        offd = OBSINFO(gridx, gridy, ds->layer);
 				if (orignet & OBSTRUCT_N) {
-				   if (sdistyy - offd > -EPS) {
+				   if (sdistyy - offd > EPS) {
 				      lnode->flags |= NI_NO_VIAY;
-				      if (sdistyx - offd > -EPS) {
+				      if (sdistyx - offd > EPS) {
 					 /* Cannot route cleanly, so use offset */
-				         if (offd - sdistyx > PitchX[ds->layer] / 2.0) 
+				         if (offd - sdistyx > PitchX / 2.0) 
 					    /* Offset distance is too large */
 					    maxerr = 1;
 					 else {
@@ -1427,10 +1418,10 @@ void create_obstructions_outside_nodes(void)
 				   }
 				}
 				else if (orignet & OBSTRUCT_S) {
-				   if (sdistyy - offd > -EPS) {
+				   if (sdistyy - offd > EPS) {
 				      lnode->flags |= NI_NO_VIAY;
-				      if (sdistyx - offd > -EPS) {
-				         if (offd - sdistyx > PitchX[ds->layer] / 2.0)
+				      if (sdistyx - offd > EPS) {
+				         if (offd - sdistyx > PitchX / 2.0)
 					    /* Offset distance is too large */
 					    maxerr = 1;
 					 else {
@@ -1442,8 +1433,7 @@ void create_obstructions_outside_nodes(void)
 				            /* add up/down block to prevent vias.      */
 
 				             if ((ds->layer < Num_layers - 1) &&
-							(gridy < NumChannelsY[ds->layer
-							+ 1] - 1) &&
+							(gridy < NumChannelsY - 1) &&
 						   	(OBSVAL(gridx, gridy + 1,
 							ds->layer + 1) & OBSTRUCT_MASK))
 					        block_route(gridx, gridy, ds->layer, UP);
@@ -1452,10 +1442,10 @@ void create_obstructions_outside_nodes(void)
 				   }
 				}
 				else if (orignet & OBSTRUCT_E) {
-				   if (sdistxx - offd > -EPS) {
+				   if (sdistxx - offd > EPS) {
 				      lnode->flags |= NI_NO_VIAX;
-				      if (sdistxy - offd > -EPS) {
-				         if (offd - sdistxy > PitchY[ds->layer] / 2.0)
+				      if (sdistxy - offd > EPS) {
+				         if (offd - sdistxy > PitchY / 2.0)
 					    /* Offset distance is too large */
 					    maxerr = 1;
 					 else {
@@ -1476,10 +1466,10 @@ void create_obstructions_outside_nodes(void)
 				   }
 				}
 				else if (orignet & OBSTRUCT_W) {
-				   if (sdistxx - offd > -EPS) {
+				   if (sdistxx - offd > EPS) {
 				      lnode->flags |= NI_NO_VIAX;
-				      if (sdistxy - offd > -EPS) {
-				         if (offd - sdistxy > PitchY[ds->layer] / 2.0)
+				      if (sdistxy - offd > EPS) {
+				         if (offd - sdistxy > PitchY / 2.0)
 					    /* Offset distance is too large */
 					    maxerr = 1;
 					 else {
@@ -1491,8 +1481,7 @@ void create_obstructions_outside_nodes(void)
 				            /* add up/down block to prevent vias.      */
 
 				            if ((ds->layer < Num_layers - 1) &&
-							(gridx < NumChannelsX[ds->layer]
-							- 1) &&
+							(gridx < NumChannelsX - 1) &&
 							(OBSVAL(gridx + 1, gridy,
 							ds->layer + 1) & OBSTRUCT_MASK))
 					       block_route(gridx, gridy, ds->layer, UP);
@@ -1628,7 +1617,7 @@ void create_obstructions_outside_nodes(void)
 
 				            if ((ds->layer < Num_layers - 1) &&
 							gridx <
-							(NumChannelsX[ds->layer] - 1)
+							(NumChannelsX - 1)
 							&& (OBSVAL(gridx + 1, gridy,
 							ds->layer + 1)
 							& OBSTRUCT_MASK))
@@ -1647,7 +1636,7 @@ void create_obstructions_outside_nodes(void)
 
 				            if ((ds->layer < Num_layers - 1) &&
 							gridy < 
-							(NumChannelsY[ds->layer] - 1)
+							(NumChannelsY - 1)
 							&& (OBSVAL(gridx, gridy - 1,
 							ds->layer + 1)
 							& OBSTRUCT_MASK))
@@ -1992,7 +1981,7 @@ void create_obstructions_outside_nodes(void)
 				     // Check tap to right
 
 				     if ((dx > ds->x2) && (gridx <
-						NumChannelsX[ds->layer] - 1)) {
+						NumChannelsX - 1)) {
 					offset_net = OBSVAL(gridx + 1, gridy, ds->layer);
 					if (offset_net == 0 || offset_net == othernet) {
 					   xdist = 0.5 * LefGetXYViaWidth(ds->layer,
@@ -2019,7 +2008,7 @@ void create_obstructions_outside_nodes(void)
 					         block_route(gridx, gridy, ds->layer, UP);
 				              else if ((ds->layer < Num_layers - 1) &&
 							(gridx > 0) &&
-							(dist > PitchX[ds->layer] / 2))
+							(dist > PitchX / 2))
 					         block_route(gridx, gridy, ds->layer, UP);
 					   }
 					}
@@ -2045,14 +2034,14 @@ void create_obstructions_outside_nodes(void)
 					      no_offsets = FALSE;
 
 				              if ((ds->layer < Num_layers - 1) && gridx <
-							(NumChannelsX[ds->layer] - 1) &&
+							(NumChannelsX - 1) &&
 							(OBSVAL(gridx - 1, gridy,
 							ds->layer + 1) & OBSTRUCT_MASK))
 					         block_route(gridx, gridy, ds->layer, UP);
 				              else if ((ds->layer < Num_layers - 1) &&
 							gridx <
-							(NumChannelsX[ds->layer] - 1) &&
-							(dist < -PitchX[ds->layer] / 2))
+							(NumChannelsX - 1) &&
+							(dist < -PitchX / 2))
 					         block_route(gridx, gridy, ds->layer, UP);
 					   }
 					}
@@ -2061,7 +2050,7 @@ void create_obstructions_outside_nodes(void)
 				     // Check tap up
 
 				     if ((dy > ds->y2) && (gridy <
-						NumChannelsY[ds->layer] - 1)) {
+						NumChannelsY - 1)) {
 					offset_net = OBSVAL(gridx, gridy + 1, ds->layer);
 					if (offset_net == 0 || offset_net == othernet) {
 					   xdist = 0.5 * LefGetXYViaWidth(ds->layer,
@@ -2085,7 +2074,7 @@ void create_obstructions_outside_nodes(void)
 					         block_route(gridx, gridy, ds->layer, UP);
 				              else if ((ds->layer < Num_layers - 1) &&
 							(gridy > 0) &&
-							(dist > PitchY[ds->layer] / 2))
+							(dist > PitchY / 2))
 					         block_route(gridx, gridy, ds->layer, UP);
 					   }
 					}
@@ -2112,14 +2101,14 @@ void create_obstructions_outside_nodes(void)
 
 				              if ((ds->layer < Num_layers - 1) &&
 							gridx <
-							(NumChannelsX[ds->layer] - 1) &&
+							(NumChannelsX - 1) &&
 							(OBSVAL(gridx, gridy - 1,
 							ds->layer + 1) & OBSTRUCT_MASK))
 					         block_route(gridx, gridy, ds->layer, UP);
 				              else if ((ds->layer < Num_layers - 1) &&
 							gridx <
-							(NumChannelsX[ds->layer] - 1) &&
-							(dist < -PitchY[ds->layer] / 2))
+							(NumChannelsX - 1) &&
+							(dist < -PitchY / 2))
 					         block_route(gridx, gridy, ds->layer, UP);
 					   }
 					}
@@ -2277,16 +2266,16 @@ void tap_to_tap_interactions(void)
 
              for (ds = g->taps[i]; ds; ds = ds->next) {
 
-		mingridx = (int)((ds->x1 - Xlowerbound) / PitchX[ds->layer]) - 1;
+		mingridx = (int)((ds->x1 - Xlowerbound) / PitchX) - 1;
 		if (mingridx < 0) mingridx = 0;
-		maxgridx = (int)((ds->x2 - Xlowerbound) / PitchX[ds->layer]) + 2;
-		if (maxgridx >= NumChannelsX[ds->layer])
-		   maxgridx = NumChannelsX[ds->layer] - 1;
-		mingridy = (int)((ds->y1 - Ylowerbound) / PitchY[ds->layer]) - 1;
+		maxgridx = (int)((ds->x2 - Xlowerbound) / PitchX) + 2;
+		if (maxgridx >= NumChannelsX)
+		   maxgridx = NumChannelsX - 1;
+		mingridy = (int)((ds->y1 - Ylowerbound) / PitchY) - 1;
 		if (mingridy < 0) mingridy = 0;
-		maxgridy = (int)((ds->y2 - Ylowerbound) / PitchY[ds->layer]) + 2;
-		if (maxgridy >= NumChannelsY[ds->layer])
-		   maxgridy = NumChannelsY[ds->layer] - 1;
+		maxgridy = (int)((ds->y2 - Ylowerbound) / PitchY) + 2;
+		if (maxgridy >= NumChannelsY)
+		   maxgridy = NumChannelsY - 1;
 
 		for (gridx = mingridx; gridx <= maxgridx; gridx++) {
 		   for (gridy = mingridy; gridy <= maxgridy; gridy++) {
@@ -2299,8 +2288,8 @@ void tap_to_tap_interactions(void)
 			 orignet &= ROUTED_NET_MASK;
 			 if (orignet != net) {
 
-		            dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
-		            dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
+		            dx = (gridx * PitchX) + Xlowerbound;
+		            dy = (gridy * PitchY) + Ylowerbound;
 
 			    lnode = NODEIPTR(gridx, gridy, ds->layer);
 			    dist = (lnode) ? lnode->offset : 0.0;
@@ -2346,8 +2335,8 @@ void tap_to_tap_interactions(void)
 			 /* Positions belonging to nodes should have	*/
 			 /* already been handled.			*/
 			 if (lnode == NULL) {
-		            dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
-		            dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
+		            dx = (gridx * PitchX) + Xlowerbound;
+		            dy = (gridy * PitchY) + Ylowerbound;
 
 			    /* For a horizontally-oriented via on ds->layer */
 			    de.x1 = dx - deltaxx[ds->layer];
@@ -2440,15 +2429,15 @@ make_routable(NODE node)
        for (i = 0; i < g->nodes; i++) {
 	  if (g->noderec[i] == node) {
              for (ds = g->taps[i]; ds; ds = ds->next) {
-		gridx = (int)((ds->x1 - Xlowerbound) / PitchX[ds->layer]) - 1;
+		gridx = (int)((ds->x1 - Xlowerbound) / PitchX) - 1;
 		while (1) {
-		   dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
-		   if (dx > ds->x2 || gridx >= NumChannelsX[ds->layer]) break;
+		   dx = (gridx * PitchX) + Xlowerbound;
+		   if (dx > ds->x2 || gridx >= NumChannelsX) break;
 		   else if (dx >= ds->x1 && gridx >= 0) {
-		      gridy = (int)((ds->y1 - Ylowerbound) / PitchY[ds->layer]) - 1;
+		      gridy = (int)((ds->y1 - Ylowerbound) / PitchY) - 1;
 		      while (1) {
-		         dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
-		         if (dy > ds->y2 || gridy >= NumChannelsY[ds->layer]) break;
+		         dy = (gridy * PitchY) + Ylowerbound;
+		         if (dy > ds->y2 || gridy >= NumChannelsY) break;
 
 			 // Area inside defined pin geometry
 
@@ -2541,20 +2530,18 @@ void adjust_stub_lengths(void)
 		wx = 0.5 * LefGetXYViaWidth(ds->layer, ds->layer, 0, orient);
 		wy = 0.5 * LefGetXYViaWidth(ds->layer, ds->layer, 1, orient);
 		s = LefGetRouteSpacing(ds->layer);
-		gridx = (int)((ds->x1 - Xlowerbound - PitchX[ds->layer])
-			/ PitchX[ds->layer]) - 1;
+		gridx = (int)((ds->x1 - Xlowerbound - PitchX) / PitchX) - 1;
 		while (1) {
-		   dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
-		   if (dx > (ds->x2 + PitchX[ds->layer]) ||
-				gridx >= NumChannelsX[ds->layer]) break;
-		   else if (dx >= (ds->x1 - PitchX[ds->layer]) && gridx >= 0) {
-		      gridy = (int)((ds->y1 - Ylowerbound - PitchY[ds->layer])
-				/ PitchY[ds->layer]) - 1;
+		   dx = (gridx * PitchX) + Xlowerbound;
+		   if (dx > (ds->x2 + PitchX) ||
+				gridx >= NumChannelsX) break;
+		   else if (dx >= (ds->x1 - PitchX) && gridx >= 0) {
+		      gridy = (int)((ds->y1 - Ylowerbound - PitchY) / PitchY) - 1;
 		      while (1) {
-		         dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
-		         if (dy > (ds->y2 + PitchY[ds->layer]) ||
-				gridy >= NumChannelsY[ds->layer]) break;
-		         if (dy >= (ds->y1 - PitchY[ds->layer]) && gridy >= 0) {
+		         dy = (gridy * PitchY) + Ylowerbound;
+		         if (dy > (ds->y2 + PitchY) ||
+				gridy >= NumChannelsY) break;
+		         if (dy >= (ds->y1 - PitchY) && gridy >= 0) {
 
 			     orignet = OBSVAL(gridx, gridy, ds->layer);
 
@@ -2997,7 +2984,7 @@ block_route(int x, int y, int lay, u_char dir)
 
    switch (dir) {
       case NORTH:
-	 if (y == NumChannelsY[lay] - 1) return;
+	 if (y == NumChannelsY - 1) return;
 	 by = y + 1;
 	 break;
       case SOUTH:
@@ -3005,7 +2992,7 @@ block_route(int x, int y, int lay, u_char dir)
 	 by = y - 1;
 	 break;
       case EAST:
-	 if (x == NumChannelsX[lay] - 1) return;
+	 if (x == NumChannelsX - 1) return;
 	 bx = x + 1;
 	 break;
       case WEST:
@@ -3091,8 +3078,8 @@ find_route_blocks()
 
 	       // Look west
 
-	       gridx = (int)((ds->x1 - Xlowerbound) / PitchX[ds->layer]);
-	       dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
+	       gridx = (int)((ds->x1 - Xlowerbound) / PitchX);
+	       dx = (gridx * PitchX) + Xlowerbound;
 	       dist = ds->x1 - dx - w;
 	       if (dist > 0 && dist < s && gridx >= 0) {
 		  dt.x1 = dt.x2 = dx;
@@ -3103,11 +3090,10 @@ find_route_blocks()
 		  // (to do)
 
 		  // Find all grid points affected
-	          gridy = (int)((ds->y1 - Ylowerbound - PitchY[ds->layer]) /
-				PitchY[ds->layer]);
-	          dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
+	          gridy = (int)((ds->y1 - Ylowerbound - PitchY) / PitchY);
+	          dy = (gridy * PitchY) + Ylowerbound;
 		  while (dy < ds->y1 - s) {
-		     dy += PitchY[ds->layer];
+		     dy += PitchY;
 		     gridy++;
 		  }
 		  while (dy < ds->y2 + s) {
@@ -3118,17 +3104,17 @@ find_route_blocks()
 			block_route(gridx, gridy, ds->layer, NORTH);
 		     if (dy - EPS > ds->y1 + u)
 			block_route(gridx, gridy, ds->layer, SOUTH);
-		     dy += PitchY[ds->layer];
+		     dy += PitchY;
 		     gridy++;
 		  }
 	       }
 
 	       // Look east
 
-	       gridx = (int)(1.0 + (ds->x2 - Xlowerbound) / PitchX[ds->layer]);
-	       dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
+	       gridx = (int)(1.0 + (ds->x2 - Xlowerbound) / PitchX);
+	       dx = (gridx * PitchX) + Xlowerbound;
 	       dist = dx - ds->x2 - w;
-	       if (dist > 0 && dist < s && gridx < NumChannelsX[ds->layer]) {
+	       if (dist > 0 && dist < s && gridx < NumChannelsX) {
 		  dt.x1 = dt.x2 = dx;
 		  dt.y1 = ds->y1;
 		  dt.y2 = ds->y2;
@@ -3137,11 +3123,10 @@ find_route_blocks()
 		  // (to do)
 
 		  // Find all grid points affected
-	          gridy = (int)((ds->y1 - Ylowerbound - PitchY[ds->layer]) /
-				PitchY[ds->layer]);
-	          dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
+	          gridy = (int)((ds->y1 - Ylowerbound - PitchY) / PitchY);
+	          dy = (gridy * PitchY) + Ylowerbound;
 		  while (dy < ds->y1 - s) {
-		     dy += PitchY[ds->layer];
+		     dy += PitchY;
 		     gridy++;
 		  }
 		  while (dy < ds->y2 + s) {
@@ -3152,15 +3137,15 @@ find_route_blocks()
 			block_route(gridx, gridy, ds->layer, NORTH);
 		     if (dy - EPS > ds->y1 + u)
 			block_route(gridx, gridy, ds->layer, SOUTH);
-		     dy += PitchY[ds->layer];
+		     dy += PitchY;
 		     gridy++;
 		  }
 	       }
 
 	       // Look south
 
-	       gridy = (int)((ds->y1 - Ylowerbound) / PitchY[ds->layer]);
-	       dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
+	       gridy = (int)((ds->y1 - Ylowerbound) / PitchY);
+	       dy = (gridy * PitchY) + Ylowerbound;
 	       dist = ds->y1 - dy - w;
 	       if (dist > 0 && dist < s && gridy >= 0) {
 		  dt.x1 = ds->x1;
@@ -3171,11 +3156,10 @@ find_route_blocks()
 		  // (to do)
 
 		  // Find all grid points affected
-	          gridx = (int)((ds->x1 - Xlowerbound - PitchX[ds->layer]) /
-				PitchX[ds->layer]);
-	          dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
+	          gridx = (int)((ds->x1 - Xlowerbound - PitchX) / PitchX);
+	          dx = (gridx * PitchX) + Xlowerbound;
 		  while (dx < ds->x1 - s) {
-		     dx += PitchX[ds->layer];
+		     dx += PitchX;
 		     gridx++;
 		  }
 		  while (dx < ds->x2 + s) {
@@ -3186,17 +3170,17 @@ find_route_blocks()
 			block_route(gridx, gridy, ds->layer, EAST);
 		     if (dx - EPS > ds->x1 + u)
 			block_route(gridx, gridy, ds->layer, WEST);
-		     dx += PitchX[ds->layer];
+		     dx += PitchX;
 		     gridx++;
 		  }
 	       }
 
 	       // Look north
 
-	       gridy = (int)(1.0 + (ds->y2 - Ylowerbound) / PitchY[ds->layer]);
-	       dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
+	       gridy = (int)(1.0 + (ds->y2 - Ylowerbound) / PitchY);
+	       dy = (gridy * PitchY) + Ylowerbound;
 	       dist = dy - ds->y2 - w;
-	       if (dist > 0 && dist < s && gridy < NumChannelsY[ds->layer]) {
+	       if (dist > 0 && dist < s && gridy < NumChannelsY) {
 		  dt.x1 = ds->x1;
 		  dt.x2 = ds->x2;
 		  dt.y1 = dt.y2 = dy;
@@ -3205,11 +3189,10 @@ find_route_blocks()
 		  // (to do)
 
 		  // Find all grid points affected
-	          gridx = (int)((ds->x1 - Xlowerbound - PitchX[ds->layer]) /
-				PitchX[ds->layer]);
-	          dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
+	          gridx = (int)((ds->x1 - Xlowerbound - PitchX) / PitchX);
+	          dx = (gridx * PitchX) + Xlowerbound;
 		  while (dx < ds->x1 - s) {
-		     dx += PitchX[ds->layer];
+		     dx += PitchX;
 		     gridx++;
 		  }
 		  while (dx < ds->x2 + s) {
@@ -3220,7 +3203,7 @@ find_route_blocks()
 			block_route(gridx, gridy, ds->layer, EAST);
 		     if (dx - EPS > ds->x1 + u)
 			block_route(gridx, gridy, ds->layer, WEST);
-		     dx += PitchX[ds->layer];
+		     dx += PitchX;
 		     gridx++;
 		  }
 	       }

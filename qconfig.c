@@ -33,10 +33,10 @@ double  PathWidth[MAX_LAYERS];		// width of the paths
 int     GDSLayer[MAX_TYPES];		// GDS layer number 
 int     GDSCommentLayer = 1;		// for dummy wires, etc.
 char    CIFLayer[MAX_TYPES][50];	// CIF layer name
-double  PitchX[MAX_LAYERS];		// Horizontal wire pitch of layer
-double  PitchY[MAX_LAYERS];		// Vertical wire pitch of layer
-int     NumChannelsX[MAX_LAYERS];	// number of wire channels in X on layer
-int     NumChannelsY[MAX_LAYERS];	// number of wire channels in Y on layer
+double  PitchX;				// Horizontal wire pitch of layer
+double  PitchY;				// Vertical wire pitch of layer
+int     NumChannelsX;			// number of wire channels in X on layer
+int     NumChannelsY;			// number of wire channels in Y on layer
 int     Vert[MAX_LAYERS];		// 1 if vertical, 0 if horizontal
 int     Numpasses = 10;			// number of times to iterate in route_segs
 char	StackedContacts = MAX_LAYERS;	// Value is number of contacts that may
@@ -65,10 +65,8 @@ char    *ViaYY[MAX_LAYERS];
 /*--------------------------------------------------------------*/
 /* post_config ---						*/
 /*								*/
-/* The following code ensures that the layer grids align.	*/
-/* For now, all PitchX[i] and PitchY[i] should be the same	*/
-/* for all layers.  Hopefully this restriction can be lifted	*/
-/* sometime, but it will necessarily be a royal pain.		*/
+/* Resolve PitchX and PitchY, which are the minimum pitches	*/
+/* that determine the underlying route grid.			*/
 /*--------------------------------------------------------------*/
 
 void
@@ -87,8 +85,6 @@ post_config(void)
     for (i = 0; i < Num_layers; i++) {
        if (!Vert[i]) {
 	  h = i;
-	  PitchY[i] = PitchX[i];
-	  PitchX[i] = 0.0;
        }
        else
 	  v = i;
@@ -100,28 +96,30 @@ post_config(void)
     if (h == -1) h = v;
     else if (v == -1) v = h;
 
+    // Make sure all layers have a pitch in both X and Y even if not
+    // specified separately in the configuration or def files.
     for (i = 0; i < Num_layers; i++) {
-       if (PitchX[i] != 0.0 && PitchX[i] != PitchX[v]) {
-	  Fprintf(stderr, "Multiple vertical route layers at different"
-		" pitches.  Using smaller pitch %g, will route on"
-		" 1-of-N tracks if necessary.\n",
-		PitchX[i]);
-	  PitchX[v] = PitchX[i];
-       }
-       if (PitchY[i] != 0.0 && PitchY[i] != PitchY[h]) {
-	  Fprintf(stderr, "Multiple horizontal route layers at different"
-		" pitches.  Using smaller pitch %g, will route on"
-		" 1-of-N tracks if necessary.\n",
-		PitchY[i]);
-	  PitchY[h] = PitchY[i];
-       }
+       if ((PitchX == 0.0) || (LefGetRoutePitchX(i) < PitchX))
+	  PitchX = LefGetRoutePitchX(i);
+       if ((PitchY == 0.0) || (LefGetRoutePitchY(i) < PitchY))
+	  PitchY = LefGetRoutePitchY(i);
     }
 
-    // 2nd pass:  Make sure all layers have a pitch in both X and Y
-    // even if not specified separately in the configuration or def files.
     for (i = 0; i < Num_layers; i++) {
-       if (PitchX[i] == 0.0) PitchX[i] = PitchX[v];
-       if (PitchY[i] == 0.0) PitchY[i] = PitchY[h];
+       if (PitchX != LefGetRoutePitchX(i)) {
+	  Fprintf(stderr, "Multiple vertical route layers at different"
+		" pitches.  Using smaller pitch %g, will route on"
+		" 1-of-%d tracks for layer %s.\n",
+		PitchX, (int)(ceil(LefGetRoutePitchX(i) / PitchX)),
+		LefGetRouteName(i));
+       }
+       if (PitchY != LefGetRoutePitchY(i)) {
+	  Fprintf(stderr, "Multiple horizontal route layers at different"
+		" pitches.  Using smaller pitch %g, will route on"
+		" 1-of-%d tracks for layer %s.\n",
+		PitchY, (int)(ceil(LefGetRoutePitchY(i) / PitchY)),
+		LefGetRouteName(i));
+       }
     }
 
 } /* post_config() */
@@ -168,9 +166,7 @@ int read_config(FILE *fconfig, int is_info)
 	Nlgates = (GATE)NULL;
 	UserObs = (DSEG)NULL;
 
-	for (i = 0; i < MAX_LAYERS; i++)
-	   PitchX[i] = PitchY[i] = 0.0;
-
+	PitchX = PitchY = 0.0;
 	Firstcall = 0;
     }
 
@@ -266,7 +262,13 @@ int read_config(FILE *fconfig, int is_info)
 	}
 	
 	if ((i = sscanf(lineptr, "layer %d wire pitch %lf\n", &iarg, &darg)) == 2) {
-	    OK = 1; PitchX[iarg-1] = darg;
+	    OK = 1;
+	    if (Vert[iarg - 1]) {
+		if ((PitchX == 0) || (darg < PitchX)) PitchX = darg;
+	    }
+	    else {
+		if ((PitchY == 0) || (darg < PitchY)) PitchY = darg;
+	    }
 	}
 	else if (i == 1) {
 	   if ((i = sscanf(lineptr, "layer %*d vertical %d\n", &iarg2)) == 1) {

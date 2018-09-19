@@ -7,7 +7,7 @@
 
 #ifndef QROUTER_H
 
-#define OGRID(x, y, layer) ((int)((x) + ((y) * NumChannelsX[(layer)])))
+#define OGRID(x, y) ((int)((x) + ((y) * NumChannelsX)))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define ABSDIFF(x, y) (((x) > (y)) ? ((x) - (y)) : ((y) - (x)))
@@ -446,13 +446,13 @@ extern float  *Obsinfo[MAX_LAYERS];	// temporary detailed obstruction info
 extern NODEINFO *Nodeinfo[MAX_LAYERS];	// stub route distances to pins and
 					// pointers to node structures.
 
-#define NODEIPTR(x, y, l) (Nodeinfo[l][OGRID(x, y, l)])
-#define OBSINFO(x, y, l) (Obsinfo[l][OGRID(x, y, l)])
-#define OBSVAL(x, y, l)  (Obs[l][OGRID(x, y, l)])
-#define OBS2VAL(x, y, l) (Obs2[l][OGRID(x, y, l)])
+#define NODEIPTR(x, y, l) (Nodeinfo[l][OGRID(x, y)])
+#define OBSINFO(x, y, l) (Obsinfo[l][OGRID(x, y)])
+#define OBSVAL(x, y, l)  (Obs[l][OGRID(x, y)])
+#define OBS2VAL(x, y, l) (Obs2[l][OGRID(x, y)])
 
-#define RMASK(x, y)      (RMask[OGRID(x, y, 0)])
-#define CONGEST(x, y)	 (Congestion[OGRID(x, y, 0)])
+#define RMASK(x, y)      (RMask[OGRID(x, y)])
+#define CONGEST(x, y)	 (Congestion[OGRID(x, y)])
 
 extern DSEG  UserObs;			// user-defined obstruction layers
 

@@ -694,7 +694,7 @@ LefGetRouteKeepout(int layer)
 		+ lefl->info.route.spacing->spacing;
 	}
     }
-    return MIN(PitchX[layer], PitchY[layer]) - PathWidth[layer] / 2.0;
+    return MIN(PitchX, PitchY) - PathWidth[layer] / 2.0;
 }
 
 /*
@@ -717,7 +717,7 @@ LefGetRouteWidth(int layer)
 	    return lefl->info.route.width;
 	}
     }
-    return MIN(PitchX[layer], PitchY[layer]) / 2.0;
+    return MIN(PitchX, PitchY) / 2.0;
 }
 
 /*
@@ -745,7 +745,7 @@ LefGetRouteOffset(int layer)
 	        return lefl->info.route.offsetx;
 	}
     }
-    return MIN(PitchX[layer], PitchY[layer]) / 2.0;
+    return MIN(PitchX, PitchY) / 2.0;
 }
 
 double
@@ -760,7 +760,7 @@ LefGetRouteOffsetX(int layer)
 	    return lefl->info.route.offsetx;
 	}
     }
-    return PitchX[layer] / 2.0;
+    return MIN(PitchX, PitchY) / 2.0;
 }
 
 double
@@ -775,7 +775,7 @@ LefGetRouteOffsetY(int layer)
 	    return lefl->info.route.offsety;
 	}
     }
-    return PitchY[layer] / 2.0;
+    return PitchY / 2.0;
 }
 
 /*
@@ -944,7 +944,7 @@ LefGetXYViaWidth(int base, int layer, int dir, int orient)
 	    }
 	}
     }
-    return MIN(PitchX[layer], PitchY[layer]) / 2.0;	// Best guess
+    return MIN(PitchX, PitchY) / 2.0;	// Best guess
 }
 
 /*
@@ -967,7 +967,7 @@ LefGetRouteSpacing(int layer)
 		return 0.0;
 	}
     }
-    return MIN(PitchX[layer], PitchY[layer]) / 2.0;
+    return MIN(PitchX, PitchY) / 2.0;
 }
 
 /*
@@ -995,7 +995,7 @@ LefGetRouteWideSpacing(int layer, double width)
 	    return spacing;
 	}
     }
-    return MIN(PitchX[layer], PitchY[layer]) / 2.0;
+    return MIN(PitchX, PitchY) / 2.0;
 }
 
 /*
@@ -1020,7 +1020,7 @@ LefGetRoutePitch(int layer)
 		return lefl->info.route.pitchx;
 	}
     }
-    return MIN(PitchX[layer], PitchY[layer]);
+    return MIN(PitchX, PitchY);
 }
 
 /*
@@ -1040,7 +1040,7 @@ LefGetRoutePitchX(int layer)
 	    return lefl->info.route.pitchx;
 	}
     }
-    return PitchX[layer];
+    return PitchX;
 }
 
 /*
@@ -1060,7 +1060,7 @@ LefGetRoutePitchY(int layer)
 	    return lefl->info.route.pitchy;
 	}
     }
-    return PitchY[layer];
+    return PitchY;
 }
 
 /*

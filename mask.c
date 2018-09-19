@@ -344,7 +344,7 @@ void defineRouteTree(NET net)
 
 void initMask(void)
 {
-   RMask = (u_char *)calloc(NumChannelsX[0] * NumChannelsY[0],
+   RMask = (u_char *)calloc(NumChannelsX * NumChannelsY,
 			sizeof(u_char));
    if (!RMask) {
       fprintf(stderr, "Out of memory 3.\n");
@@ -374,9 +374,9 @@ create_vbranch_mask(int x, int y1, int y2, u_char slack, u_char halo)
       gy2 = y2 + slack;
    }
    if (gx1 < 0) gx1 = 0;
-   if (gx2 >= NumChannelsX[0]) gx2 = NumChannelsX[0] - 1;
+   if (gx2 >= NumChannelsX) gx2 = NumChannelsX - 1;
    if (gy1 < 0) gy1 = 0;
-   if (gy2 >= NumChannelsY[0]) gy2 = NumChannelsY[0] - 1;
+   if (gy2 >= NumChannelsY) gy2 = NumChannelsY - 1;
 
    for (i = gx1; i <= gx2; i++)
       for (j = gy1; j <= gy2; j++)
@@ -384,10 +384,10 @@ create_vbranch_mask(int x, int y1, int y2, u_char slack, u_char halo)
 
    for (v = 1; v < halo; v++) {
       if (gx1 > 0) gx1--;
-      if (gx2 < NumChannelsX[0] - 1) gx2++;
+      if (gx2 < NumChannelsX - 1) gx2++;
       if (y1 > y2) {
-         if (gy1 < NumChannelsY[0] - 1) gy1++;
-         if (gy2 < NumChannelsY[0] - 1) gy2++;
+         if (gy1 < NumChannelsY - 1) gy1++;
+         if (gy2 < NumChannelsY - 1) gy2++;
       }
       else {
 	 if (gy1 > 0) gy1--;
@@ -423,9 +423,9 @@ create_hbranch_mask(int y, int x1, int x2, u_char slack, u_char halo)
       gx2 = x2 + slack;
    }
    if (gx1 < 0) gx1 = 0;
-   if (gx2 >= NumChannelsX[0]) gx2 = NumChannelsX[0] - 1;
+   if (gx2 >= NumChannelsX) gx2 = NumChannelsX - 1;
    if (gy1 < 0) gy1 = 0;
-   if (gy2 >= NumChannelsY[0]) gy2 = NumChannelsY[0] - 1;
+   if (gy2 >= NumChannelsY) gy2 = NumChannelsY - 1;
 
    for (i = gx1; i <= gx2; i++)
       for (j = gy1; j <= gy2; j++)
@@ -433,10 +433,10 @@ create_hbranch_mask(int y, int x1, int x2, u_char slack, u_char halo)
 
    for (v = 1; v < halo; v++) {
       if (gy1 > 0) gy1--;
-      if (gy2 < NumChannelsY[0] - 1) gy2++;
+      if (gy2 < NumChannelsY - 1) gy2++;
       if (x1 > x2) {
-         if (gx1 < NumChannelsX[0] - 1) gx1++;
-         if (gx2 < NumChannelsX[0] - 1) gx2++;
+         if (gx1 < NumChannelsX - 1) gx1++;
+         if (gx2 < NumChannelsX - 1) gx2++;
       }
       else {
 	 if (gx1 > 0) gx1--;
@@ -513,27 +513,27 @@ void createBboxMask(NET net, u_char halo)
 
     for (i = 1; i <= halo; i++) {
 	gx1 = xmin - i;
-	if (gx1 >= 0 && gx1 < NumChannelsX[0])
+	if (gx1 >= 0 && gx1 < NumChannelsX)
            for (j = ymin - i; j <= ymax + i; j++)
-	      if (j >= 0 && j < NumChannelsY[0])
+	      if (j >= 0 && j < NumChannelsY)
 		 RMASK(gx1, j) = (u_char)i;
 
 	gx2 = xmax + i;
-	if (gx2 >= 0 && gx2 < NumChannelsX[0])
+	if (gx2 >= 0 && gx2 < NumChannelsX)
            for (j = ymin - i; j <= ymax + i; j++)
-	      if (j >= 0 && j < NumChannelsY[0])
+	      if (j >= 0 && j < NumChannelsY)
 		 RMASK(gx2, j) = (u_char)i;
 
 	gy1 = ymin - i;
-	if (gy1 >= 0 && gy1 < NumChannelsY[0])
+	if (gy1 >= 0 && gy1 < NumChannelsY)
            for (j = xmin - i; j <= xmax + i; j++)
-	      if (j >= 0 && j < NumChannelsX[0])
+	      if (j >= 0 && j < NumChannelsX)
 		 RMASK(j, gy1) = (u_char)i;
 
 	gy2 = ymax + i;
-	if (gy2 >= 0 && gy2 < NumChannelsY[0])
+	if (gy2 >= 0 && gy2 < NumChannelsY)
            for (j = xmin - i; j <= xmax + i; j++)
-	      if (j >= 0 && j < NumChannelsX[0])
+	      if (j >= 0 && j < NumChannelsX)
 		 RMASK(j, gy2) = (u_char)i;
      }
 }
@@ -638,9 +638,9 @@ void createMask(NET net, u_char slack, u_char halo)
      xmax = oxmax;
 
      for (i = xmin - slack; i <= xmax + slack; i++) {
-	if (i < 0 || i >= NumChannelsX[0]) continue;
+	if (i < 0 || i >= NumChannelsX) continue;
 	for (j = ycent - slack; j <= ycent + slack; j++) {
-	   if (j < 0 || j >= NumChannelsY[0]) continue;
+	   if (j < 0 || j >= NumChannelsY) continue;
 	   RMASK(i, j) = (u_char)0;
 	}
      }
@@ -649,19 +649,19 @@ void createMask(NET net, u_char slack, u_char halo)
 	gy1 = ycent - slack - i;
 	gy2 = ycent + slack + i;
         for (j = xmin - slack - i; j <= xmax + slack + i; j++) {
-	   if (j < 0 || j >= NumChannelsX[0]) continue;
+	   if (j < 0 || j >= NumChannelsX) continue;
 	   if (gy1 >= 0)
 	      RMASK(j, gy1) = (u_char)i;
-	   if (gy2 < NumChannelsY[0])
+	   if (gy2 < NumChannelsY)
 	      RMASK(j, gy2) = (u_char)i;
 	}
 	gx1 = xmin - slack - i;
 	gx2 = xmax + slack + i;
         for (j = ycent - slack - i; j <= ycent + slack + i; j++) {
-	   if (j < 0 || j >= NumChannelsY[0]) continue;
+	   if (j < 0 || j >= NumChannelsY) continue;
 	   if (gx1 >= 0)
 	      RMASK(gx1, j) = (u_char)i;
-	   if (gx2 < NumChannelsX[0])
+	   if (gx2 < NumChannelsX)
 	      RMASK(gx2, j) = (u_char)i;
 	}
      }
@@ -674,9 +674,9 @@ void createMask(NET net, u_char slack, u_char halo)
      ymax = oymax;
 
      for (i = xcent - slack; i <= xcent + slack; i++) {
-	if (i < 0 || i >= NumChannelsX[0]) continue;
+	if (i < 0 || i >= NumChannelsX) continue;
 	for (j = ymin - slack; j <= ymax + slack; j++) {
-	   if (j < 0 || j >= NumChannelsY[0]) continue;
+	   if (j < 0 || j >= NumChannelsY) continue;
 	   RMASK(i, j) = (u_char)0;
 	}
      }
@@ -685,19 +685,19 @@ void createMask(NET net, u_char slack, u_char halo)
 	gx1 = xcent - slack - i;
 	gx2 = xcent + slack + i;
         for (j = ymin - slack - i; j <= ymax + slack + i; j++) {
-	   if (j < 0 || j >= NumChannelsY[0]) continue;
+	   if (j < 0 || j >= NumChannelsY) continue;
 	   if (gx1 >= 0)
 	      RMASK(gx1, j) = (u_char)i;
-	   if (gx2 < NumChannelsX[0])
+	   if (gx2 < NumChannelsX)
 	      RMASK(gx2, j) = (u_char)i;
 	}
 	gy1 = ymin - slack - i;
 	gy2 = ymax + slack + i;
         for (j = xcent - slack - i; j <= xcent + slack + i; j++) {
-	   if (j < 0 || j >= NumChannelsX[0]) continue;
+	   if (j < 0 || j >= NumChannelsX) continue;
 	   if (gy1 >= 0)
 	      RMASK(j, gy1) = (u_char)i;
-	   if (gy2 < NumChannelsY[0])
+	   if (gy2 < NumChannelsY)
 	      RMASK(j, gy2) = (u_char)i;
 	}
      }
@@ -797,7 +797,7 @@ void createMask(NET net, u_char slack, u_char halo)
 
 void fillMask(u_char value) {
    memset((void *)RMask, (int)value,
-		(size_t)(NumChannelsX[0] * NumChannelsY[0]
+		(size_t)(NumChannelsX * NumChannelsY
 		* sizeof(u_char)));
 }
 

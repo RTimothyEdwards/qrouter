@@ -81,33 +81,33 @@ int set_num_channels(void)
     NODE node;
     DPOINT ctap, ltap, ntap;
 
-    if (NumChannelsX[0] != 0) return 0;	/* Already been called */
+    if (NumChannelsX != 0) return 0;	/* Already been called */
 
-    for (i = 0; i < Num_layers; i++) {
-	if (PitchX[i] == 0.0 || PitchY[i] == 0.0) {
-	    Fprintf(stderr, "Have a 0 pitch for layer %d (of %d).  "
-			"Exit.\n", i + 1, Num_layers);
-	    return (-3);
-	}
-	NumChannelsX[i] = (int)(1.5 + (Xupperbound - Xlowerbound) / PitchX[i]);
-	NumChannelsY[i] = (int)(1.5 + (Yupperbound - Ylowerbound) / PitchY[i]);
-	if ((Verbose > 1) || (NumChannelsX[i] <= 0))
-	    Fprintf(stdout, "Number of x channels for layer %d is %d\n",
-				i, NumChannelsX[i]);
-	if ((Verbose > 1) || (NumChannelsY[i] <= 0))
-	    Fprintf(stdout, "Number of y channels for layer %d is %d\n",
-				i, NumChannelsY[i]);
-	
-	if (NumChannelsX[i] <= 0) {
-	    Fprintf(stderr, "Something wrong with layer %d x bounds.\n", i);
-	    return(-3);
-	}
-	if (NumChannelsY[i] <= 0) {
-	    Fprintf(stderr, "Something wrong with layer %d y bounds.\n", i);
-	    return(-3);
-	}
-	Flush(stdout);
+    if (PitchX == 0.0) {
+	Fprintf(stderr, "Have a 0 pitch for X direction.  Exit.\n");
+	return (-3);
     }
+    else if (PitchY == 0.0) {
+	Fprintf(stderr, "Have a 0 pitch for Y direction.  Exit.\n");
+	return (-3);
+    }
+
+    NumChannelsX = (int)(1.5 + (Xupperbound - Xlowerbound) / PitchX);
+    NumChannelsY = (int)(1.5 + (Yupperbound - Ylowerbound) / PitchY);
+    if ((Verbose > 1) || (NumChannelsX <= 0))
+	Fprintf(stdout, "Number of x channels is %d\n", NumChannelsX);
+    if ((Verbose > 1) || (NumChannelsY <= 0))
+	Fprintf(stdout, "Number of y channels is %d\n", NumChannelsY);
+	
+    if (NumChannelsX <= 0) {
+	Fprintf(stderr, "Something wrong with x bounds.\n");
+	return(-3);
+    }
+    if (NumChannelsY <= 0) {
+	Fprintf(stderr, "Something wrong with y bounds.\n");
+	return(-3);
+    }
+    Flush(stdout);
 
     // Go through all nodes and remove any tap or extend entries that are
     // out of bounds.
@@ -119,8 +119,8 @@ int set_num_channels(void)
 	    ltap = NULL;
 	    for (ctap = node->taps; ctap != NULL; ) {
 		ntap = ctap->next;
-		glimitx = NumChannelsX[ctap->layer];
-		glimity = NumChannelsY[ctap->layer];
+		glimitx = NumChannelsX;
+		glimity = NumChannelsY;
 		if (ctap->gridx < 0 || ctap->gridx >= glimitx ||
 				ctap->gridy < 0 || ctap->gridy >= glimity) {
 		    /* Remove ctap */
@@ -137,8 +137,8 @@ int set_num_channels(void)
 	    ltap = NULL;
 	    for (ctap = node->extend; ctap != NULL; ) {
 		ntap = ctap->next;
-		glimitx = NumChannelsX[ctap->layer];
-		glimity = NumChannelsY[ctap->layer];
+		glimitx = NumChannelsX;
+		glimity = NumChannelsY;
 		if (ctap->gridx < 0 || ctap->gridx >= glimitx ||
 				ctap->gridy < 0 || ctap->gridy >= glimity) {
 		    /* Remove ctap */
@@ -169,7 +169,7 @@ int allocate_obs_array(void)
    if (Obs[0] != NULL) return 0;	/* Already been called */
 
    for (i = 0; i < Num_layers; i++) {
-      Obs[i] = (u_int *)calloc(NumChannelsX[i] * NumChannelsY[i],
+      Obs[i] = (u_int *)calloc(NumChannelsX * NumChannelsY,
 			sizeof(u_int));
       if (!Obs[i]) {
 	 Fprintf(stderr, "Out of memory 4.\n");
@@ -382,21 +382,29 @@ runqrouter(int argc, char *argv[])
 	 /* Set PitchX and PitchY from route info as	*/
 	 /* check_variable_pitch needs the values	*/
 
-	 if (o == 1)
-	    PitchY[i] = LefGetRoutePitch(i);
-	 else
-	    PitchX[i] = LefGetRoutePitch(i);
+	 if (o == 1) {
+	    if ((PitchY == 0.0) || (LefGetRoutePitchY(i) < PitchY))
+	 	PitchY = LefGetRoutePitchY(i);
+	 }
+	 else {
+	    if ((PitchX == 0.0) || (LefGetRoutePitchX(i) < PitchX))
+	 	PitchX = LefGetRoutePitchX(i);
+	 }
       }
 
       /* Resolve pitch information similarly to post_config() */
 
-      for (i = 1; i < Num_layers; i++) {
+      for (i = 0; i < Num_layers; i++) {
 	 int o = LefGetRouteOrientation(i);
 
-	 if ((o == 1) && (PitchY[i - 1] == 0))
-	    PitchY[i - 1] = PitchY[i];
-	 else if ((o == 0) && (PitchX[i - 1] == 0))
-	    PitchX[i - 1] = PitchX[i];
+	 if (o == 1) {
+	    if ((PitchY == 0.0) || (LefGetRoutePitchY(i) < PitchY))
+	        PitchY = LefGetRoutePitchY(i);
+	 }
+	 else {
+	    if ((PitchX == 0.0) || (LefGetRoutePitchX(i) < PitchX))
+	        PitchX = LefGetRoutePitchX(i);
+	 }
       }
 
       /* Print information about route layers, and exit */
@@ -411,7 +419,7 @@ runqrouter(int argc, char *argv[])
 	 if (hnum > 1 && vnum == 1) vnum++;
 		
 	 if (layername != NULL) {
-	    pitch = (o == 1) ? PitchY[i] : PitchX[i],
+	    pitch = (o == 1) ? PitchY : PitchX,
 	    width = LefGetRouteWidth(i);
 	    if (pitch == 0.0 || width == 0.0) continue;
 	    fprintf(infoFILEptr, "%s %g %g %g %s",
@@ -448,7 +456,7 @@ runqrouter(int argc, char *argv[])
    }
 
    Obs[0] = (u_int *)NULL;
-   NumChannelsX[0] = 0;	// This is so we can check if NumChannelsX/Y were
+   NumChannelsX = 0;	// This is so we can check if NumChannelsX/Y were
 			// set from within DefRead() due to reading in
 			// existing nets.
 
@@ -520,7 +528,7 @@ static void reinitialize()
     // Free up all of the matrices
 
     for (i = 0; i < Pinlayers; i++) {
-	for (j = 0; j < NumChannelsX[i] * NumChannelsY[i]; j++)
+	for (j = 0; j < NumChannelsX * NumChannelsY; j++)
 	    if (Nodeinfo[i][j])
 		free(Nodeinfo[i][j]);
 	free(Nodeinfo[i]);
@@ -663,7 +671,7 @@ void apply_drc_blocks(int layer, double via_except, double route_except)
          sreq2t = LefGetXYViaWidth(i, i, 0, 3) + sreq1;
          if (sreq2t < sreq2) sreq2 = sreq2t;
 	 sreq2 -= via_except;
-         if ((sreq2 - EPS) > PitchX[i]) needblock[i] |= VIABLOCKX;
+         if ((sreq2 - EPS) > PitchX) needblock[i] |= VIABLOCKX;
       }
       if (i != 0) {
 	 sreq2 = LefGetXYViaWidth(i - 1, i, 0, 0) + sreq1;
@@ -674,7 +682,7 @@ void apply_drc_blocks(int layer, double via_except, double route_except)
 	 sreq2t = LefGetXYViaWidth(i - 1, i, 0, 3) + sreq1;
 	 if (sreq2t < sreq2) sreq2 = sreq2t;
 	 sreq2 -= via_except;
-         if ((sreq2 - EPS) > PitchX[i]) needblock[i] |= VIABLOCKX;
+         if ((sreq2 - EPS) > PitchX) needblock[i] |= VIABLOCKX;
       }
 
       if (i < Num_layers - 1) {
@@ -686,7 +694,7 @@ void apply_drc_blocks(int layer, double via_except, double route_except)
          sreq2t = LefGetXYViaWidth(i, i, 1, 3) + sreq1;
          if (sreq2t < sreq2) sreq2 = sreq2t;
 	 sreq2 -= via_except;
-         if ((sreq2 - EPS) > PitchY[i]) needblock[i] |= VIABLOCKY;
+         if ((sreq2 - EPS) > PitchY) needblock[i] |= VIABLOCKY;
       }
       if (i != 0) {
 	 sreq2 = LefGetXYViaWidth(i - 1, i, 1, 0) + sreq1;
@@ -697,7 +705,7 @@ void apply_drc_blocks(int layer, double via_except, double route_except)
 	 sreq2t = LefGetXYViaWidth(i - 1, i, 1, 3) + sreq1;
 	 if (sreq2t < sreq2) sreq2 = sreq2t;
 	 sreq2 -= via_except;
-         if ((sreq2 - EPS) > PitchY[i]) needblock[i] |= VIABLOCKY;
+         if ((sreq2 - EPS) > PitchY) needblock[i] |= VIABLOCKY;
       }
 
       sreq1 += 0.5 * LefGetRouteWidth(i);
@@ -711,7 +719,7 @@ void apply_drc_blocks(int layer, double via_except, double route_except)
          sreq2t = sreq1 + 0.5 * LefGetXYViaWidth(i, i, 0, 3);
          if (sreq2t < sreq2) sreq2 = sreq2t;
 	 sreq2 -= route_except;
-         if ((sreq2 - EPS) > PitchX[i]) needblock[i] |= ROUTEBLOCKX;
+         if ((sreq2 - EPS) > PitchX) needblock[i] |= ROUTEBLOCKX;
       }
       if (i != 0) {
 	 sreq2 = sreq1 + 0.5 * LefGetXYViaWidth(i - 1, i, 0, 0);
@@ -722,7 +730,7 @@ void apply_drc_blocks(int layer, double via_except, double route_except)
 	 sreq2t = sreq1 + 0.5 * LefGetXYViaWidth(i - 1, i, 0, 3);
 	 if (sreq2t < sreq2) sreq2 = sreq2t;
 	 sreq2 -= route_except;
-         if ((sreq2 - EPS) > PitchX[i]) needblock[i] |= ROUTEBLOCKX;
+         if ((sreq2 - EPS) > PitchX) needblock[i] |= ROUTEBLOCKX;
       }
 
       if (i < Num_layers - 1) {
@@ -734,7 +742,7 @@ void apply_drc_blocks(int layer, double via_except, double route_except)
          sreq2t = sreq1 + 0.5 * LefGetXYViaWidth(i, i, 1, 3);
          if (sreq2t < sreq2) sreq2 = sreq2t;
 	 sreq2 -= route_except;
-         if ((sreq2 - EPS) > PitchY[i]) needblock[i] |= ROUTEBLOCKY;
+         if ((sreq2 - EPS) > PitchY) needblock[i] |= ROUTEBLOCKY;
       }
       if (i != 0) {
 	 sreq2 = sreq1 + 0.5 * LefGetXYViaWidth(i - 1, i, 1, 0);
@@ -745,7 +753,7 @@ void apply_drc_blocks(int layer, double via_except, double route_except)
 	 sreq2t = sreq1 + 0.5 * LefGetXYViaWidth(i - 1, i, 1, 3);
 	 if (sreq2t < sreq2) sreq2 = sreq2t;
 	 sreq2 -= route_except;
-         if ((sreq2 - EPS) > PitchY[i]) needblock[i] |= ROUTEBLOCKY;
+         if ((sreq2 - EPS) > PitchY) needblock[i] |= ROUTEBLOCKY;
       }
    }
 }
@@ -788,14 +796,14 @@ static int post_def_setup()
 
    for (i = 0; i < Num_layers; i++) {
 
-      Obsinfo[i] = (float *)calloc(NumChannelsX[i] * NumChannelsY[i],
+      Obsinfo[i] = (float *)calloc(NumChannelsX * NumChannelsY,
 			sizeof(float));
       if (!Obsinfo[i]) {
 	 fprintf(stderr, "Out of memory 5.\n");
 	 exit(5);
       }
 
-      Nodeinfo[i] = (NODEINFO *)calloc(NumChannelsX[i] * NumChannelsY[i],
+      Nodeinfo[i] = (NODEINFO *)calloc(NumChannelsX * NumChannelsY,
 			sizeof(NODEINFO));
       if (!Nodeinfo[i]) {
 	 fprintf( stderr, "Out of memory 6.\n");
@@ -806,7 +814,7 @@ static int post_def_setup()
 
    if (Verbose > 1)
       Fprintf(stderr, "Diagnostic: memory block is %d bytes\n",
-		(int)sizeof(u_int) * NumChannelsX[0] * NumChannelsY[0]);
+		(int)sizeof(u_int) * NumChannelsX * NumChannelsY);
 
    /* Be sure to create obstructions from gates first, since we don't	*/
    /* want improperly defined or positioned obstruction layers to over-	*/
@@ -840,7 +848,7 @@ static int post_def_setup()
    for (i = 0; i < Num_layers; i++) free(Obsinfo[i]);
 
    for (i = 0; i < Num_layers; i++) {
-      Obs2[i] = (PROUTE *)calloc(NumChannelsX[i] * NumChannelsY[i],
+      Obs2[i] = (PROUTE *)calloc(NumChannelsX * NumChannelsY,
 			sizeof(PROUTE));
       if (!Obs2[i]) {
          fprintf( stderr, "Out of memory 9.\n");
@@ -1680,7 +1688,7 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
      // used for crossover costing of future routes.
 
      for (i = 0; i < Pinlayers; i++) {
-	for (j = 0; j < NumChannelsX[i] * NumChannelsY[i]; j++) {
+	for (j = 0; j < NumChannelsX * NumChannelsY; j++) {
 	   if (Nodeinfo[i][j]) {
 	      node = Nodeinfo[i][j]->nodeloc;
 	      if (node != (NODE)NULL)
@@ -1736,7 +1744,7 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
   // terminal positions for the net being routed.
 
   for (i = 0; i < Num_layers; i++) {
-      for (j = 0; j < NumChannelsX[i] * NumChannelsY[i]; j++) {
+      for (j = 0; j < NumChannelsX * NumChannelsY; j++) {
 	  netnum = Obs[i][j] & (~BLOCKED_MASK);
 	  Pr = &Obs2[i][j];
 	  if (netnum != 0) {
@@ -1782,8 +1790,8 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
 
   if (result) {
      iroute->bbox.x2 = iroute->bbox.y2 = 0;
-     iroute->bbox.x1 = NumChannelsX[0];
-     iroute->bbox.y1 = NumChannelsY[0];
+     iroute->bbox.x1 = NumChannelsX;
+     iroute->bbox.y1 = NumChannelsY;
 
      if (iroute->do_pwrbus == FALSE) {
 
@@ -1860,7 +1868,7 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
      // used for crossover costing of future routes.
 
      for (i = 0; i < Pinlayers; i++) {
-	for (j = 0; j < NumChannelsX[i] * NumChannelsY[i]; j++) {
+	for (j = 0; j < NumChannelsX * NumChannelsY; j++) {
 	   if (Nodeinfo[i][j]) {
 	      iroute->nsrc = Nodeinfo[i][j]->nodeloc;
 	      if (iroute->nsrc != (NODE)NULL)
@@ -2000,8 +2008,8 @@ int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
       // seen occurring during doantennaroute().  Check using valgrind.
 
       if ((gpoint->x1 < 0) || (gpoint->y1 < 0) ||
-		(gpoint->x1 > NumChannelsX[gpoint->layer]) ||
-		(gpoint->y1 > NumChannelsY[gpoint->layer])) {
+		(gpoint->x1 > NumChannelsX) ||
+		(gpoint->y1 > NumChannelsY)) {
          Fprintf(stderr, "Internal memory error!\n");
 	 freePOINT(gpoint);
 	 continue;
@@ -2128,7 +2136,7 @@ int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
 	       predecessor = PR_CONFLICT;
 	    case EAST:
 	       predecessor |= PR_PRED_W;
-               if ((curpt.x + 1) < NumChannelsX[curpt.lay]) {
+               if ((curpt.x + 1) < NumChannelsX) {
          	  if ((gpoint = eval_pt(&curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist[i];
          	     iroute->glist[i] = gpoint;
@@ -2164,7 +2172,7 @@ int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
 	       predecessor = PR_CONFLICT;
 	    case NORTH:
 	       predecessor |= PR_PRED_S;
-               if ((curpt.y + 1) < NumChannelsY[curpt.lay]) {
+               if ((curpt.y + 1) < NumChannelsY) {
          	  if ((gpoint = eval_pt(&curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist[i];
          	     iroute->glist[i] = gpoint;

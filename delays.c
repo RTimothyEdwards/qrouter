@@ -487,11 +487,11 @@ int write_delays(char *filename)
 	LefGetRouteRCvalues(i, &areacap, &edgecap, &respersq);
 	width = LefGetRouteWidth(i);
 
-	lefrcvalues[i].resx = (PitchX[i] / width) * respersq;
-	lefrcvalues[i].resy = (PitchY[i] / width) * respersq;
+	lefrcvalues[i].resx = (PitchX / width) * respersq;
+	lefrcvalues[i].resy = (PitchY / width) * respersq;
 
-	lefrcvalues[i].capx = (PitchX[i] * width) * areacap + (PitchX[i] * edgecap);
-	lefrcvalues[i].capy = (PitchY[i] * width) * areacap + (PitchY[i] * edgecap);
+	lefrcvalues[i].capx = (PitchX * width) * areacap + (PitchX * edgecap);
+	lefrcvalues[i].capy = (PitchY * width) * areacap + (PitchY * edgecap);
 
 	if (i < (Num_layers - 1))
 	    LefGetViaResistance(i, &(lefrcvalues[i].viares));

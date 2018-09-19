@@ -102,9 +102,9 @@ void highlight_source() {
     // Draw source pins as magenta squares
     XSetForeground(dpy, gc, magentapix);
     for (i = 0; i < Num_layers; i++) {
-	for (x = 0; x < NumChannelsX[i]; x++) {
+	for (x = 0; x < NumChannelsX; x++) {
 	    xspc = (x + 1) * spacing - hspc;
-	    for (y = 0; y < NumChannelsY[i]; y++) {
+	    for (y = 0; y < NumChannelsY; y++) {
 		Pr = &OBS2VAL(x, y, i);
 		if (Pr->flags & PR_SOURCE) {
 		    yspc = height - (y + 1) * spacing - hspc;
@@ -140,9 +140,9 @@ void highlight_dest() {
     // Draw destination pins as purple squares
     XSetForeground(dpy, gc, purplepix);
     for (i = 0; i < Num_layers; i++) {
-	for (x = 0; x < NumChannelsX[i]; x++) {
+	for (x = 0; x < NumChannelsX; x++) {
 	    xspc = (x + 1) * spacing - hspc;
-	    for (y = 0; y < NumChannelsY[i]; y++) {
+	    for (y = 0; y < NumChannelsY; y++) {
 		Pr = &OBS2VAL(x, y, i);
 		if (Pr->flags & PR_TARGET) {
 		    yspc = height - (y + 1) * spacing - hspc;
@@ -199,9 +199,9 @@ void highlight_mask(void) {
     hspc = spacing >> 1;
 
     // Draw destination pins as tan squares
-    for (x = 0; x < NumChannelsX[0]; x++) {
+    for (x = 0; x < NumChannelsX; x++) {
 	xspc = (x + 1) * spacing - hspc;
-	for (y = 0; y < NumChannelsY[0]; y++) {
+	for (y = 0; y < NumChannelsY; y++) {
 	    XSetForeground(dpy, gc, brownvector[RMASK(x, y)]);
 	    yspc = height - (y + 1) * spacing - hspc;
 	    XFillRectangle(dpy, win, gc, xspc, yspc, spacing, spacing);
@@ -227,9 +227,9 @@ map_obstruction()
     // Draw obstructions as light gray squares
     XSetForeground(dpy, gc, ltgraypix);
     for (i = 0; i < Num_layers; i++) {
-	for (x = 0; x < NumChannelsX[i]; x++) {
+	for (x = 0; x < NumChannelsX; x++) {
 	    xspc = (x + 1) * spacing - hspc;
-	    for (y = 0; y < NumChannelsY[i]; y++) {
+	    for (y = 0; y < NumChannelsY; y++) {
 		if (OBSVAL(x, y, i) & NO_NET) {
 		    yspc = height - (y + 1) * spacing - hspc;
 		    XFillRectangle(dpy, buffer, gc, xspc, yspc,
@@ -242,9 +242,9 @@ map_obstruction()
     // Draw pins as gray squares
     XSetForeground(dpy, gc, graypix);
     for (i = 0; i < Pinlayers; i++) {
-	for (x = 0; x < NumChannelsX[i]; x++) {
+	for (x = 0; x < NumChannelsX; x++) {
 	    xspc = (x + 1) * spacing - hspc;
-	    for (y = 0; y < NumChannelsY[i]; y++) {
+	    for (y = 0; y < NumChannelsY; y++) {
 		if (NODEIPTR(x, y, i) != NULL) {
 		    yspc = height - (y + 1) * spacing - hspc;
 		    XFillRectangle(dpy, buffer, gc, xspc, yspc,
@@ -271,13 +271,13 @@ map_congestion()
 
     hspc = spacing >> 1;
 
-    Congestion = (u_char *)calloc(NumChannelsX[0] * NumChannelsY[0],
+    Congestion = (u_char *)calloc(NumChannelsX * NumChannelsY,
 			sizeof(u_char));
 
     // Analyze Obs[] array for congestion
     for (i = 0; i < Num_layers; i++) {
-	for (x = 0; x < NumChannelsX[i]; x++) {
-	    for (y = 0; y < NumChannelsY[i]; y++) {
+	for (x = 0; x < NumChannelsX; x++) {
+	    for (y = 0; y < NumChannelsY; y++) {
 		value = (u_char)0;
 		n = OBSVAL(x, y, i);
 		if (n & ROUTED_NET) value++;
@@ -290,8 +290,8 @@ map_congestion()
     }
 
     maxval = 0;
-    for (x = 0; x < NumChannelsX[0]; x++) {
-	for (y = 0; y < NumChannelsY[0]; y++) {
+    for (x = 0; x < NumChannelsX; x++) {
+	for (y = 0; y < NumChannelsY; y++) {
 	    value = CONGEST(x, y);
 	    if (value > maxval) maxval = value;
 	}
@@ -299,9 +299,9 @@ map_congestion()
     norm = (LONGSPAN - 1) / maxval;
 
     // Draw destination pins as blue squares
-    for (x = 0; x < NumChannelsX[0]; x++) {
+    for (x = 0; x < NumChannelsX; x++) {
 	xspc = (x + 1) * spacing - hspc;
-	for (y = 0; y < NumChannelsY[0]; y++) {
+	for (y = 0; y < NumChannelsY; y++) {
 	    XSetForeground(dpy, gc, bluevector[norm * CONGEST(x, y)]);
 	    yspc = height - (y + 1) * spacing - hspc;
 	    XFillRectangle(dpy, buffer, gc, xspc, yspc, spacing, spacing);
@@ -328,7 +328,7 @@ map_estimate()
 
     hspc = spacing >> 1;
 
-    Congestion = (float *)calloc(NumChannelsX[0] * NumChannelsY[0],
+    Congestion = (float *)calloc(NumChannelsX * NumChannelsY,
 			sizeof(float));
 
     // Use net bounding boxes to estimate congestion
@@ -352,8 +352,8 @@ map_estimate()
     }
 
     maxval = 0.0;
-    for (x = 0; x < NumChannelsX[0]; x++) {
-	for (y = 0; y < NumChannelsY[0]; y++) {
+    for (x = 0; x < NumChannelsX; x++) {
+	for (y = 0; y < NumChannelsY; y++) {
 	    density = CONGEST(x, y);
 	    if (density > maxval) maxval = density;
 	}
@@ -361,9 +361,9 @@ map_estimate()
     norm = (float)(LONGSPAN - 1) / maxval;
 
     // Draw destination pins as blue squares
-    for (x = 0; x < NumChannelsX[0]; x++) {
+    for (x = 0; x < NumChannelsX; x++) {
 	xspc = (x + 1) * spacing - hspc;
-	for (y = 0; y < NumChannelsY[0]; y++) {
+	for (y = 0; y < NumChannelsY; y++) {
 	    value = (int)(norm * CONGEST(x, y));
 	    XSetForeground(dpy, gc, bluevector[value]);
 	    yspc = height - (y + 1) * spacing - hspc;
@@ -782,8 +782,8 @@ int redraw(ClientData clientData, Tcl_Interp *interp, int objc,
 }
 
 /*------------------------------------------------------*/
-/* Call to recalculate the spacing if NumChannelsX[0]	*/
-/* or NumChannelsY[0] changes.				*/
+/* Call to recalculate the spacing if NumChannelsX	*/
+/* or NumChannelsY changes.				*/
 /*							*/
 /* Return 1 if the spacing changed, 0 otherwise.	*/
 /*------------------------------------------------------*/
@@ -793,8 +793,8 @@ int recalc_spacing()
    int xspc, yspc;
    int oldspacing = spacing;
 
-   xspc = width / (NumChannelsX[0] + 1);
-   yspc = height / (NumChannelsY[0] + 1);
+   xspc = width / (NumChannelsX + 1);
+   yspc = height / (NumChannelsY + 1);
    spacing = (xspc < yspc) ? xspc : yspc;
    if (spacing == 0) spacing = 1;
 
