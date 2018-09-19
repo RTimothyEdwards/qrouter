@@ -1463,6 +1463,7 @@ LefReadEnclosure(FILE *f, int curlayer, float oscale)
     /* Scale coordinates (microns to centimicrons) (doubled)	*/
 		
     scale = oscale / 2.0;
+
     paintrect.x1 = -x / scale;
     paintrect.y1 = -y / scale;
     paintrect.x2 = x / scale;
@@ -3358,7 +3359,7 @@ LefRead(inName)
     int keyword, layer;
     int oprecis = 100;	// = 1 / manufacturing grid (microns)
     float oscale;
-    double xydiff, ogrid;
+    double xydiff, ogrid, minwidth;
     LefList lefl;
     DSEG grect;
     GATE gateginfo;
@@ -3620,7 +3621,8 @@ LefRead(inName)
 	}
     }
 
-    /* If VIARULE contacts are not square, generate rotated versions */
+    /* If VIARULE contacts are not square, generate rotated versions.	    */
+    /* Also check that VIARULE sizes meet minimum metal width requirements. */
 
     for (lefl = LefInfo; lefl; lefl = lefl->next) {
 	if (lefl->lefClass == CLASS_VIA) {
@@ -3633,6 +3635,25 @@ LefRead(inName)
 		viarect1 = lefl->info.via.lr;
 		if (viarect1 == NULL) continue;
 		viarect2 = lefl->info.via.lr->next;
+
+		minwidth = LefGetRouteWidth(viarect1->layer);
+		if ((viarect1->x2 - viarect1->x1 + EPS) < (2.0 * minwidth)) {
+		    viarect1->x2 = minwidth;
+		    viarect1->x1 = -minwidth;
+	        }
+		if ((viarect1->y2 - viarect1->y1 + EPS) < (2.0 * minwidth)) {
+		    viarect1->y2 = minwidth;
+		    viarect1->y1 = -minwidth;
+	        }
+		minwidth = LefGetRouteWidth(viarect2->layer);
+		if ((viarect2->x2 - viarect2->x1 + EPS) < (2.0 * minwidth)) {
+		    viarect2->x2 = minwidth;
+		    viarect2->x1 = -minwidth;
+	        }
+		if ((viarect2->y2 - viarect2->y1 + EPS) < (2.0 * minwidth)) {
+		    viarect2->y2 = minwidth;
+		    viarect2->y1 = -minwidth;
+	        }
 
 		nsq1 = (ABSDIFF((viarect1->x2 - viarect1->x1),
 				(viarect1->y2 - viarect1->y1)) > EPS) ? TRUE : FALSE;
