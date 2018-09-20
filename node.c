@@ -2114,11 +2114,20 @@ void create_obstructions_outside_nodes(void)
 					}
 				     }
 
-				     // No offsets were possible, so disable the
-				     // position
+				     // No offsets were possible.  If orient is 0
+				     // then mark as NI_NO_VIAX and try again with
+				     // orient 2.  If orient is 2 and no offsets
+				     // are possible, then disable the position.
 
-				     if (no_offsets == TRUE)
-				        disable_gridpos(gridx, gridy, ds->layer);
+				     if (no_offsets == TRUE) {
+				 	if (orient == 2) {
+					    // Maybe no need to revert the flag?
+					    lnode->flags &= ~NI_NO_VIAX;
+				            disable_gridpos(gridx, gridy, ds->layer);
+					}
+					else
+					    lnode->flags |= NI_NO_VIAX;
+				     }
 				  }
 				  else
 				     disable_gridpos(gridx, gridy, ds->layer);
