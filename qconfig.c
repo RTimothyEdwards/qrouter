@@ -67,10 +67,12 @@ char    *ViaYY[MAX_LAYERS];
 /*								*/
 /* Resolve PitchX and PitchY, which are the minimum pitches	*/
 /* that determine the underlying route grid.			*/
+/*								*/
+/* If "noprint" is TRUE, then do not print diagnostic info.	*/
 /*--------------------------------------------------------------*/
 
 void
-post_config(void)
+post_config(u_char noprint)
 {
     int i, h, v;
 
@@ -81,21 +83,6 @@ post_config(void)
     i = LefGetMaxRouteLayer();
     if (i < Num_layers) Num_layers = i;
 
-    h = v = -1;
-    for (i = 0; i < Num_layers; i++) {
-       if (!Vert[i]) {
-	  h = i;
-       }
-       else
-	  v = i;
-    }
-
-    // In case all layers are listed as horizontal or all
-    // as vertical, we should still handle it gracefully
-
-    if (h == -1) h = v;
-    else if (v == -1) v = h;
-
     // Make sure all layers have a pitch in both X and Y even if not
     // specified separately in the configuration or def files.
     for (i = 0; i < Num_layers; i++) {
@@ -105,23 +92,49 @@ post_config(void)
 	  PitchY = LefGetRoutePitchY(i);
     }
 
+    // This is mostly arbitrary.  Generally, all route layer
+    // pitches except for the smallest X and Y pitches will
+    // be ignored, and the actual route pitches will be multiples
+    // of the smallest value, and determined by width and spacing
+    // rules rather than using any value in the technology LEF.
+
     for (i = 0; i < Num_layers; i++) {
-       if (PitchX != LefGetRoutePitchX(i)) {
-	  Fprintf(stderr, "Multiple vertical route layers at different"
-		" pitches.  Using smaller pitch %g, will route on"
-		" 1-of-%d tracks for layer %s.\n",
-		PitchX, (int)(ceil(LefGetRoutePitchX(i) / PitchX)),
-		LefGetRouteName(i));
-       }
-       if (PitchY != LefGetRoutePitchY(i)) {
-	  Fprintf(stderr, "Multiple horizontal route layers at different"
-		" pitches.  Using smaller pitch %g, will route on"
-		" 1-of-%d tracks for layer %s.\n",
-		PitchY, (int)(ceil(LefGetRoutePitchY(i) / PitchY)),
-		LefGetRouteName(i));
-       }
+	if (LefGetRoutePitchX(i) == 0.0) {
+	    if (Vert[i])
+		LefSetRoutePitchX(i, PitchX);
+	    else if (i > 0)
+		LefSetRoutePitchX(i, LefGetRoutePitchX(i - 1));
+	    else
+		LefSetRoutePitchX(i, LefGetRoutePitchX(i + 1));
+	}
+	if (LefGetRoutePitchY(i) == 0.0) {
+	    if (!Vert[i])
+		LefSetRoutePitchY(i, PitchX);
+	    else if (i > 0)
+		LefSetRoutePitchY(i, LefGetRoutePitchY(i - 1));
+	    else
+		LefSetRoutePitchY(i, LefGetRoutePitchY(i + 1));
+	}
     }
 
+    if (noprint == FALSE) {
+	for (i = 0; i < Num_layers; i++) {
+	    if (PitchX != LefGetRoutePitchX(i)) {
+		Fprintf(stderr, "Multiple vertical route layers at different"
+			" pitches.  Using smaller pitch %g, will route on"
+			" 1-of-%d tracks for layer %s.\n",
+			PitchX, (int)(ceil(LefGetRoutePitchX(i) / PitchX)),
+			LefGetRouteName(i));
+	    }
+	    if (PitchY != LefGetRoutePitchY(i)) {
+		Fprintf(stderr, "Multiple horizontal route layers at different"
+			" pitches.  Using smaller pitch %g, will route on"
+			" 1-of-%d tracks for layer %s.\n",
+			PitchY, (int)(ceil(LefGetRoutePitchY(i) / PitchY)),
+			LefGetRouteName(i));
+	    }
+	}
+    }
 } /* post_config() */
 
 /*--------------------------------------------------------------*/
@@ -487,7 +500,7 @@ int read_config(FILE *fconfig, int is_info)
 	line[0] = line[1] = '\0';
 
     }
-    post_config();
+    post_config(FALSE);
     return count;
 
 } /* read_config() */

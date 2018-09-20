@@ -26,13 +26,35 @@
 /*--------------------------------------------------------------*/
 
 NODEINFO
-SetNodeinfo(int gridx, int gridy, int layer)
+SetNodeinfo(int gridx, int gridy, int layer, NODE node)
 {
+    DPOINT dp;
     NODEINFO *lnodeptr;
 
     lnodeptr = &NODEIPTR(gridx, gridy, layer);
     if (*lnodeptr == NULL) {
 	*lnodeptr = (NODEINFO)calloc(1, sizeof(struct nodeinfo_));
+
+	/* Make sure this position is in the list of node's taps.  Add	*/
+	/* it if it is not there.					*/
+
+	for (dp = (DPOINT)node->taps; dp; dp = dp->next)
+	    if (dp->gridx == gridx && dp->gridy == gridy && dp->layer == layer)
+		break;
+	if (dp == NULL)
+	    for (dp = (DPOINT)node->extend; dp; dp = dp->next)
+		if (dp->gridx == gridx && dp->gridy == gridy && dp->layer == layer)
+		    break;
+	if (dp == NULL) {
+	    dp = (DPOINT)malloc(sizeof(struct dpoint_));
+	    dp->gridx = gridx;
+	    dp->gridy = gridy;
+	    dp->layer = layer;
+	    dp->x = (gridx * PitchX) + Xlowerbound;
+	    dp->y = (gridy * PitchY) + Ylowerbound;
+	    dp->next = node->extend;
+	    node->extend = dp;
+	}
     }
     return *lnodeptr;
 }
@@ -153,7 +175,8 @@ count_reachable_taps()
 						(OBSVAL(gridx, gridy, ds->layer)
 						& BLOCKED_MASK)
 						| (u_int)node->netnum;
-					    lnode = SetNodeinfo(gridx, gridy, ds->layer);
+					    lnode = SetNodeinfo(gridx, gridy, ds->layer,
+							node);
 					    lnode->nodeloc = node;
 					    lnode->nodesav = node;
 
@@ -315,7 +338,7 @@ count_reachable_taps()
 			OBSVAL(tapx, tapy, tapl) =
 				(OBSVAL(tapx, tapy, tapl) & BLOCKED_MASK)
 				| mask | (u_int)node->netnum;
-			lnode = SetNodeinfo(tapx, tapy, tapl);
+			lnode = SetNodeinfo(tapx, tapy, tapl, node);
 			lnode->nodeloc = node;
 			lnode->nodesav = node;
 			lnode->stub = dist;
@@ -1164,7 +1187,8 @@ void create_obstructions_inside_nodes(void)
 			        	= (OBSVAL(gridx, gridy, ds->layer)
 					   & BLOCKED_MASK) | (u_int)node->netnum | mask;
 				   if (!lnode)
-				      lnode = SetNodeinfo(gridx, gridy, ds->layer);
+				      lnode = SetNodeinfo(gridx, gridy, ds->layer,
+						node);
 				   lnode->nodeloc = node;
 				   lnode->nodesav = node;
 				   lnode->stub = dist;
@@ -1383,7 +1407,7 @@ void create_obstructions_outside_nodes(void)
 				// the obstruction to resolve the DRC error.
 
 				// Make sure we have marked this as a node.
-				lnode = SetNodeinfo(gridx, gridy, ds->layer);
+				lnode = SetNodeinfo(gridx, gridy, ds->layer, node);
 				lnode->nodeloc = node;
 				lnode->nodesav = node;
 			        OBSVAL(gridx, gridy, ds->layer)
@@ -1894,7 +1918,7 @@ void create_obstructions_outside_nodes(void)
 				   }
                                 }
 
-				lnode = SetNodeinfo(gridx, gridy, ds->layer);
+				lnode = SetNodeinfo(gridx, gridy, ds->layer, node);
 				lnode->nodeloc = node;
 				lnode->nodesav = node;
 
@@ -2158,7 +2182,8 @@ void create_obstructions_outside_nodes(void)
 				   		= (OBSVAL(gridx, gridy, ds->layer)
 						& BLOCKED_MASK) |
 						node->netnum | STUBROUTE;
-				        lnode = SetNodeinfo(gridx, gridy, ds->layer);
+				        lnode = SetNodeinfo(gridx, gridy, ds->layer,
+						node);
 					lnode->nodeloc = node;
 					lnode->nodesav = node;
 					lnode->stub = ds->y1 - dy;
@@ -2175,7 +2200,8 @@ void create_obstructions_outside_nodes(void)
 				   		= (OBSVAL(gridx, gridy, ds->layer)
 						& BLOCKED_MASK) |
 						node->netnum | STUBROUTE;
-				        lnode = SetNodeinfo(gridx, gridy, ds->layer);
+				        lnode = SetNodeinfo(gridx, gridy, ds->layer,
+						node);
 					lnode->nodeloc = node;
 					lnode->nodesav = node;
 					lnode->stub = ds->y2 - dy;
@@ -2195,7 +2221,8 @@ void create_obstructions_outside_nodes(void)
 				   		= (OBSVAL(gridx, gridy, ds->layer)
 						& BLOCKED_MASK) |
 						node->netnum | STUBROUTE;
-				        lnode = SetNodeinfo(gridx, gridy, ds->layer);
+				        lnode = SetNodeinfo(gridx, gridy, ds->layer,
+						node);
 					lnode->nodeloc = node;
 					lnode->nodesav = node;
 					lnode->stub = ds->x1 - dx;
@@ -2212,7 +2239,8 @@ void create_obstructions_outside_nodes(void)
 				   		= (OBSVAL(gridx, gridy, ds->layer)
 						& BLOCKED_MASK) |
 						node->netnum | STUBROUTE;
-				        lnode = SetNodeinfo(gridx, gridy, ds->layer);
+				        lnode = SetNodeinfo(gridx, gridy, ds->layer,
+						node);
 					lnode->nodeloc = node;
 					lnode->nodesav = node;
 					lnode->stub = ds->x2 - dx;
@@ -2358,7 +2386,8 @@ void tap_to_tap_interactions(void)
 			        if ((ds->y1 < de.y2 && ds->y2 > de.y2) ||
 			 		(ds->y2 > de.y1 && ds->y1 < de.y1)) {
 				    /* prohibit horizontal via */
-				    lnode = SetNodeinfo(gridx, gridy, ds->layer);
+				    lnode = SetNodeinfo(gridx, gridy, ds->layer,
+						g->noderec[i]);
 				    lnode->flags |= NI_NO_VIAX;
 				}
 			    }
@@ -2368,7 +2397,8 @@ void tap_to_tap_interactions(void)
 			        if ((ds->x1 < de.x2 && ds->x2 > de.x2) ||
 					(ds->x2 > de.x1 && ds->x1 < de.x1)) {
 				    /* prohibit horizontal via */
-				    lnode = SetNodeinfo(gridx, gridy, ds->layer);
+				    lnode = SetNodeinfo(gridx, gridy, ds->layer,
+						g->noderec[i]);
 				    lnode->flags |= NI_NO_VIAX;
 				}
 			    }
@@ -2384,7 +2414,8 @@ void tap_to_tap_interactions(void)
 			        if ((ds->y1 < de.y2 && ds->y2 > de.y2) ||
 			 		(ds->y2 > de.y1 && ds->y1 < de.y1)) {
 				    /* prohibit horizontal via */
-				    lnode = SetNodeinfo(gridx, gridy, ds->layer);
+				    lnode = SetNodeinfo(gridx, gridy, ds->layer,
+						g->noderec[i]);
 				    lnode->flags |= NI_NO_VIAY;
 				}
 			    }
@@ -2394,7 +2425,8 @@ void tap_to_tap_interactions(void)
 			        if ((ds->x1 < de.x2 && ds->x2 > de.x2) ||
 					(ds->x2 > de.x1 && ds->x1 < de.x1)) {
 				    /* prohibit horizontal via */
-				    lnode = SetNodeinfo(gridx, gridy, ds->layer);
+				    lnode = SetNodeinfo(gridx, gridy, ds->layer,
+						g->noderec[i]);
 				    lnode->flags |= NI_NO_VIAY;
 				}
 			    }
@@ -2455,7 +2487,8 @@ make_routable(NODE node)
 
 			    if (orignet & NO_NET) {
 				OBSVAL(gridx, gridy, ds->layer) = g->netnum[i];
-				lnode = SetNodeinfo(gridx, gridy, ds->layer);
+				lnode = SetNodeinfo(gridx, gridy, ds->layer,
+						g->noderec[i]);
 				lnode->nodeloc = node;
 				lnode->nodesav = node;
 				return;

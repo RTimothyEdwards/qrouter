@@ -371,41 +371,8 @@ runqrouter(int argc, char *argv[])
       /* Note that this comes from MANUFACTURINGGRID, not UNITS DATABASE */
       fprintf(infoFILEptr, "units scale %d\n", Scales.mscale);
 
-      /* Resolve pitches.  This is normally done after reading	*/
-      /* the DEF file, but the info file is usually generated	*/
-      /* from LEF layer information only, in order to get the	*/
-      /* values needed to write the DEF file tracks.		*/
-
-      for (i = 0; i < Num_layers; i++) {
-	 int o = LefGetRouteOrientation(i);
-
-	 /* Set PitchX and PitchY from route info as	*/
-	 /* check_variable_pitch needs the values	*/
-
-	 if (o == 1) {
-	    if ((PitchY == 0.0) || (LefGetRoutePitchY(i) < PitchY))
-	 	PitchY = LefGetRoutePitchY(i);
-	 }
-	 else {
-	    if ((PitchX == 0.0) || (LefGetRoutePitchX(i) < PitchX))
-	 	PitchX = LefGetRoutePitchX(i);
-	 }
-      }
-
-      /* Resolve pitch information similarly to post_config() */
-
-      for (i = 0; i < Num_layers; i++) {
-	 int o = LefGetRouteOrientation(i);
-
-	 if (o == 1) {
-	    if ((PitchY == 0.0) || (LefGetRoutePitchY(i) < PitchY))
-	        PitchY = LefGetRoutePitchY(i);
-	 }
-	 else {
-	    if ((PitchX == 0.0) || (LefGetRoutePitchX(i) < PitchX))
-	        PitchX = LefGetRoutePitchX(i);
-	 }
-      }
+      /* Resolve base horizontal and vertical pitches. */
+      post_config(TRUE);
 
       /* Print information about route layers, and exit */
       for (i = 0; i < Num_layers; i++) {

@@ -1625,18 +1625,15 @@ qrouter_readlef(ClientData clientData, Tcl_Interp *interp,
  
     for (i = 0; i < Num_layers; i++) {
 
-       /* Set Vert, PitchX, and PitchY from route info */
+       /* Set Vert from route info since this gets called a lot	*/
+       /* (e.g., from eval_pt() and is more convenient to pull	*/
+       /* from an array than calling a subroutine every time.	*/
 
        Vert[i] = (1 - LefGetRouteOrientation(i));
-       if (Vert[i]) {
-	  if (LefGetRoutePitch(i) < PitchX) PitchX = LefGetRoutePitch(i);
-       }
-       else {
-	  if (LefGetRoutePitch(i) < PitchY) PitchY = LefGetRoutePitch(i);
-       }
     }
 
-    post_config();
+    /* Resolve the base horizontal and vertical pitches */
+    post_config(FALSE);
 
     /* Set DRC blockage behavior based on via and route widths */
     apply_drc_blocks(-1, 0.0, 0.0);

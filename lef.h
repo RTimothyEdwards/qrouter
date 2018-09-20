@@ -82,6 +82,17 @@ typedef struct {
     u_char hdirection;	/* horizontal direction preferred */
 } lefRoute;
 
+/* These values may be used for "hdirection".  initialize hdirection	*/
+/* with DIR_UNKNOWN.  If the LEF file defines the pitch before the 	*/
+/* direction and does not specify both X and Y pitches, then change to	*/
+/* DIR_RESOLVE to indicate that the pitch in the non-preferred		*/
+/* direction should be zeroed when the preferred direction is known.	*/
+
+#define DIR_VERTICAL	(u_char)0
+#define DIR_HORIZONTAL	(u_char)1
+#define DIR_UNKNOWN	(u_char)2
+#define DIR_RESOLVE	(u_char)3
+
 /* Structure used to maintain default generation information for each	*/
 /* via or viarule (contact) type.  If "cell" is non-NULL, then the via	*/
 /* is saved in a cell (pointed to by "cell"), and "area" describes the	*/
@@ -150,6 +161,8 @@ int  LefReadLayer(FILE *f, u_char obstruct);
 LefList LefFindLayer(char *token);
 LefList LefFindLayerByNum(int layer);
 int    LefFindLayerNum(char *token);
+void   LefSetRoutePitchX(int layer, double value);
+void   LefSetRoutePitchY(int layer, double value);
 double LefGetRouteKeepout(int layer);
 double LefGetRouteWidth(int layer);
 double LefGetRouteMinArea(int layer);

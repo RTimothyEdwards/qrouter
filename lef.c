@@ -1065,6 +1065,44 @@ LefGetRoutePitchY(int layer)
 
 /*
  *------------------------------------------------------------
+ * Set the route pitch in X for a given layer
+ *------------------------------------------------------------
+ */
+
+void
+LefSetRoutePitchX(int layer, double value)
+{
+    LefList lefl;
+
+    lefl = LefFindLayerByNum(layer);
+    if (lefl) {
+	if (lefl->lefClass == CLASS_ROUTE) {
+	    lefl->info.route.pitchx = value;
+	}
+    }
+}
+
+/*
+ *------------------------------------------------------------
+ * Set the route pitch in Y for a given layer
+ *------------------------------------------------------------
+ */
+
+void
+LefSetRoutePitchY(int layer, double value)
+{
+    LefList lefl;
+
+    lefl = LefFindLayerByNum(layer);
+    if (lefl) {
+	if (lefl->lefClass == CLASS_ROUTE) {
+	    lefl->info.route.pitchy = value;
+	}
+    }
+}
+
+/*
+ *------------------------------------------------------------
  * Get the route name for a given layer
  *------------------------------------------------------------
  */
@@ -2680,7 +2718,7 @@ LefReadLayerSection(f, lname, mode, lefl)
 			// been specified and needs to be set to default.
 			lefl->info.route.offsetx = -1.0;
 			lefl->info.route.offsety = -1.0;
-			lefl->info.route.hdirection = (u_char)0;
+			lefl->info.route.hdirection = DIR_UNKNOWN;
 
 			lefl->info.route.minarea = 0.0;
 			lefl->info.route.thick = 0.0;
@@ -2869,6 +2907,18 @@ LefReadLayerSection(f, lname, mode, lefl)
 		}
 		else {
 		    lefl->info.route.pitchy = lefl->info.route.pitchx;
+		    /* If the orientation is known, then zero the pitch	*/
+		    /* in the opposing direction.  If not, then set the	*/
+		    /* direction to DIR_RESOLVE so that the pitch in	*/
+		    /* the opposing direction can be zeroed when the	*/
+		    /* direction is specified.				*/
+
+		    if (lefl->info.route.hdirection == DIR_UNKNOWN)
+			lefl->info.route.hdirection = DIR_RESOLVE;
+		    else if (lefl->info.route.hdirection == DIR_VERTICAL)
+			lefl->info.route.pitchy = 0.0;
+		    else if (lefl->info.route.hdirection == DIR_HORIZONTAL)
+			lefl->info.route.pitchx = 0.0;
 		}
 
 		/* Offset default is 1/2 the pitch.  Offset is		*/
@@ -2882,7 +2932,14 @@ LefReadLayerSection(f, lname, mode, lefl)
 	    case LEF_LAYER_DIRECTION:
 		token = LefNextToken(f, TRUE);
 		LefLower(token);
-		lefl->info.route.hdirection = (token[0] == 'h') ? TRUE : FALSE;
+		if (lefl->info.route.hdirection == DIR_RESOLVE) {
+		    if (token[0] == 'h')
+			lefl->info.route.pitchx = 0.0;
+		    else if (token[0] == 'v')
+			lefl->info.route.pitchy = 0.0;
+		}
+		lefl->info.route.hdirection = (token[0] == 'h') ? DIR_HORIZONTAL
+				: DIR_VERTICAL;
 		LefEndStatement(f);
 		break;
 	    case LEF_LAYER_OFFSET:
