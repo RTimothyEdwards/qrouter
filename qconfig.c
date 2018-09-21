@@ -75,6 +75,7 @@ void
 post_config(u_char noprint)
 {
     int i, h, v;
+    double rpitchx, rpitchy;
 
     // Make sure that Num_layers does not exceed the number of
     // routing layers defined by the LEF file (or the config
@@ -86,10 +87,12 @@ post_config(u_char noprint)
     // Make sure all layers have a pitch in both X and Y even if not
     // specified separately in the configuration or def files.
     for (i = 0; i < Num_layers; i++) {
-       if ((PitchX == 0.0) || (LefGetRoutePitchX(i) < PitchX))
-	  PitchX = LefGetRoutePitchX(i);
-       if ((PitchY == 0.0) || (LefGetRoutePitchY(i) < PitchY))
-	  PitchY = LefGetRoutePitchY(i);
+       rpitchx = LefGetRoutePitchX(i);
+       rpitchy = LefGetRoutePitchY(i);
+       if ((PitchX == 0.0) || ((rpitchx != 0.0) && (rpitchx < PitchX)))
+	  PitchX = rpitchx;
+       if ((PitchY == 0.0) || ((rpitchy != 0.0) && (rpitchy < PitchY)))
+	  PitchY = rpitchy;
     }
 
     // This is mostly arbitrary.  Generally, all route layer
@@ -119,14 +122,14 @@ post_config(u_char noprint)
 
     if (noprint == FALSE) {
 	for (i = 0; i < Num_layers; i++) {
-	    if (PitchX != LefGetRoutePitchX(i)) {
+	    if ((PitchX != 0.0) && (PitchX != LefGetRoutePitchX(i))) {
 		Fprintf(stderr, "Multiple vertical route layers at different"
 			" pitches.  Using smaller pitch %g, will route on"
 			" 1-of-%d tracks for layer %s.\n",
 			PitchX, (int)(ceil(LefGetRoutePitchX(i) / PitchX)),
 			LefGetRouteName(i));
 	    }
-	    if (PitchY != LefGetRoutePitchY(i)) {
+	    if ((PitchY != 0.0) && (PitchY != LefGetRoutePitchY(i))) {
 		Fprintf(stderr, "Multiple horizontal route layers at different"
 			" pitches.  Using smaller pitch %g, will route on"
 			" 1-of-%d tracks for layer %s.\n",

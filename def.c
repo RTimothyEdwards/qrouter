@@ -1782,7 +1782,7 @@ DefRead(char *inName)
     char *token;
     int keyword, dscale, total;
     int curlayer = -1, channels;
-    int v, h, i;
+    int i;
     float oscale;
     double start, step;
     double llx, lly, urx, ury, locpitch;
@@ -1845,7 +1845,6 @@ DefRead(char *inName)
 
     oscale = 1;
     lefCurrentLine = 0;
-    v = h = -1;
 
     DefHashInit();
 
@@ -1861,39 +1860,7 @@ DefRead(char *inName)
 	    LefEndStatement(f);
 	    continue;
 	}
-
-	/* After the TRACKS have been read in, corient is 'x' or 'y'.	*/
-	/* On the next keyword, finish filling in track information.	*/
-
-	if (keyword != DEF_TRACKS && corient != '.')
-	{
-	    /* Because the TRACKS statement only covers the pitch of	*/
-	    /* a single direction, we need to fill in with the pitch	*/
-	    /* of opposing layers.  For now, we expect all horizontal	*/
-	    /* routes to be at the same pitch, and all vertical routes	*/
-	    /* to be at the same pitch.					*/
-
-	    if (h == -1) h = v;
-	    if (v == -1) v = h;
-
-	    for (i = 0; i < Num_layers; i++)
-	    {
-		if (PitchX != 0.0 && PitchX != LefGetRoutePitch(i) && Verbose > 0)
-		    Fprintf(stderr, "Multiple vertical route layers at different"
-				" pitches.  Using pitch %g and routing on 1-of-%d"
-				" tracks for layer %s.\n",
-				PitchX, (int)ceil(LefGetRoutePitch(i) / PitchX),
-				LefGetRouteName(i));
-		if (PitchY != 0.0 && PitchY != LefGetRoutePitch(i) && Verbose > 0)
-		    Fprintf(stderr, "Multiple horizontal route layers at different"
-				" pitches.  Using pitch %g and routing on 1-of-%d"
-				" tracks for layer %s.\n",
-				PitchY, (int)ceil(LefGetRoutePitch(i) / PitchY),
-				LefGetRouteName(i));
-
-		corient = '.';	// So we don't run this code again.
-	    }
-	}
+	if (keyword != DEF_TRACKS) corient = '.';
 
 	switch (keyword)
 	{
@@ -1972,7 +1939,6 @@ DefRead(char *inName)
 		    locpitch = step / oscale;
 		    if ((PitchX == 0.0) || (locpitch < PitchX))
 			PitchX = locpitch;
-		    if (v == -1) v = curlayer;
 		    llx = start;
 		    urx = start + step * channels;
 		    if ((llx / oscale) < Xlowerbound)
@@ -1985,7 +1951,6 @@ DefRead(char *inName)
 		    locpitch = step / oscale;
 		    if ((PitchY == 0.0) || (locpitch < PitchY))
 			PitchY = locpitch;
-		    if (h == -1) h = curlayer;
 		    lly = start;
 		    ury = start + step * channels;
 		    if ((lly / oscale) < Ylowerbound)
