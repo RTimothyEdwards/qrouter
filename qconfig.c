@@ -89,9 +89,9 @@ post_config(u_char noprint)
     for (i = 0; i < Num_layers; i++) {
        rpitchx = LefGetRoutePitchX(i);
        rpitchy = LefGetRoutePitchY(i);
-       if ((PitchX == 0.0) || ((rpitchx != 0.0) && (rpitchx < PitchX)))
+       if ((PitchX == 0.0) || ((rpitchx != 0.0) && (rpitchx + EPS < PitchX)))
 	  PitchX = rpitchx;
-       if ((PitchY == 0.0) || ((rpitchy != 0.0) && (rpitchy < PitchY)))
+       if ((PitchY == 0.0) || ((rpitchy != 0.0) && (rpitchy + EPS < PitchY)))
 	  PitchY = rpitchy;
     }
 
@@ -112,7 +112,7 @@ post_config(u_char noprint)
 	}
 	if (LefGetRoutePitchY(i) == 0.0) {
 	    if (!Vert[i])
-		LefSetRoutePitchY(i, PitchX);
+		LefSetRoutePitchY(i, PitchY);
 	    else if (i > 0)
 		LefSetRoutePitchY(i, LefGetRoutePitchY(i - 1));
 	    else
@@ -122,18 +122,20 @@ post_config(u_char noprint)
 
     if (noprint == FALSE) {
 	for (i = 0; i < Num_layers; i++) {
-	    if ((PitchX != 0.0) && (PitchX != LefGetRoutePitchX(i))) {
-		Fprintf(stderr, "Multiple vertical route layers at different"
-			" pitches.  Using smaller pitch %g, will route on"
+	    rpitchx = LefGetRoutePitchX(i);
+	    rpitchy = LefGetRoutePitchY(i);
+	    if ((PitchX != 0.0) && (PitchX + EPS < rpitchx)) {
+		Fprintf(stdout, "Vertical route layer at non-minimum pitch"
+			" %g.  Using smaller pitch %g, will route on"
 			" 1-of-%d tracks for layer %s.\n",
-			PitchX, (int)(ceil(LefGetRoutePitchX(i) / PitchX)),
+			rpitchx, PitchX, (int)(ceil(rpitchx / PitchX)),
 			LefGetRouteName(i));
 	    }
-	    if ((PitchY != 0.0) && (PitchY != LefGetRoutePitchY(i))) {
-		Fprintf(stderr, "Multiple horizontal route layers at different"
-			" pitches.  Using smaller pitch %g, will route on"
+	    if ((PitchY != 0.0) && (PitchY + EPS < rpitchy)) {
+		Fprintf(stdout, "Horizontal route layer at non-minimum pitch"
+			" %g.  Using smaller pitch %g, will route on"
 			" 1-of-%d tracks for layer %s.\n",
-			PitchY, (int)(ceil(LefGetRoutePitchY(i) / PitchY)),
+			rpitchy, PitchY, (int)(ceil(rpitchy / PitchY)),
 			LefGetRouteName(i));
 	    }
 	}
