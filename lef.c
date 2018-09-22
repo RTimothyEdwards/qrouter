@@ -1443,10 +1443,6 @@ LefReadRect(FILE *f, int curlayer, float oscale)
 	/* Issue warning but keep geometry with negative layer number */
 	LefError(LEF_WARNING, "No layer defined for RECT.\n");
     }
-    else if (curlayer >= Num_layers) {
-	LefError(LEF_WARNING, "Layer defined for RECT is above route layer limit.\n");
-	return (DSEG)NULL;
-    }
 
     /* Scale coordinates (microns to centimicrons)	*/
 		
@@ -3124,13 +3120,28 @@ LefWriteGeneratedVias(FILE *f, double oscale, int defvias)
 
     scale = oscale / 2.0;	/* Via dimensions are double */
 
-    /* 1st pass---check if any vias are generated. */
+    /* 1st pass---check if any vias are generated.  Also check if any	*/
+    /* vias have non-route layers (e.g., POLY, or Num_layers and above)	*/
+    /* and unmark them.							*/
 
     numvias = defvias;
     for (lefl = LefInfo; lefl; lefl = lefl->next)
 	if (lefl->lefClass == CLASS_VIA)
-	    if (lefl->info.via.generated)
+	    if (lefl->info.via.generated) {
+		if (!lefl->info.via.lr ||
+			(lefl->info.via.lr->layer < 0) ||
+			(lefl->info.via.lr->layer >= Num_layers)) {
+		    lefl->info.via.generated = FALSE;
+		    continue;
+		}
+		else if (!lefl->info.via.lr->next ||
+			(lefl->info.via.lr->next->layer < 0) ||
+			(lefl->info.via.lr->next->layer >= Num_layers)) {
+		    lefl->info.via.generated = FALSE;
+		    continue;
+		}
 		numvias++;
+	    }
 
     if (numvias == 0) return;	/* Nothing to write */
 
@@ -3223,10 +3234,10 @@ LefAssignLayerVias()
 		/* Find the base layer and set hasGenerate[] for that layer */
 		baselayer = lefl->info.via.area.layer;
 		if (lefl->info.via.lr)
-		    if (lefl->info.via.lr->layer < baselayer)
+		    if ((baselayer < 0) || (lefl->info.via.lr->layer < baselayer))
 			baselayer = lefl->info.via.lr->layer;
 		if (lefl->info.via.lr->next)
-		    if (lefl->info.via.lr->next->layer < baselayer)
+		    if ((baselayer < 0) || (lefl->info.via.lr->next->layer < baselayer))
 			baselayer = lefl->info.via.lr->next->layer;
 		if ((baselayer >= 0) && (baselayer < MAX_LAYERS))
 		    hasGenerate[baselayer] = TRUE;
@@ -3266,17 +3277,26 @@ LefAssignLayerVias()
 
 		for (grect = lefl->info.via.lr; grect; grect = grect->next) {
 		    if (grect->layer >= minroute && grect->layer <= maxroute) {
-			if (grect->layer > baselayer) {
-			    toplayer = grect->layer;
-			    xytdiff = (grect->x2 - grect->x1) - (grect->y2 - grect->y1);
-			}
-			else {
+			if (grect->layer < baselayer) {
 			    baselayer = grect->layer;
 			    xybdiff = (grect->x2 - grect->x1) - (grect->y2 - grect->y1);
 			}
 		    }
 		}
-		if (baselayer < MAX_LAYERS) {
+		toplayer = baselayer;
+
+		for (grect = lefl->info.via.lr; grect; grect = grect->next) {
+		    if (grect->layer >= minroute && grect->layer <= maxroute) {
+			if (grect->layer > toplayer) {
+			    toplayer = grect->layer;
+			    xytdiff = (grect->x2 - grect->x1) - (grect->y2 - grect->y1);
+			}
+		    }
+		}
+
+		/* Ignore vias on undefined layers (-1) */
+		if ((baselayer < MAX_LAYERS) && (toplayer < MAX_LAYERS) &&
+			(baselayer >= 0) && (toplayer >= 0)) {
 		    /* Assign only to layers in AllowedVias, if it is non-NULL */
 		    if (AllowedVias != NULL) {
 			for (viaName = AllowedVias; viaName; viaName = viaName->next) {
@@ -3288,21 +3308,32 @@ LefAssignLayerVias()
 		    else if (hasGenerate[baselayer] && lefl->info.via.generated == FALSE)
 			continue;
 
-		    if ((xytdiff > -EPS) && (xybdiff > -EPS)) {
-			if (newViaXX[baselayer] != NULL) free(newViaXX[baselayer]);
-			newViaXX[baselayer] = strdup(lefl->lefName);      
+		    /* Check for unexpected via definitions */
+		    if ((toplayer - baselayer) != 1) {
+			LefError(LEF_WARNING, "Via \"%s\" in LEF file is defined "
+				"on non-contiguous route layers!\n", lefl->lefName);
 		    }
-		    else if ((xytdiff > -EPS) && (xybdiff < EPS)) {
+
+		    if ((xytdiff > EPS) && (xybdiff < -EPS)) {
 			if (newViaYX[baselayer] != NULL) free(newViaYX[baselayer]);
 			newViaYX[baselayer] = strdup(lefl->lefName);      
 		    }
-		    else if ((xytdiff < EPS) && (xybdiff > -EPS)) {
+		    else if ((xytdiff < -EPS) && (xybdiff > EPS)) {
 			if (newViaXY[baselayer] != NULL) free(newViaXY[baselayer]);
 			newViaXY[baselayer] = strdup(lefl->lefName);      
 		    }
-		    else {
+		    else if ((xytdiff > EPS) || (xybdiff > EPS)) {
+			if (newViaXX[baselayer] != NULL) free(newViaXX[baselayer]);
+			newViaXX[baselayer] = strdup(lefl->lefName);      
+		    }
+		    else if ((xytdiff < -EPS) || (xybdiff < -EPS)) {
 			if (newViaYY[baselayer] != NULL) free(newViaYY[baselayer]);
 			newViaYY[baselayer] = strdup(lefl->lefName);
+		    }
+		    else {
+			if (newViaXX[baselayer] == NULL) {
+			    newViaXX[baselayer] = strdup(lefl->lefName);      
+			}
 		    }
 		}
 	    }
