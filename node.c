@@ -899,6 +899,7 @@ void create_obstructions_from_gates(void)
     }
 
     for (ds = UserObs; ds; ds = ds->next) {
+	if (ds->layer >= Num_layers) continue;
 	gridx = (int)((ds->x1 - Xlowerbound - delta[ds->layer]) / PitchX) - 1;
 	while (1) {
 	    dx = (gridx * PitchX) + Xlowerbound;
