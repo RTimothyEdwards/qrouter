@@ -386,7 +386,10 @@ walk_route_output(endpointinfo *eptinfo, int eidx,
 	    fprintf(delayFile, "%s/%s ", g->gatename, g->gatetype->node[i]);
 	if (d > 0) fprintf(delayFile, ", ");
     }
-
+    else if (d == 0) {
+	/* This should not happen:  No node, no route */
+	fprintf(delayFile, "ERROR ");
+    }
 
     /* Output downstream nodes */
     for (i = 0; i < d; i++) {
