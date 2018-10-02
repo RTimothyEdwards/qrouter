@@ -661,7 +661,6 @@ int write_delays(char *filename)
 		brki = -1;
 		for (i = 0; i < numroutes; i++) {
 		    if (eptinfo[i].route == rt) continue;
-		    if (eptinfo[i].endl == -2) continue;
 
 		    testroute = eptinfo[i].orig;
 		    if ((!(testroute->flags & RT_START_NODE)) &&
@@ -802,7 +801,7 @@ int write_delays(char *filename)
 			}
 		    }
 		}
-		if ((brki >= 0) && (eptinfo[brki].endl != -2)) {
+		if (brki >= 0) {
 		    /* Disable this endpoint so it is not checked again */
 		    eptinfo[brki].endl = -2;
 

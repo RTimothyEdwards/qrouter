@@ -1363,6 +1363,8 @@ int dothirdstage(u_char graphdebug, int debug_netnum, u_int effort)
 	    if (Verbose > 0)
 	       Fprintf(stdout, "Failed to route net %s; restoring original\n",
 			net->netname);
+
+	    ripup_net(net, TRUE, FALSE, TRUE);	// Remove routes from Obs array
 	    remove_routes(net->routes, FALSE);	/* should be NULL already */
 	    net->routes = rt;
 	    writeback_all_routes(net);	/* restore the original */

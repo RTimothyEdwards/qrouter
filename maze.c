@@ -1800,6 +1800,9 @@ route_set_connections(net, route)
    u_char   found, match;
    int	    x, y;
 
+   /* Reset start/end node flags */
+   route->flags &= ~(RT_START_NODE | RT_END_NODE);
+
    /* Does first route segment connect to a node? */
 
    seg = route->segments;
@@ -1850,7 +1853,8 @@ route_set_connections(net, route)
    }
 
    if (!found) {
-      Fprintf(stderr, "Error:  Failure to find route start node/route!\n");
+      Fprintf(stderr, "Error:  Failure to find route start node/route on net %s!\n",
+		net->netname);
    }
 
    /* Does last route segment connect to a node? */
@@ -1909,7 +1913,8 @@ route_set_connections(net, route)
    }
 
    if (!found) {
-      Fprintf(stderr, "Error:  Failure to find route end node/route!\n");
+      Fprintf(stderr, "Error:  Failure to find route end node/route on net %s!\n",
+		net->netname);
    }
 }
 
@@ -2022,6 +2027,8 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	    lrppre = lrprev->next;
 	    if (lrppre == NULL) break;
 	    stackheight = 0;
+	    /* Advance lrcur if jogs were inserted */
+	    while (lrprev != lrcur->next) lrcur = lrcur->next;
 	    a = lrcur;
 	    b = lrprev;
 	    while (a->layer != b->layer) {

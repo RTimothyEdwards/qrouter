@@ -930,6 +930,7 @@ void cleanup_net(NET net)
 			if (segp && (segp->x2 == segf->x1) && (segp->y2 == segf->y1))
 			    continue;
 			/* Remove via and change wire layer */
+			needfix = TRUE;
 			segf->next = seg->next;
 			viabase = segf->layer;
 			segf->layer = (viabase == seg->layer) ? seg->layer + 1 :
@@ -949,6 +950,7 @@ void cleanup_net(NET net)
 			if (segp && (segp->x2 == segf->x1) && (segp->y2 == segf->y1))
 			    continue;
 			/* Remove via and change wire layer */
+			needfix = TRUE;
 			segf->next = seg->next;
 			viabase = segf->layer;
 			segf->layer = (viabase == seg->layer) ? seg->layer + 1 :
@@ -974,6 +976,7 @@ void cleanup_net(NET net)
 			if (segp && (segp->x1 == segl->x2) && (segp->y1 == segl->y2))
 			    continue;
 			/* Remove via and change wire layer */
+			needfix = TRUE;
 			seg->next = NULL;
 			seg->segtype = ST_WIRE;
 			viabase = seg->layer;
@@ -996,6 +999,7 @@ void cleanup_net(NET net)
 			if (segp && (segp->x1 == segl->x2) && (segp->y1 == segl->y2))
 			    continue;
 			/* Remove via and change wire layer */
+			needfix = TRUE;
 			viabase = seg->layer;
 			seg->next = NULL;
 			seg->segtype = ST_WIRE;
