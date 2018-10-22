@@ -2553,6 +2553,7 @@ LefList LefNewVia(char *name)
     lefl->info.via.cell = (GATE)NULL;
     lefl->info.via.lr = (DSEG)NULL;
     lefl->info.via.generated = FALSE;
+    lefl->info.via.respervia = 0.0;
     lefl->lefName = strdup(name);
 
     return lefl;
@@ -2720,6 +2721,10 @@ LefReadLayerSection(f, lname, mode, lefl)
 			lefl->info.route.thick = 0.0;
 			lefl->info.route.antenna = 0.0;
 			lefl->info.route.method = CALC_NONE;
+
+			lefl->info.route.areacap = 0.0;
+			lefl->info.route.respersq = 0.0;
+			lefl->info.route.edgecap = 0.0;
 
 			/* A routing type has been declared.  Assume	*/
 			/* this takes the name "metal1", "M1", or some	*/

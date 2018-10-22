@@ -1649,14 +1649,36 @@ static int
 qrouter_readdef(ClientData clientData, Tcl_Interp *interp,
                 int objc, Tcl_Obj *CONST objv[])
 {
+    char *argv;
+    u_char abort_on_error = FALSE;
+    int result;
+
+    /* Parse out options */
+
+    while (objc > 0) {
+	argv = Tcl_GetString(objv[objc - 1]);
+	if (*argv == '-') {
+	    if (!strncmp(argv + 1, "abort", 5))
+		abort_on_error = TRUE;
+	    objc--;
+	}
+	else break;
+    }
+
     if ((DEFfilename == NULL) && (objc != 2)) {
 	Tcl_SetResult(interp, "No DEF filename specified!", NULL);
 	return TCL_ERROR;
     }
+
     if (objc == 2)
-	read_def(Tcl_GetString(objv[1]));
+	result = read_def(Tcl_GetString(objv[1]));
     else
-	read_def(NULL);
+	result = read_def(NULL);
+
+    if ((result != (u_char)0) && (abort_on_error == TRUE)) {
+	Tcl_SetResult(interp, "Errors in input DEF file;  aborting.", NULL);
+	return TCL_ERROR;
+    }
 
     // Redisplay
     draw_layout();

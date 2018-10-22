@@ -735,6 +735,7 @@ void apply_drc_blocks(int layer, double via_except, double route_except)
 static int post_def_setup()
 {
    NET net;
+   ROUTE rt;
    int i;
 
    if (DEFfilename == NULL) {
@@ -802,10 +803,13 @@ static int post_def_setup()
    count_reachable_taps();
    count_pinlayers();
    
-   // If any nets are pre-routed, place those routes.
+   // If any nets are pre-routed, calculate route endpoints, and
+   // place those routes.
 
    for (i = 0; i < Numnets; i++) {
       net = Nlnets[i];
+      for (rt = net->routes; rt; rt = rt->next)
+	 route_set_connections(net, rt);
       writeback_all_routes(net);
    }
 
@@ -837,15 +841,18 @@ static int post_def_setup()
 /* read_def ---							*/
 /*								*/
 /* Read in the DEF file in DEFfilename				*/
+/* Return 0 on success, 1 on fatal error in DEF file.		*/
 /*--------------------------------------------------------------*/
 
-void read_def(char *filename)
+int read_def(char *filename)
 {
-   double oscale, precis;
+   float oscale;
+   double precis;
+   int result;
 
    if ((filename == NULL) && (DEFfilename == NULL)) {
       Fprintf(stderr, "No DEF file specified, nothing to read.\n");
-      return;
+      return 1;
    }
    else if (filename != NULL) {
       if (DEFfilename != NULL) {
@@ -856,8 +863,9 @@ void read_def(char *filename)
    }
    else reinitialize();
 
-   oscale = (double)DefRead(DEFfilename);
-   precis = Scales.mscale / oscale;	// from LEF manufacturing grid
+   oscale = (float)0.0;
+   result = DefRead(DEFfilename, &oscale);
+   precis = Scales.mscale / (double)oscale;	// from LEF manufacturing grid
    if (precis < 1.0) precis = 1.0;
    precis *= (double)Scales.iscale;	// user-defined extra scaling
 
@@ -870,6 +878,7 @@ void read_def(char *filename)
 		1.0 / (double)Scales.iscale);
 
    post_def_setup();
+   return result;
 }
 
 /*--------------------------------------------------------------*/

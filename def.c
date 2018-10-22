@@ -125,7 +125,7 @@ DefHashInstance(GATE gateginfo)
  *	Parse a network route statement from the DEF file.
  *	If "special" is 1, then, add the geometry to the
  *	list of obstructions.  If "special" is 0, then read
- *	the geometry into a route structure for the net. 
+ *	the geometry into a route structure for the net.
  *
  * Results:
  *	Returns the last token encountered.
@@ -405,7 +405,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 		locarea.x2 = refp.x1;
 		locarea.y2 = refp.y1;
 
-		if (special == (char)1) {
+		if (special != (char)0) {
 		   if (valid == TRUE) {
 		      s = LefGetRouteSpacing(routeLayer); 
 		      hw = w / 2;
@@ -442,10 +442,14 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 		else if ((paintLayer >= 0) && (paintLayer < Num_layers)) {
 		   newRoute = (SEG)malloc(sizeof(struct seg_));
 		   newRoute->segtype = ST_WIRE;
-		   newRoute->x1 = locarea.x1;
-		   newRoute->x2 = locarea.x2;
-		   newRoute->y1 = locarea.y1;
-		   newRoute->y2 = locarea.y2;
+		   // NOTE: Segments are added at the front of the linked
+		   // list, so they are backwards from the entry in the
+		   // DEF file.  Therefore the first and second coordinates
+		   // must be swapped, or the segments become disjoint.
+		   newRoute->x1 = locarea.x2;
+		   newRoute->x2 = locarea.x1;
+		   newRoute->y1 = locarea.y2;
+		   newRoute->y2 = locarea.y1;
 		   newRoute->layer = paintLayer;
 
 		   if (routednet == NULL) {
@@ -768,24 +772,17 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 			    /* Ignore this too, along with the next keyword */
 			    token = LefNextToken(f, TRUE);
 			    break;
+			case DEF_NETPROP_FIXED:
+			case DEF_NETPROP_COVER:
+			    // Read in fixed nets like regular nets but mark
+			    // them as NET_IGNORED.
+			    net->flags |= NET_IGNORED;
+			    // fall through
 			case DEF_NETPROP_ROUTED:
 			    // Read in the route;  qrouter now takes
 			    // responsibility for this route.
 			    while (token && (*token != ';'))
 			        token = DefAddRoutes(f, oscale, net, special);
-			    break;
-			case DEF_NETPROP_FIXED:
-			case DEF_NETPROP_COVER:
-			    // Treat fixed nets like specialnets:  read them
-			    // in as obstructions, and write them out as-is.
-			    // Use special = 2 so it is treated like a
-			    // specialnet but does not expect the specialnet
-			    // syntax (unless it is, in fact, a specialnet
-			    // entry).
-			    
-			    while (token && (*token != ';'))
-			        token = DefAddRoutes(f, oscale, net,
-					(special == (char)0) ? (char)2 : special);
 			    break;
 		    }
 		}
@@ -1439,7 +1436,7 @@ DefReadBlockages(FILE *f, char *sname, float oscale, int total)
  *	Read a COMPONENTS section from a DEF file.
  *
  * Results:
- *	None.
+ *	0 on success, 1 on fatal error.
  *
  * Side Effects:
  *	Many.  Cell instances are created and added to
@@ -1456,7 +1453,7 @@ enum def_prop_keys {
 	DEF_PROP_REGION, DEF_PROP_GENERATE, DEF_PROP_PROPERTY,
 	DEF_PROP_EEQMASTER};
 
-static void
+static int
 DefReadComponents(FILE *f, char *sname, float oscale, int total)
 {
     GATE gateginfo;
@@ -1468,6 +1465,7 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
     char OK;
     DSEG drect, newrect;
     double tmp;
+    int err_fatal = 0;
 
     static char *component_keys[] = {
 	"-",
@@ -1517,6 +1515,7 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 		    LefError(DEF_ERROR, "Bad component statement:  Need use "
 				"and macro names\n");
 		    LefEndStatement(f);
+		    err_fatal++;
 		    break;
 		}
 		token = LefNextToken(f, TRUE);
@@ -1533,6 +1532,7 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 		    LefError(DEF_ERROR, "Could not find a macro definition for \"%s\"\n",
 				token);
 		    gate = NULL;
+		    err_fatal++;
 		}
 		else {
 		    gate = (GATE)malloc(sizeof(struct gate_));
@@ -1722,6 +1722,7 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 		{
 		    LefError(DEF_ERROR, "Component END statement missing.\n");
 		    keyword = -1;
+		    err_fatal++;
 		}
 
 		/* Finish final call by placing the cell use */
@@ -1742,6 +1743,7 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
     else
 	LefError(DEF_WARNING, "Warning:  Number of subcells read (%d) does not match "
 		"the number declared (%d).\n", processed, total);
+    return err_fatal;
 }
 
 /*
@@ -1774,8 +1776,8 @@ enum def_sections {DEF_VERSION = 0, DEF_NAMESCASESENSITIVE,
 	DEF_CONSTRAINTS, DEF_GROUPS, DEF_EXTENSION,
 	DEF_END};
 
-float
-DefRead(char *inName)
+int
+DefRead(char *inName, float *retscale)
 {
     FILE *f;
     char filename[256];
@@ -1783,6 +1785,7 @@ DefRead(char *inName)
     int keyword, dscale, total;
     int curlayer = -1, channels;
     int i;
+    int err_fatal = 0;
     float oscale;
     double start, step;
     double llx, lly, urx, ury, locpitch;
@@ -1833,7 +1836,8 @@ DefRead(char *inName)
     {
 	Fprintf(stderr, "Cannot open input file: ");
 	perror(filename);
-	return (float)0.0;
+	*retscale = (float)0.0;
+	return 1;
     }
 
     /* Initialize */
@@ -1913,22 +1917,27 @@ DefRead(char *inName)
 		token = LefNextToken(f, TRUE);
 		if (sscanf(token, "%lg", &start) != 1) {
 		    LefError(DEF_ERROR, "Problem parsing track start position.\n");
+		    err_fatal++;
 		}
 		token = LefNextToken(f, TRUE);
 		if (strcmp(token, "DO")) {
 		    LefError(DEF_ERROR, "TRACKS missing DO loop.\n");
+		    err_fatal++;
 		}
 		token = LefNextToken(f, TRUE);
 		if (sscanf(token, "%d", &channels) != 1) {
 		    LefError(DEF_ERROR, "Problem parsing number of track channels.\n");
+		    err_fatal++;
 		}
 		token = LefNextToken(f, TRUE);
 		if (strcmp(token, "STEP")) {
 		    LefError(DEF_ERROR, "TRACKS missing STEP size.\n");
+		    err_fatal++;
 		}
 		token = LefNextToken(f, TRUE);
 		if (sscanf(token, "%lg", &step) != 1) {
 		    LefError(DEF_ERROR, "Problem parsing track step size.\n");
+		    err_fatal++;
 		}
 		token = LefNextToken(f, TRUE);
 		if (!strcmp(token, "LAYER")) {
@@ -1995,7 +2004,7 @@ DefRead(char *inName)
 		token = LefNextToken(f, TRUE);
 		if (sscanf(token, "%d", &total) != 1) total = 0;
 		LefEndStatement(f);
-		DefReadComponents(f, sections[DEF_COMPONENTS], oscale, total);
+		err_fatal += DefReadComponents(f, sections[DEF_COMPONENTS], oscale, total);
 		break;
 	    case DEF_BLOCKAGES:
 		token = LefNextToken(f, TRUE);
@@ -2077,5 +2086,6 @@ DefRead(char *inName)
     /* Cleanup */
 
     if (f != NULL) fclose(f);
-    return oscale;
+    *retscale = oscale;
+    return err_fatal;
 }

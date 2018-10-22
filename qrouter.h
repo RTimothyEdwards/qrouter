@@ -498,7 +498,7 @@ int    runqrouter(int argc, char *argv[]);
 void   remove_failed();
 void   apply_drc_blocks(int, double, double);
 
-void   read_def(char *filename);
+int    read_def(char *filename);
 
 #ifdef TCL_QROUTER
 int    write_delays(char *filename);

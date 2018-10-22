@@ -9,6 +9,6 @@
 #define _DEFINT_H
 
 extern int numSpecial;
-extern float  DefRead(char *inName);
+extern int DefRead(char *inName, float *);
 
 #endif /* _DEFINT_H */
