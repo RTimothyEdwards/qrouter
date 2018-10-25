@@ -606,7 +606,11 @@ DefReadGatePin(NET net, NODE node, char *instname, char *pinname, double *home)
  *	Read a NETS or SPECIALNETS section from a DEF file.
  *
  * Results:
- *	None.
+ *	Return the total number of fixed or cover nets,
+ *	excluding power and ground nets.  This gives the
+ *	base number of nets to be copied verbatim from
+ *	input to output (used only for SPECIALNETS, as
+ *	regular nets are tracked with the IGNORED_NET flag).
  *
  * Side Effects:
  *	Many.  Networks are created, and geometry may be
@@ -621,13 +625,14 @@ enum def_netprop_keys {
 	DEF_NETPROP_COVER, DEF_NETPROP_SHAPE, DEF_NETPROP_SOURCE,
 	DEF_NETPROP_WEIGHT, DEF_NETPROP_PROPERTY};
 
-static void
+static int
 DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 {
     char *token;
     int keyword, subkey;
     int i, processed = 0;
     int nodeidx;
+    int fixed = 0;
     char instname[MAX_NAME_LEN], pinname[MAX_NAME_LEN];
 
     NET net;
@@ -777,12 +782,17 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 			    // Read in fixed nets like regular nets but mark
 			    // them as NET_IGNORED.
 			    net->flags |= NET_IGNORED;
+			    fixed++;
 			    // fall through
 			case DEF_NETPROP_ROUTED:
 			    // Read in the route;  qrouter now takes
 			    // responsibility for this route.
 			    while (token && (*token != ';'))
 			        token = DefAddRoutes(f, oscale, net, special);
+			    // Treat power and ground nets in specialnets as fixed 
+			    if (subkey == DEF_NETPROP_ROUTED && special == (char)1)
+				if (net->netnum == VDD_NET || net->netnum == GND_NET)
+				    fixed++;
 			    break;
 		    }
 		}
@@ -823,6 +833,7 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
     else
 	LefError(DEF_WARNING, "Warning:  Number of nets read (%d) does not match "
 		"the number declared (%d).\n", processed, total);
+    return fixed;
 }
 
 /*
@@ -2031,8 +2042,8 @@ DefRead(char *inName, float *retscale)
 		token = LefNextToken(f, TRUE);
 		if (sscanf(token, "%d", &total) != 1) total = 0;
 		LefEndStatement(f);
-		DefReadNets(f, sections[DEF_SPECIALNETS], oscale, TRUE, total);
-		numSpecial = total;
+		numSpecial = DefReadNets(f, sections[DEF_SPECIALNETS], oscale, TRUE,
+				total);
 		break;
 	    case DEF_NETS:
 		token = LefNextToken(f, TRUE);

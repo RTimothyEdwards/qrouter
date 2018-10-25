@@ -2536,6 +2536,8 @@ static void emit_routes(char *filename, double oscale, int iscale)
     FILE *fdef;
     u_char errcond = FALSE;
     u_char need_cleanup = FALSE;
+    u_char purge_routed = FALSE;
+    u_char skip_net = FALSE;
 
     fdef = fopen(DEFfilename, "r");
     if (fdef == NULL) {
@@ -2644,8 +2646,9 @@ static void emit_routes(char *filename, double oscale, int iscale)
 		   // the original routing information
 		   while (fgets(line, MAX_LINE_LEN, fdef) != NULL) {
 		      if ((lptr = strchr(line, ';')) != NULL) {
-			 *lptr = '\n';
-			 *(lptr + 1) = '\0';
+			 // *lptr = '\n';
+			 // *(lptr + 1) = '\0';
+			 *line = '\0';
 			 break;
 		      }
 		   }
@@ -2671,12 +2674,15 @@ static void emit_routes(char *filename, double oscale, int iscale)
 	  if (!strcmp(net->netname, netname))
 	     break;
        }
-       if (!net) {
-	  Fprintf(stderr, "emit_routes():  Net %s cannot be found.\n",
-		netname);
+       if (!net || (net->flags & NET_IGNORED)) {
+	  if (!net)
+	     Fprintf(stderr, "emit_routes():  Net %s cannot be found.\n",
+			netname);
 
-	  /* Dump rest of net and continue---no routing information */
+	  /* Dump rest of net and continue */
 	  *(lptr) = ';';
+	  *(lptr + 1) = '\n';
+	  *(lptr + 2) = '\0';
 	  fputs(line, Cmd);
 	  continue;
        }
@@ -2708,6 +2714,7 @@ static void emit_routes(char *filename, double oscale, int iscale)
     stubroutes = 0;
     for (i = 0; i < Numnets; i++) {
 	net = Nlnets[i];
+	if (net->flags & NET_IGNORED) continue;
 	if (net->flags & NET_STUB) {
 	    stubroutes++;
 	    for (rt = net->routes; rt; rt = rt->next)
@@ -2723,6 +2730,7 @@ static void emit_routes(char *filename, double oscale, int iscale)
         fprintf(Cmd, "\nSPECIALNETS %d ", stubroutes + numSpecial);
 	for (i = 0; i < Numnets; i++) {
 	     net = Nlnets[i];
+	     if (net->flags & NET_IGNORED) continue;
 	     emit_routed_net(Cmd, net, (u_char)1, oscale, iscale);
 	}
 	if (numSpecial == 0)
@@ -2731,15 +2739,47 @@ static void emit_routes(char *filename, double oscale, int iscale)
 	    fprintf(Cmd, ";\n");
     }    
 
-    // Finish copying the rest of the file
+    // Finish copying the rest of the file.  Ignore ROUTED specialnets if
+    // the nets are known nets and not power or ground nets.  FIXED or
+    // COVER nets are output verbatim.
+
     while (fgets(line, MAX_LINE_LEN, fdef) != NULL) {
        lptr = line;
        while (isspace(*lptr)) lptr++;
        if (!strncmp(lptr, "SPECIALNETS", 11)) {
-	   if (stubroutes > 0)
+	   if (stubroutes > 0) {
+	       purge_routed = TRUE;
 	       continue;	/* SPECIALNETS line already written;  do not output. */
+	   }
        }
-       fputs(line, Cmd);
+       if (!purge_routed)
+	  fputs(line, Cmd);
+       else {
+          lptr = line;
+          while (isspace(*lptr)) lptr++;
+	  if (*lptr == '-') {
+	     lptr++;
+             while (isspace(*lptr)) lptr++;
+	     sscanf(lptr, "%s", netname);
+
+	     // Find this net
+	     for (j = 0; j < Numnets; j++) {
+		net = Nlnets[j];
+		if (!strcmp(net->netname, netname))
+		   break;
+	     }
+	     if (!net || (net->flags & NET_IGNORED))
+		skip_net = FALSE;
+	     else if (net->netnum == VDD_NET || net->netnum == GND_NET)
+		skip_net = FALSE;
+	     else
+		skip_net = TRUE;
+	  }
+	  if (!skip_net) fputs(line, Cmd);
+	  else if ((lptr = strchr(line, ';')) != NULL) {
+	      skip_net = FALSE;
+	  }
+       }
     }
     fclose(fdef);
     fclose(Cmd);

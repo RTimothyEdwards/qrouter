@@ -486,11 +486,11 @@ int read_config(FILE *fconfig, int is_info)
 		// Allocate memory for 10 more pins
                 gateinfo->taps = (DSEG *)realloc(gateinfo->taps,
 				(CurrentPin + 10) * sizeof(DSEG));
-                gateinfo->noderec = (NODE *)realloc(gateinfo->taps,
+                gateinfo->noderec = (NODE *)realloc(gateinfo->noderec,
 				(CurrentPin + 10) * sizeof(NODE));
-                gateinfo->netnum = (int *)realloc(gateinfo->taps,
+                gateinfo->netnum = (int *)realloc(gateinfo->netnum,
 				(CurrentPin + 10) * sizeof(int));
-                gateinfo->node = (char **)realloc(gateinfo->taps,
+                gateinfo->node = (char **)realloc(gateinfo->node,
 				(CurrentPin + 10) * sizeof(char *));
 	    }
 	}
