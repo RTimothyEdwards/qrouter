@@ -1816,6 +1816,40 @@ route_set_connections(net, route)
       }
    }
 
+   /* For routes that were just imported from DEF, check if the	*/
+   /* route overshot a pin terminal by rounding off a non-grid	*/
+   /* coordinate.						*/
+
+   if (!found && (route->flags & RT_CHECK) && (seg->layer < Pinlayers)) {
+      if (seg->x1 == seg->x2) {
+	 x = seg->x1;
+	 if (seg->y1 < seg->y2)
+	    y = seg->y1 + 1;
+         else
+	    y = seg->y1 - 1;
+      }
+      else {
+	 y = seg->y1;
+	 if (seg->x1 < seg->x2)
+	    x = seg->x1 + 1;
+         else
+	    x = seg->x1 - 1;
+      }
+      lnode = NODEIPTR(x, y, seg->layer);
+      if ((lnode != NULL) && (lnode->nodesav != NULL) &&
+		(lnode->nodesav->netnum == net->netnum) &&
+		((x != seg->x2) || (y != seg->y2))) {
+	 route->start.node = lnode->nodesav;
+	 route->flags |= RT_START_NODE;
+	 found = TRUE;
+	 /* Diagnostic */
+	 Fprintf(stderr, "Coordinate %d %d corrected to %d %d\n",
+		seg->x1, seg->y1, x, y);
+	 seg->x1 = x;
+	 seg->y1 = y;
+      }
+   }
+
    /* Does first route segment connect to a route? */
 
    if (!found) {
@@ -1874,6 +1908,40 @@ route_set_connections(net, route)
 	    found = TRUE;
 	 }
       }
+
+      /* For routes that were just imported from DEF, check if	*/
+      /* the route overshot a pin terminal by rounding off a	*/
+      /* non-grid coordinate.					*/
+
+      if (!found && (route->flags & RT_CHECK) && (seg->layer < Pinlayers)) {
+         if (seg->x1 == seg->x2) {
+	    x = seg->x2;
+	    if (seg->y1 < seg->y2)
+	       y = seg->y2 - 1;
+            else
+	       y = seg->y2 + 1;
+         }
+         else {
+	    y = seg->y2;
+	    if (seg->x1 < seg->x2)
+	       x = seg->x2 - 1;
+            else
+	       x = seg->x2 + 1;
+         }
+         lnode = NODEIPTR(x, y, seg->layer);
+         if ((lnode != NULL) && (lnode->nodesav != NULL) &&
+			(lnode->nodesav->netnum == net->netnum) &&
+			((x != seg->x1) || (y != seg->y1))) {
+	    route->start.node = lnode->nodesav;
+	    route->flags |= RT_END_NODE;
+	    found = TRUE;
+	    /* Diagnostic */
+	    Fprintf(stderr, "Coordinate %d %d corrected to %d %d\n",
+			seg->x2, seg->y2, x, y);
+	    seg->x2 = x;
+	    seg->y2 = y;
+         }
+      }
    }
 
    /* Does last route segment connect to a route? */
@@ -1916,6 +1984,9 @@ route_set_connections(net, route)
       Fprintf(stderr, "Error:  Failure to find route end node/route on net %s!\n",
 		net->netname);
    }
+
+   /* Clear RT_CHECK flag after processing */
+   if (route->flags & RT_CHECK) route->flags &= ~RT_CHECK;
 }
 
 /*--------------------------------------------------------------*/

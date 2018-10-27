@@ -475,6 +475,25 @@ void remove_failed()
 }
 
 /*--------------------------------------------------------------*/
+/* Remove the first (top) route record from a net		*/
+/*--------------------------------------------------------------*/
+
+void remove_top_route(NET net)
+{
+    ROUTE rt;
+    SEG seg;
+
+    rt = net->routes;
+    net->routes = net->routes->next;
+    while (rt->segments) {
+	seg = rt->segments;
+	rt->segments = rt->segments->next;
+	    free(seg);
+    }
+    free(rt);
+}
+
+/*--------------------------------------------------------------*/
 /* reinitialize ---						*/
 /*								*/
 /* Free up memory in preparation for reading another DEF file	*/
@@ -526,16 +545,9 @@ static void reinitialize()
 	    net->noripup = net->noripup->next;
 	    free(nl);
 	}
-	while (net->routes) {
-	    rt = net->routes;
-	    net->routes = net->routes->next;
-	    while (rt->segments) {
-		seg = rt->segments;
-		rt->segments = rt->segments->next;
-		free(seg);
-	    }
-	    free(rt);
-	}
+	while (net->routes)
+            remove_top_route(net);
+
 	while (net->netnodes) {
 	    node = net->netnodes;
 	    net->netnodes = net->netnodes->next;

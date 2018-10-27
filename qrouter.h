@@ -228,6 +228,7 @@ struct route_ {
 #define RT_END_NODE	0x08	// Route ends on a node
 #define RT_VISITED	0x10	// Flag for recursive search
 #define RT_RIP		0x20	// Flag for route rip-up
+#define RT_CHECK	0x40	// Route from DEF file needs checking
 
 /* Structure used to hold nodes, saved nodes, and stub/offset info */
 
@@ -497,6 +498,7 @@ int    countlist(NETLIST net);
 int    runqrouter(int argc, char *argv[]);
 void   remove_failed();
 void   apply_drc_blocks(int, double, double);
+void   remove_top_route(NET net);
 
 int    read_def(char *filename);
 

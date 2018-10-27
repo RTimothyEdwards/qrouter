@@ -142,12 +142,10 @@ void create_netorder(u_char method)
   for (cn = CriticalNet; cn; cn = cn->next) {
      if (Verbose > 1)
 	Fprintf(stdout, "critical net %s\n", cn->name);
-     for (j = 0; j < Numnets; j++) {
-	net = Nlnets[j];
-	if (!strcmp(net->netname, (char *)cn->name)) {
-           net->netorder = i++;
-	   net->flags |= NET_CRITICAL;
-	}
+     net = DefFindNet(cn->name);
+     if (net) {
+        net->netorder = i++;
+	net->flags |= NET_CRITICAL;
      }
   }
 

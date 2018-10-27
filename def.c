@@ -37,18 +37,35 @@ int numSpecial = 0;		/* Tracks number of specialnets */
 #ifndef TCL_QROUTER
 
 /* Find an instance in the instance list.  If qrouter	*/
-/* is compiled with Tcl support, then this routine is	*/
-/* found in tclqrouter.c and uses hash tables, greatly	*/
-/* speeding up the read-in of large DEF files.		*/
+/* is compiled with Tcl support, then this routine	*/
+/* uses Tcl hash tables, greatly speeding up the	*/
+/* read-in of large DEF files.				*/
 
-static GATE
-DefFindInstance(char *name)
+GATE
+DefFindGate(char *name)
 {
     GATE ginst;
 
     for (ginst = Nlgates; ginst; ginst = ginst->next) {
 	if (!strcasecmp(ginst->gatename, name))
 	    return ginst;
+    }
+    return NULL;
+}
+
+/* Find a net in the list of nets.  If qrouter is	*/
+/* compiled with Tcl support, then this routine		*/
+/* uses Tcl hash tables, greatly speeding up the	*/
+/* read-in of large DEF files.				*/
+
+NET
+DefFindNet(char *name)
+{
+    NET net;
+
+    for (net = Nlnets; net; net = net->next) {
+	if (!strcasecmp(net->netname, name))
+	    return net;
     }
     return NULL;
 }
@@ -65,13 +82,19 @@ DefHashInstance(GATE gateginfo)
 {
 }
 
+static void
+DefHashNet(NET net)
+{
+}
+
 #else /* The versions using TCL hash tables */
 
 #include <tk.h>
 
-/* This hash table speeds up DEF file reading */
+/* These hash tables speed up DEF file reading */
 
 static Tcl_HashTable InstanceTable;
+static Tcl_HashTable NetTable;
 
 /*--------------------------------------------------------------*/
 /* Cell macro lookup based on the hash table			*/
@@ -83,10 +106,11 @@ DefHashInit(void)
    /* Initialize the macro hash table */
 
    Tcl_InitHashTable(&InstanceTable, TCL_STRING_KEYS);
+   Tcl_InitHashTable(&NetTable, TCL_STRING_KEYS);
 }
 
-static GATE
-DefFindInstance(char *name)
+GATE
+DefFindGate(char *name)
 {
     GATE ginst;
     Tcl_HashEntry *entry;
@@ -94,6 +118,17 @@ DefFindInstance(char *name)
     entry = Tcl_FindHashEntry(&InstanceTable, name);
     ginst = (entry) ? (GATE)Tcl_GetHashValue(entry) : NULL;
     return ginst;
+}
+
+NET
+DefFindNet(char *name)
+{
+    NET net;
+    Tcl_HashEntry *entry;
+
+    entry = Tcl_FindHashEntry(&NetTable, name);
+    net = (entry) ? (NET)Tcl_GetHashValue(entry) : NULL;
+    return net;
 }
 
 /*--------------------------------------------------------------*/
@@ -113,6 +148,24 @@ DefHashInstance(GATE gateginfo)
 		gateginfo->gatename, &new);
     if (entry != NULL)
 	Tcl_SetHashValue(entry, (ClientData)gateginfo);
+}
+
+/*--------------------------------------------------------------*/
+/* Net hash table generation					*/
+/* Given a net record, create an entry in the hash table for	*/
+/* the net name, with the record entry pointing to the net	*/
+/* record.							*/
+/*--------------------------------------------------------------*/
+
+static void
+DefHashNet(NET net)
+{
+    int new;
+    Tcl_HashEntry *entry;
+
+    entry = Tcl_CreateHashEntry(&NetTable, net->netname, &new);
+    if (entry != NULL)
+	Tcl_SetHashValue(entry, (ClientData)net);
 }
 
 #endif	/* TCL_QROUTER */
@@ -145,6 +198,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
     DSEG lr, drect;
     struct point_ refp;
     char valid = FALSE;		/* is there a valid reference point? */
+    char noobstruct;
     char initial = TRUE;
     struct dseg_ locarea;
     double x, y, lx, ly, w, hw, s;
@@ -157,6 +211,12 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 
     /* Set pitches and allocate memory for Obs[] if we haven't yet. */
     set_num_channels();
+
+    /* Don't create obstructions or routes on routed specialnets inputs	*/
+    /* except for power and ground nets.				*/
+    noobstruct = ((special == (char)1) && (!(net->flags & NET_IGNORED)) &&
+		(net->netnum != VDD_NET) && (net->netnum != GND_NET)) ?
+		TRUE : FALSE;
 
     while (initial || (token = LefNextToken(f, TRUE)) != NULL)
     {
@@ -247,7 +307,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 			   routeLayer = lefl->info.via.area.layer;
 			   if (routeLayer < paintLayer) paintLayer = routeLayer;
 			   if ((routeLayer >= 0) && (special == (char)1) &&
-					(valid == TRUE)) {
+					(valid == TRUE) && (noobstruct == FALSE)) {
 				s = LefGetRouteSpacing(routeLayer); 
 				drect = (DSEG)malloc(sizeof(struct dseg_));
 				drect->x1 = x + (lefl->info.via.area.x1 / 2.0) - s;
@@ -264,7 +324,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 			   routeLayer = lr->layer;
 			   if (routeLayer < paintLayer) paintLayer = routeLayer;
 			   if ((routeLayer >= 0) && (special == (char)1) &&
-					(valid == TRUE)) {
+					(valid == TRUE) && (noobstruct == FALSE)) {
 				s = LefGetRouteSpacing(routeLayer); 
 				drect = (DSEG)malloc(sizeof(struct dseg_));
 				drect->x1 = x + (lr->x1 / 2.0) - s;
@@ -352,7 +412,17 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    else if (sscanf(token, "%lg", &x) == 1)
 	    {
 		x /= oscale;		// In microns
-		refp.x1 = (int)((x - Xlowerbound + EPS) / PitchX);
+		/* Note: offsets and stubs are always less than half a pitch,	*/
+		/* so round to the nearest integer grid point.			*/
+		refp.x1 = (int)(0.5 + ((x - Xlowerbound + EPS) / PitchX));
+
+		/* Flag offsets that are more than 1/3 track pitch, as they	*/
+		/* need careful analyzing (in route_set_connections()) to	*/
+		/* separate the main route from the stub route or offest.	*/
+		if ((special == (char)0) && ABSDIFF((double)refp.x1,
+				(x - Xlowerbound) / PitchX) > 0.33) {
+		    if (routednet) routednet->flags |= RT_CHECK;
+		}
 	    }
 	    else
 	    {
@@ -375,7 +445,12 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    else if (sscanf(token, "%lg", &y) == 1)
 	    {
 		y /= oscale;		// In microns
-		refp.y1 = (int)((y - Ylowerbound + EPS) / PitchY);
+		refp.y1 = (int)(0.5 + ((y - Ylowerbound + EPS) / PitchY));
+
+		if ((special == (u_char)0) && ABSDIFF((double)refp.y1,
+				(y - Ylowerbound) / PitchY) > 0.33) {
+		    if (routednet) routednet->flags |= RT_CHECK;
+		}
 	    }
 	    else
 	    {
@@ -406,7 +481,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 		locarea.y2 = refp.y1;
 
 		if (special != (char)0) {
-		   if (valid == TRUE) {
+		   if ((valid == TRUE) && (noobstruct == FALSE)) {
 		      s = LefGetRouteSpacing(routeLayer); 
 		      hw = w / 2;
 		      drect = (DSEG)malloc(sizeof(struct dseg_));
@@ -476,14 +551,22 @@ endCoord:
 	    while (*token != ')')
 		token = LefNextToken(f, TRUE);
 	}
-
     }
 
-    /* Make sure we have allocated memory for nets */
-    allocate_obs_array();
+    /* Remove routes that are less than 1 track long;  these are stub	*/
+    /* routes to terminals that did not require a specialnets entry.	*/
 
-    /* Write the route(s) back into Obs[] */
-    writeback_all_routes(net);
+    if (routednet && (net->routes == routednet) && (routednet->flags & RT_CHECK)) {
+	int ix, iy;
+	SEG seg;
+	seg = routednet->segments;
+	if (seg && seg->next == NULL) {
+	    ix = ABSDIFF(seg->x1, seg->x2);
+	    iy = ABSDIFF(seg->y1, seg->y2);
+	    if ((ix == 0 && iy == 1) || (ix == 1 && iy == 0)) 
+		remove_top_route(net);
+	}
+    }
 
     return token;	/* Pass back the last token found */
 }
@@ -513,7 +596,7 @@ DefReadGatePin(NET net, NODE node, char *instname, char *pinname, double *home)
     int gridx, gridy;
     DPOINT dp;
 
-    g = DefFindInstance(instname);
+    g = DefFindGate(instname);
     if (g) {
 
 	gateginfo = g->gatetype;
@@ -610,7 +693,7 @@ DefReadGatePin(NET net, NODE node, char *instname, char *pinname, double *home)
  *	excluding power and ground nets.  This gives the
  *	base number of nets to be copied verbatim from
  *	input to output (used only for SPECIALNETS, as
- *	regular nets are tracked with the IGNORED_NET flag).
+ *	regular nets are tracked with the NET_IGNORED flag).
  *
  * Side Effects:
  *	Many.  Networks are created, and geometry may be
@@ -673,6 +756,7 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 	}
     }
     else {
+	netidx = Numnets;
 	Nlnets = (NET *)realloc(Nlnets, (Numnets + total) * sizeof(NET));
 	for (i = Numnets; i < (Numnets + total); i++) Nlnets[i] = NULL;
     }
@@ -694,31 +778,37 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 
 		/* Get net name */
 		token = LefNextToken(f, TRUE);
+		net = DefFindNet(token);
 
-		net = (NET)malloc(sizeof(struct net_));
-		Nlnets[Numnets++] = net;
-		net->netorder = 0;
-		net->numnodes = 0;
-		net->flags = 0;
-		net->netname = strdup(token);
-		net->netnodes = (NODE)NULL;
-		net->noripup = (NETLIST)NULL;
-		net->routes = (ROUTE)NULL;
-		net->xmin = net->ymin = 0;
-		net->xmax = net->ymax = 0;
+		if (net == NULL) {
+		    net = (NET)malloc(sizeof(struct net_));
+		    Nlnets[Numnets++] = net;
+		    net->netorder = 0;
+		    net->numnodes = 0;
+		    net->flags = 0;
+		    net->netname = strdup(token);
+		    net->netnodes = (NODE)NULL;
+		    net->noripup = (NETLIST)NULL;
+		    net->routes = (ROUTE)NULL;
+		    net->xmin = net->ymin = 0;
+		    net->xmax = net->ymax = 0;
 
-		// Net numbers start at MIN_NET_NUMBER for regular nets,
-		// use VDD_NET and GND_NET for power and ground, and 0
-		// is not a valid net number.
+		    // Net numbers start at MIN_NET_NUMBER for regular nets,
+		    // use VDD_NET and GND_NET for power and ground, and 0
+		    // is not a valid net number.
 
-		if (vddnet && !strcmp(token, vddnet))
-		   net->netnum = VDD_NET;
-		else if (gndnet && !strcmp(token, gndnet))
-		   net->netnum = GND_NET;
+		    if (vddnet && !strcmp(token, vddnet))
+		       net->netnum = VDD_NET;
+		    else if (gndnet && !strcmp(token, gndnet))
+		       net->netnum = GND_NET;
+		    else
+		       net->netnum = netidx++;
+		    DefHashNet(net);
+
+		    nodeidx = node->nodenum;
+		}
 		else
-		   net->netnum = netidx++;
-
-		nodeidx = 0;
+		    nodeidx = 0;
 
 		/* Update the record of the number of nets processed	*/
 		/* and spit out a message for every 5% finished.	*/

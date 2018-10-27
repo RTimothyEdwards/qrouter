@@ -2540,7 +2540,7 @@ static void emit_routes(char *filename, double oscale, int iscale)
     u_char skip_net = FALSE;
 
     fdef = fopen(DEFfilename, "r");
-    if (fdef == NULL) {
+    if ((fdef == NULL) && (DEFfilename != NULL)) {
 	if (strchr(DEFfilename, '.') == NULL) {
 	    char *extfilename = malloc(strlen(DEFfilename) + 5);
 	    sprintf(extfilename, "%s.def", DEFfilename);
@@ -2669,11 +2669,7 @@ static void emit_routes(char *filename, double oscale, int iscale)
 
        /* Find this net */
 
-       for (j = 0; j < Numnets; j++) {
-          net = Nlnets[j];
-	  if (!strcmp(net->netname, netname))
-	     break;
-       }
+       net = DefFindNet(netname);
        if (!net || (net->flags & NET_IGNORED)) {
 	  if (!net)
 	     Fprintf(stderr, "emit_routes():  Net %s cannot be found.\n",
@@ -2763,11 +2759,7 @@ static void emit_routes(char *filename, double oscale, int iscale)
 	     sscanf(lptr, "%s", netname);
 
 	     // Find this net
-	     for (j = 0; j < Numnets; j++) {
-		net = Nlnets[j];
-		if (!strcmp(net->netname, netname))
-		   break;
-	     }
+	     net = DefFindNet(netname);
 	     if (!net || (net->flags & NET_IGNORED))
 		skip_net = FALSE;
 	     else if (net->netnum == VDD_NET || net->netnum == GND_NET)

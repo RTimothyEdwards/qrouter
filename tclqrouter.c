@@ -21,6 +21,7 @@
 #include "maze.h"
 #include "qconfig.h"
 #include "lef.h"
+#include "def.h"
 #include "graphics.h"
 #include "node.h"
 #include "tkSimple.h"
@@ -779,28 +780,12 @@ qrouter_map(ClientData clientData, Tcl_Interp *interp,
 }
 
 /*------------------------------------------------------*/
-/* Find the net named "netname" in the list of nets	*/
-/* and return a pointer to it.				*/
-/*							*/
-/* NOTE:  Really need a hash table lookup here!		*/
-/*------------------------------------------------------*/
-
-NET LookupNet(char *netname)
-{
-    NET net;
-    int i;
-
-    for (i = 0; i < Numnets; i++) {
-       net = Nlnets[i];
-       if (!strcmp(net->netname, netname))
-	  return net;
-    }
-    return NULL;
-}
-
-/*------------------------------------------------------*/
 /* Find the net with number "number" in the list of	*/
 /* nets and return a pointer to it.			*/
+/*							*/
+/* NOTE:  This could be hashed like net names, but is	*/
+/* only used in one place, and router performance does	*/
+/* not depend on it.					*/
 /*------------------------------------------------------*/
 
 NET LookupNetNr(int number)
@@ -812,22 +797,6 @@ NET LookupNetNr(int number)
        net = Nlnets[i];
        if (net->netnum == number)
 	  return net;
-    }
-    return NULL;
-}
-
-/*------------------------------------------------------*/
-/* Find the gate instance named gatename and return a	*/
-/* pointer to it.					*/
-/*------------------------------------------------------*/
-
-GATE LookupGate(char *gatename)
-{
-    GATE gate;
-
-    for (gate = Nlgates; gate != NULL; gate = gate->next) {
-       if (!strcmp(gate->gatename, gatename))
-	  return gate;
     }
     return NULL;
 }
@@ -920,7 +889,7 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 			return TCL_ERROR;
 		    }
 		    i++;
-		    net = LookupNet(Tcl_GetString(objv[i]));
+		    net = DefFindNet(Tcl_GetString(objv[i]));
 		    if (net == NULL) {
 			Tcl_SetResult(interp, "No such net", NULL);
 			return TCL_ERROR;
@@ -1128,7 +1097,7 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 			return TCL_ERROR;
 		    }
 		    i++;
-		    net = LookupNet(Tcl_GetString(objv[i]));
+		    net = DefFindNet(Tcl_GetString(objv[i]));
 		    if (net == NULL) {
 			Tcl_SetResult(interp, "No such net", NULL);
 			return TCL_ERROR;
@@ -1297,7 +1266,7 @@ qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
 			return TCL_ERROR;
 		    }
 		    i++;
-		    net = LookupNet(Tcl_GetString(objv[i]));
+		    net = DefFindNet(Tcl_GetString(objv[i]));
 		    if (net == NULL) {
 			Tcl_SetResult(interp, "No such net", NULL);
 			return TCL_ERROR;
@@ -1441,7 +1410,7 @@ qrouter_cleanup(ClientData clientData, Tcl_Interp *interp,
 
 	    case NetIdx:
 		for (i = 2; i < objc; i++) {
-		    net = LookupNet(Tcl_GetString(objv[i]));
+		    net = DefFindNet(Tcl_GetString(objv[i]));
 		    if (net != NULL)
 			cleanup_net(net);
 		}
@@ -1499,7 +1468,7 @@ qrouter_remove(ClientData clientData, Tcl_Interp *interp,
 		break;
 	    case NetIdx:
 		for (i = 2; i < objc; i++) {
-		    net = LookupNet(Tcl_GetString(objv[i]));
+		    net = DefFindNet(Tcl_GetString(objv[i]));
 		    if (net != NULL)
 			ripup_net(net, (u_char)1, (u_char)1, (u_char)0);
 		}
@@ -1949,7 +1918,7 @@ qrouter_ignore(ClientData clientData, Tcl_Interp *interp,
     }
     else {
 	for (i = 1; i < objc; i++) {
-	    net = LookupNet(Tcl_GetString(objv[i]));
+	    net = DefFindNet(Tcl_GetString(objv[i]));
 	    if (net == NULL) {
 		Tcl_SetResult(interp, "No such net", NULL);
 		return TCL_ERROR;
@@ -1996,7 +1965,7 @@ qrouter_priority(ClientData clientData, Tcl_Interp *interp,
     else {
 	for (i = objc - 1; i > 0; i--) {
 	    netname = Tcl_GetString(objv[i]);
-	    net = LookupNet(netname);
+	    net = DefFindNet(netname);
 	    if (net == NULL) {
 		Tcl_SetResult(interp, "No such net", NULL);
 	    }
@@ -2950,7 +2919,7 @@ qrouter_print(ClientData clientData, Tcl_Interp *interp,
 
     switch (idx) {
         case NetIdx:
-            net = LookupNet(Tcl_GetString(objv[2]));
+            net = DefFindNet(Tcl_GetString(objv[2]));
             if (net == NULL) {
                 Tcl_SetResult(interp, "Net not found", NULL);
                 return TCL_ERROR;
@@ -2970,7 +2939,7 @@ qrouter_print(ClientData clientData, Tcl_Interp *interp,
             break;
 
         case GateIdx:
-            gate = LookupGate(Tcl_GetString(objv[2]));
+            gate = DefFindGate(Tcl_GetString(objv[2]));
             if (gate == NULL) {
                 Tcl_SetResult(interp, "Gate not found", NULL);
                 return TCL_ERROR;
