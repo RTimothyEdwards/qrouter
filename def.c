@@ -805,7 +805,7 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 		       net->netnum = netidx++;
 		    DefHashNet(net);
 
-		    nodeidx = node->nodenum;
+		    nodeidx = net->numnodes;
 		}
 		else
 		    nodeidx = 0;
