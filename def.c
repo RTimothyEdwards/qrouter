@@ -717,6 +717,7 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
     int nodeidx;
     int fixed = 0;
     char instname[MAX_NAME_LEN], pinname[MAX_NAME_LEN];
+    u_char is_new;
 
     NET net;
     int netidx;
@@ -805,10 +806,13 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 		       net->netnum = netidx++;
 		    DefHashNet(net);
 
-		    nodeidx = net->numnodes;
-		}
-		else
 		    nodeidx = 0;
+		    is_new = TRUE;
+		}
+		else {
+		    nodeidx = net->numnodes;
+		    is_new = FALSE;
+		}
 
 		/* Update the record of the number of nets processed	*/
 		/* and spit out a message for every 5% finished.	*/
@@ -869,10 +873,17 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 			    break;
 			case DEF_NETPROP_FIXED:
 			case DEF_NETPROP_COVER:
-			    // Read in fixed nets like regular nets but mark
-			    // them as NET_IGNORED.
-			    net->flags |= NET_IGNORED;
-			    fixed++;
+			    /* Read in fixed nets like regular nets but mark
+			     * them as NET_IGNORED.  HOWEVER, if the net
+			     * already exists and is not marked NET_IGNORED,
+			     * then don't force it to be ignored.  That is
+			     * particularly an issue for a net like power or
+			     * ground, which may need to be routed like a
+			     * regular net but also has fixed portions. */
+			    if (is_new) {
+				net->flags |= NET_IGNORED;
+				fixed++;
+			    }
 			    // fall through
 			case DEF_NETPROP_ROUTED:
 			    // Read in the route;  qrouter now takes
