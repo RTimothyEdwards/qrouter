@@ -61,9 +61,11 @@ DefFindGate(char *name)
 NET
 DefFindNet(char *name)
 {
+    int i;
     NET net;
 
-    for (net = Nlnets; net; net = net->next) {
+    for (i = 0; i < Numnets; i++) {
+	net = Numnets[i];
 	if (!strcasecmp(net->netname, name))
 	    return net;
     }
