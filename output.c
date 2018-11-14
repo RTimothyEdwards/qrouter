@@ -275,7 +275,7 @@ char *print_node_name(NODE node)
 {
     GATE g;
     int i;
-    static char *nodestr = NULL;
+    char *nodestr = NULL;
 
     for (g = Nlgates; g; g = g->next) {
 	for (i = 0; i < g->nodes; i++) {
@@ -283,12 +283,15 @@ char *print_node_name(NODE node)
 		if (nodestr != NULL)
 		   free(nodestr);
 
-		nodestr = (char *)malloc(strlen(g->gatename)
-			+ strlen(g->node[i]) + 2);
-		if (!strcmp(g->node[i], "pin"))
+		if (!strcmp(g->node[i], "pin")) {
+		    nodestr = (char *)malloc(strlen(g->gatename) + 5);
 		    sprintf(nodestr, "PIN/%s", g->gatename);
-		else
+		}
+		else {
+		    nodestr = (char *)malloc(strlen(g->gatename)
+				+ strlen(g->node[i]) + 2);
 		    sprintf(nodestr, "%s/%s", g->gatename, g->node[i]);
+		}
 		return nodestr;
 	    }
 	}
