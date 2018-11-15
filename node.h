@@ -11,7 +11,6 @@
 #define ANTENNA_NET	 3
 #define MIN_NET_NUMBER   4
 
-void create_netorder(u_char method);
 void find_bounding_box(NET net);
 void defineRouteTree(NET);
 void print_nodes(char *filename);

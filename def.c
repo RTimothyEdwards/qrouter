@@ -128,6 +128,9 @@ DefFindNet(char *name)
     NET net;
     Tcl_HashEntry *entry;
 
+    // Guard against calls to find nets before DEF file is read
+    if (Numnets == 0) return NULL;
+
     entry = Tcl_FindHashEntry(&NetTable, name);
     net = (entry) ? (NET)Tcl_GetHashValue(entry) : NULL;
     return net;

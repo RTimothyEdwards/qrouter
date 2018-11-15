@@ -46,11 +46,10 @@ int compNets(NET *a, NET *b)
 
    // Sort critical nets at the front by assigned order
 
-   if (p->flags & NET_CRITICAL) {
-      if (q->flags & NET_CRITICAL) {
-	 return (p->netorder < q->netorder) ? -1 : 1;
-      }
-      else return -1;
+   if ((p->flags & NET_CRITICAL) || (q->flags & NET_CRITICAL)) {
+      if (!(p->flags & NET_CRITICAL)) return 1;
+      else if (!(q->flags & NET_CRITICAL)) return -1;
+      else return (p->netorder < q->netorder) ? -1 : 1;
    }
 
    // Otherwise sort by number of nodes
@@ -83,12 +82,12 @@ int altCompNets(NET *a, NET *b)
 
    // Sort critical nets at the front by assigned order
 
-   if (p->flags & NET_CRITICAL) {
-      if (q->flags & NET_CRITICAL) {
-	 return (p->netorder < q->netorder) ? -1 : 1;
-      }
-      else return -1;
+   if ((p->flags & NET_CRITICAL) || (q->flags & NET_CRITICAL)) {
+      if (!(p->flags & NET_CRITICAL)) return 1;
+      else if (!(q->flags & NET_CRITICAL)) return -1;
+      else return (p->netorder < q->netorder) ? -1 : 1;
    }
+
 
    // Otherwise sort as described above.
 

@@ -2300,8 +2300,7 @@ void tap_to_tap_interactions(void)
     for (g = Nlgates; g; g = g->next) {
        for (i = 0; i < g->nodes; i++) {
 	  net = g->netnum[i];
-	  if (net != 0) {
-
+	  if (net > 0) {
              for (ds = g->taps[i]; ds; ds = ds->next) {
 
 		mingridx = (int)((ds->x1 - Xlowerbound) / PitchX) - 1;

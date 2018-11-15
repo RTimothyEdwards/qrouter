@@ -643,18 +643,30 @@ qrouter_start(ClientData clientData, Tcl_Interp *interp,
 	    fclose(scriptf);
 	    result = Tcl_EvalFile(interp, scriptfile);
 	}
-	free(scriptfile);
 
 	/* The script file should determine whether or not to	*/
 	/* exit by including the "quit" command.  But if there	*/
 	/* is an error in the script, then always quit.		*/
 
+	/* If tkcon console is in use and there is an error in	*/
+	/* the script, then print the error message to the	*/
+	/* terminal, not the console, or else it vanishes.	*/
+
 	if (result != TCL_OK) {
+	    if (consoleinterp == interp)
+		Fprintf(stderr, "Script file \"%s\" failed with result \'%s\'\n",
+			scriptfile, Tcl_GetStringResult(interp));
+	    else
+		fprintf(stderr, "Script file \"%s\" failed with result \'%s\'\n",
+			scriptfile, Tcl_GetStringResult(interp));
+	    free(scriptfile);
 	    /* Make sure Tcl has generated all output */
 	    while (Tcl_DoOneEvent(TCL_DONT_WAIT) != 0);
 	    /* And exit gracefully */
 	    qrouter_quit(clientData, interp, 1, objv);
 	}
+	else
+	    free(scriptfile);
     }
 
     if ((DEFfilename != NULL) && (Nlgates == NULL)) {
@@ -1945,7 +1957,7 @@ static int
 qrouter_priority(ClientData clientData, Tcl_Interp *interp,
                  int objc, Tcl_Obj *CONST objv[])
 {
-    int i;
+    int i, j;
     char *netname;
     NET net;
     STRING cn, ctest;
@@ -1962,15 +1974,40 @@ qrouter_priority(ClientData clientData, Tcl_Interp *interp,
 	}
 	Tcl_SetObjResult(interp, lobj);
     }
+    else if (Nlnets == NULL) {
+	Tcl_SetResult(interp, "Must read nets from DEF file before setting priority.",
+		NULL);
+	return TCL_ERROR;
+    }
     else {
-	for (i = objc - 1; i > 0; i--) {
+
+	/* Find the highest-numbered existing critical net so that	*/
+	/* repeated calls to "priority" will work.			*/
+
+	j = -1;
+	for (i = 0; i < Numnets; i++) {
+	    net = Nlnets[i];
+	    if (net->flags & NET_CRITICAL)
+		if (net->netorder > j)
+		    j = net->netorder;
+	}
+	j++;
+
+	for (i = 1; i < objc; i++) {
 	    netname = Tcl_GetString(objv[i]);
 	    net = DefFindNet(netname);
 	    if (net == NULL) {
 		Tcl_SetResult(interp, "No such net", NULL);
 	    }
-	    else {
+	    else if (!(net->flags & NET_CRITICAL)) {
 		net->flags |= NET_CRITICAL;
+		net->netorder = j++;
+
+		/* NOTE:  CriticalNet is left over from the old config	*/
+		/* file format.  Normally it will remain NULL.  If the	*/
+		/* old config file format is used, then remove items	*/
+		/* from it that match nets in the Tcl priority command.	*/
+
 		for (cn = CriticalNet; cn && cn->next; cn = cn->next) {
 		    if (!cn->next) break;
 		    if (!strcmp(cn->next->name, netname)) {
