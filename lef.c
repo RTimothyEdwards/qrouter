@@ -2589,7 +2589,7 @@ enum lef_sections {LEF_VERSION = 0,
  */
 
 enum lef_layer_keys {LEF_LAYER_TYPE=0, LEF_LAYER_WIDTH,
-	LEF_LAYER_MAXWIDTH, LEF_LAYER_AREA,
+	LEF_LAYER_MINWIDTH, LEF_LAYER_MAXWIDTH, LEF_LAYER_AREA,
 	LEF_LAYER_SPACING, LEF_LAYER_SPACINGTABLE,
 	LEF_LAYER_PITCH, LEF_LAYER_DIRECTION, LEF_LAYER_OFFSET,
 	LEF_LAYER_WIREEXT,
@@ -2634,6 +2634,7 @@ LefReadLayerSection(f, lname, mode, lefl)
     static char *layer_keys[] = {
 	"TYPE",
 	"WIDTH",
+	"MINWIDTH",
 	"MAXWIDTH",
 	"AREA",
 	"SPACING",
@@ -2774,6 +2775,14 @@ LefReadLayerSection(f, lname, mode, lefl)
 		}
 		LefEndStatement(f);
 		break;
+	    case LEF_LAYER_MINWIDTH:
+		// Not handled if width is already defined.
+		if ((lefl->lefClass != CLASS_ROUTE) ||
+		    	(lefl->info.route.width != 0)) {
+		    LefEndStatement(f);
+		    break;
+		}
+		/* drop through */
 	    case LEF_LAYER_WIDTH:
 		token = LefNextToken(f, TRUE);
 		sscanf(token, "%lg", &dvalue);
