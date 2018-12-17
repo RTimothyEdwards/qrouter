@@ -65,7 +65,7 @@ DefFindNet(char *name)
     NET net;
 
     for (i = 0; i < Numnets; i++) {
-	net = Numnets[i];
+	net = Nlnets[i];
 	if (!strcasecmp(net->netname, name))
 	    return net;
     }

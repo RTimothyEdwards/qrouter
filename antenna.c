@@ -18,6 +18,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <regex.h>
 
 /* This entire file is dependent on the Tcl/Tk version */
 #ifdef TCL_QROUTER
@@ -54,6 +56,46 @@ struct antennainfo_ {
 ANTENNAINFO AntennaList;
 
 /*--------------------------------------------------------------*/
+/* Regular expression matching of the given string in		*/
+/* "antennacell" to the string "strtest".  If the regular	*/
+/* expression matches and the result is in the first character	*/
+/* position of the string, then return TRUE (match), otherwise	*/
+/* return FALSE (no match).					*/
+/*--------------------------------------------------------------*/
+
+u_char
+string_match(char *antennacell, char *strtest)
+{
+    regex_t regex;
+    regmatch_t pmatch;
+    int reti;
+
+    /* Compile regular expression */
+    reti = regcomp(&regex, antennacell, 0);
+    if (reti) {
+	/* Assume this is not a regular expression and just run */
+	/* a straight string match.				*/
+	if (!strcasecmp(antennacell, strtest))
+	    return TRUE;
+	else
+	    return FALSE;
+    }
+
+    /* Execute regular expression */
+    reti = regexec(&regex, strtest, 1, &pmatch, 0);
+    regfree(&regex);
+
+    if (!reti) {
+	if (pmatch.rm_so == 0)	/* Must match beginning of string */
+	    return TRUE;
+	else
+	    return FALSE;
+    }
+    else
+	return FALSE;
+}
+
+/*--------------------------------------------------------------*/
 /* Find free antenna cells, and collect all the antenna taps	*/
 /* into a single net, much like VDD_NET or GND_NET.		*/
 /*								*/
@@ -73,27 +115,16 @@ find_free_antenna_taps(char *antennacell)
     GATE gateginfo;
     NODE noderec;
     int netnum, i;
-    u_char is_antenna;
-    int wildcard = 0;
 
     if (antennacell == NULL) {
 	Fprintf(stderr, "No antenna cell defined!\n");
 	return;
     }
-    if (*(antennacell + strlen(antennacell) - 1) == '*') {
-	wildcard = strlen(antennacell) - 1;
-	*(antennacell + wildcard) = '\0';
-    }
     numtaps = 0;
     for (ginst = Nlgates; ginst; ginst = ginst->next) {
 	gateginfo = ginst->gatetype;
 	
-	if (wildcard > 0)
-	    is_antenna = !strncasecmp(gateginfo->gatename, antennacell, wildcard);
-	else
-	    is_antenna = !strcasecmp(gateginfo->gatename, antennacell);
-
-	if (is_antenna) {
+	if (string_match(antennacell, gateginfo->gatename)) {
 	    /* Find an unassigned node.  If there is not one,	*/
 	    /* this is probably a routed (not free) cell.	*/
 	    for (i = 0; i < ginst->nodes; i++) {
@@ -107,7 +138,6 @@ find_free_antenna_taps(char *antennacell)
 	    }
 	}
     }
-    if (wildcard > 0) *(antennacell + wildcard) = '*';
 }
 
 /*--------------------------------------------------------------*/
@@ -121,24 +151,12 @@ count_free_antenna_taps(char *antennacell)
     GATE ginst;
     GATE gateginfo;
     int netnum, i;
-    u_char is_antenna;
-    int wildcard = -1;
-
-    if (*(antennacell + strlen(antennacell) - 1) == '*') {
-	wildcard = strlen(antennacell) - 1;
-	*(antennacell + wildcard) = '\0';
-    }
 
     numtaps = 0;
     for (ginst = Nlgates; ginst; ginst = ginst->next) {
 	gateginfo = ginst->gatetype;
 
-	if (wildcard > 0)
-	    is_antenna = !strncasecmp(gateginfo->gatename, antennacell, wildcard);
-	else
-	    is_antenna = !strcasecmp(gateginfo->gatename, antennacell);
-
-	if (is_antenna) {
+	if (string_match(antennacell, gateginfo->gatename)) {
 	    /* Find an unassigned node.  If there is not one,	*/
 	    /* this is probably a routed (not free) cell.	*/
 	    for (i = 0; i < ginst->nodes; i++) {
@@ -148,7 +166,6 @@ count_free_antenna_taps(char *antennacell)
 	    }
 	}
     }
-    if (wildcard > 0) *(antennacell + wildcard) = '*';
     return numtaps;
 }
 
