@@ -738,6 +738,34 @@ void apply_drc_blocks(int layer, double via_except, double route_except)
 }
 
 /*--------------------------------------------------------------*/
+/* remove_tap_blocks						*/
+/*								*/
+/* Qrouter avoids routing directly over a tap point, blocking	*/
+/* it, if there is a Nodeinfo[][]->nodeloc entry present.	*/
+/* Remove this entry to remove the blockage (it can be		*/
+/* replaced if needed by copying back the Nodeinfo[][]->nodesav	*/
+/* pointer)							*/
+/*--------------------------------------------------------------*/
+
+void
+remove_tap_blocks(int netnum)
+{
+    int i, j;
+    NODE node;
+
+    for (i = 0; i < Pinlayers; i++) {
+	for (j = 0; j < NumChannelsX * NumChannelsY; j++) {
+	    if (Nodeinfo[i][j]) {
+		node = Nodeinfo[i][j]->nodeloc;
+		if (node != (NODE)NULL)
+		    if (node->netnum == netnum)
+			Nodeinfo[i][j]->nodeloc = (NODE)NULL;
+	    }
+        }
+    }
+}
+
+/*--------------------------------------------------------------*/
 /* post_def_setup ---						*/
 /*								*/
 /* Things to do after a DEF file has been read in, and the size	*/
@@ -838,6 +866,14 @@ static int post_def_setup()
          exit(9);
       }
    }
+
+   // Remove tap blocks from power, ground, and antenna nets, as these
+   // can take up large areas of the layout and will cause serious issues
+   // with routability if left blocked.
+
+   remove_tap_blocks(VDD_NET);
+   remove_tap_blocks(GND_NET);
+   remove_tap_blocks(ANTENNA_NET);
 
    // Now we have netlist data, and can use it to get a list of nets.
 
@@ -1676,18 +1712,7 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 
      // Remove nodes of the net from Nodeinfo.nodeloc so that they will not be
      // used for crossover costing of future routes.
-
-     for (i = 0; i < Pinlayers; i++) {
-	for (j = 0; j < NumChannelsX * NumChannelsY; j++) {
-	   if (Nodeinfo[i][j]) {
-	      node = Nodeinfo[i][j]->nodeloc;
-	      if (node != (NODE)NULL)
-	         if (node->netnum == iroute->net->netnum)
-		    Nodeinfo[i][j]->nodeloc = (NODE)NULL;
-	   }
-        }
-     }
-
+     remove_tap_blocks(iroute->net->netnum);
      free_glist(iroute);
      return 0;
   }
@@ -1856,18 +1881,7 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
   if (!result) {
      // Remove nodes of the net from Nodeinfo.nodeloc so that they will not be
      // used for crossover costing of future routes.
-
-     for (i = 0; i < Pinlayers; i++) {
-	for (j = 0; j < NumChannelsX * NumChannelsY; j++) {
-	   if (Nodeinfo[i][j]) {
-	      iroute->nsrc = Nodeinfo[i][j]->nodeloc;
-	      if (iroute->nsrc != (NODE)NULL)
-	         if (iroute->nsrc->netnum == iroute->net->netnum)
-		    Nodeinfo[i][j]->nodeloc = (NODE)NULL;
-	   }
-        }
-     }
-
+     remove_tap_blocks(iroute->net->netnum);
      free_glist(iroute);
      return 0;
   }

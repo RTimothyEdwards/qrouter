@@ -59,6 +59,10 @@ ANTENNAINFO AntennaList;
 /*								*/
 /* Return the number of free antenna taps available in the	*/
 /* layout.							*/
+/*								*/
+/* If the name of the antennacell ends in '*', then assume a	*/
+/* wildcard character and match to any string beginning with 	*/
+/* the substring of antennacell.				*/
 /*--------------------------------------------------------------*/
 
 void
@@ -69,15 +73,27 @@ find_free_antenna_taps(char *antennacell)
     GATE gateginfo;
     NODE noderec;
     int netnum, i;
+    u_char is_antenna;
+    int wildcard = 0;
 
     if (antennacell == NULL) {
 	Fprintf(stderr, "No antenna cell defined!\n");
 	return;
     }
+    if (*(antennacell + strlen(antennacell) - 1) == '*') {
+	wildcard = strlen(antennacell) - 1;
+	*(antennacell + wildcard) = '\0';
+    }
     numtaps = 0;
     for (ginst = Nlgates; ginst; ginst = ginst->next) {
 	gateginfo = ginst->gatetype;
-	if (!strcasecmp(gateginfo->gatename, antennacell)) {
+	
+	if (wildcard > 0)
+	    is_antenna = !strncasecmp(gateginfo->gatename, antennacell, wildcard);
+	else
+	    is_antenna = !strcasecmp(gateginfo->gatename, antennacell);
+
+	if (is_antenna) {
 	    /* Find an unassigned node.  If there is not one,	*/
 	    /* this is probably a routed (not free) cell.	*/
 	    for (i = 0; i < ginst->nodes; i++) {
@@ -91,6 +107,7 @@ find_free_antenna_taps(char *antennacell)
 	    }
 	}
     }
+    if (wildcard > 0) *(antennacell + wildcard) = '*';
 }
 
 /*--------------------------------------------------------------*/
@@ -104,11 +121,24 @@ count_free_antenna_taps(char *antennacell)
     GATE ginst;
     GATE gateginfo;
     int netnum, i;
+    u_char is_antenna;
+    int wildcard = -1;
+
+    if (*(antennacell + strlen(antennacell) - 1) == '*') {
+	wildcard = strlen(antennacell) - 1;
+	*(antennacell + wildcard) = '\0';
+    }
 
     numtaps = 0;
     for (ginst = Nlgates; ginst; ginst = ginst->next) {
 	gateginfo = ginst->gatetype;
-	if (!strcasecmp(gateginfo->gatename, antennacell)) {
+
+	if (wildcard > 0)
+	    is_antenna = !strncasecmp(gateginfo->gatename, antennacell, wildcard);
+	else
+	    is_antenna = !strcasecmp(gateginfo->gatename, antennacell);
+
+	if (is_antenna) {
 	    /* Find an unassigned node.  If there is not one,	*/
 	    /* this is probably a routed (not free) cell.	*/
 	    for (i = 0; i < ginst->nodes; i++) {
@@ -118,6 +148,7 @@ count_free_antenna_taps(char *antennacell)
 	    }
 	}
     }
+    if (wildcard > 0) *(antennacell + wildcard) = '*';
     return numtaps;
 }
 
