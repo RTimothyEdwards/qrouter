@@ -634,6 +634,12 @@ void createMask(NET net, u_char slack, u_char halo)
      xmin = oxmin;
      xmax = oxmax;
 
+     // Avoid faulting if the min/max values were never set
+     if (xmin > xmax) {
+	xmin = 0;
+	xmax = NumChannelsX - 1;
+     }
+
      for (i = xmin - slack; i <= xmax + slack; i++) {
 	if (i < 0 || i >= NumChannelsX) continue;
 	for (j = ycent - slack; j <= ycent + slack; j++) {
@@ -669,6 +675,12 @@ void createMask(NET net, u_char slack, u_char halo)
      xmin = xmax = xcent;
      ymin = oymin;
      ymax = oymax;
+
+     // Avoid faulting if the min/max values were never set
+     if (ymin > ymax) {
+	ymin = 0;
+	ymax = NumChannelsY - 1;
+     }
 
      for (i = xcent - slack; i <= xcent + slack; i++) {
 	if (i < 0 || i >= NumChannelsX) continue;
