@@ -17,6 +17,7 @@
 #include "node.h"
 #include "qconfig.h"
 #include "lef.h"
+#include "output.h"
 
 /*--------------------------------------------------------------*/
 /* SetNodeinfo --						*/
