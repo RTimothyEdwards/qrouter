@@ -52,13 +52,11 @@ typedef struct _endpointinfo {
     ROUTE orig;			/* original pointer to routed segments */
     int startx;			/* values at segment start */
     int starty;
-    int startl;
-    u_char starttype;
+    int startl;			/* note: layer is exact, not base via layer */
     NODE startnode;
     int endx;			/* values at segment end */
     int endy;
     int endl;
-    u_char endtype;
     NODE endnode;
     double res;			/* total resistance of segment	*/
     double cap;			/* total capacitance of segment */
@@ -133,39 +131,17 @@ check_downstream(SEG walkseg, endpointinfo *eptinfo, int eidx,
 
 	/* Check wire/via layer compatibility */
 
-	if (eptinfo[i].starttype & ST_WIRE) {
-	    if (walkseg->segtype & ST_WIRE)
-		startcompat = (walkseg->layer == eptinfo[i].startl);
-	    else
-		startcompat = (walkseg->layer == eptinfo[i].startl) ||
+	if (walkseg->segtype & ST_WIRE)
+	    startcompat = (walkseg->layer == eptinfo[i].startl);
+	else
+	    startcompat = (walkseg->layer == eptinfo[i].startl) ||
 			(walkseg->layer + 1 == eptinfo[i].startl);
-	}
-	else {
-	    if (walkseg->segtype & ST_WIRE)
-		startcompat = (walkseg->layer == eptinfo[i].startl) ||
-			(walkseg->layer == eptinfo[i].startl + 1);
-	    else
-		startcompat = (walkseg->layer == eptinfo[i].startl) ||
-			(walkseg->layer == eptinfo[i].startl + 1) ||
-			(walkseg->layer + 1 == eptinfo[i].startl);
-	}
 
-	if (eptinfo[i].endtype & ST_WIRE) {
-	    if (walkseg->segtype & ST_WIRE)
-		endcompat = (walkseg->layer == eptinfo[i].endl);
-	    else
-		endcompat = (walkseg->layer == eptinfo[i].endl) ||
+	if (walkseg->segtype & ST_WIRE)
+	    endcompat = (walkseg->layer == eptinfo[i].endl);
+	else
+	    endcompat = (walkseg->layer == eptinfo[i].endl) ||
 			(walkseg->layer + 1 == eptinfo[i].endl);
-	}
-	else {
-	    if (walkseg->segtype & ST_WIRE)
-		endcompat = (walkseg->layer == eptinfo[i].endl) ||
-			(walkseg->layer == eptinfo[i].endl + 1);
-	    else
-		endcompat = (walkseg->layer == eptinfo[i].endl) ||
-			(walkseg->layer == eptinfo[i].endl + 1) ||
-			(walkseg->layer + 1 == eptinfo[i].endl);
-	}
 
 	if ((walkseg->x2 == eptinfo[i].startx) &&
 		(walkseg->y2 == eptinfo[i].starty) && startcompat) {
@@ -248,7 +224,6 @@ walk_route(int eidx, int driverend, endpointinfo *eptinfo,
     GATE g;
     NODE node;
     int i;
-    u_char f;
     ROUTE rt;
 
     eptinfo[eidx].flags |= EPT_VISITED;
@@ -302,10 +277,6 @@ walk_route(int eidx, int driverend, endpointinfo *eptinfo,
 	i = eptinfo[eidx].startl;
 	eptinfo[eidx].startl = eptinfo[eidx].endl;
 	eptinfo[eidx].endl = i;
-
-	f = eptinfo[eidx].starttype;
-	eptinfo[eidx].starttype = eptinfo[eidx].endtype;
-	eptinfo[eidx].endtype = f;
     }
     else
 	firstseg = rt->segments;
@@ -442,7 +413,7 @@ int write_delays(char *filename)
     NODEINFO nodeptr;
     SEG seg, newseg, lastseg, nxseg;
     GATE g, drivergate;
-    int i, j, n, new, driverend;
+    int i, j, n, new, driverend, testl;
     int drivernodeidx, driveridx;
     int nroute, numroutes;
     endpointinfo *eptinfo;
@@ -539,18 +510,31 @@ int write_delays(char *filename)
 		eptinfo[nroute].startx = seg->x1;
 		eptinfo[nroute].starty = seg->y1;
 		eptinfo[nroute].startl = seg->layer;
-		eptinfo[nroute].starttype = seg->segtype;
 		eptinfo[nroute].res = 0.0;
 		eptinfo[nroute].cap = 0.0;
+
+		/* If a via, check if direction is up or down */
+		if (seg->segtype & ST_VIA) {
+		    if (seg->next && (seg->next->layer <= seg->layer))
+			eptinfo[nroute].startl++;
+		}
 	    }
 
 	    /* Segment end */
-	    for (seg = rt->segments; seg && seg->next; seg = seg->next);
+	    testl = eptinfo[nroute].startl;
+	    for (seg = rt->segments; seg && seg->next; seg = seg->next)
+		testl = seg->layer;
+
 	    if (seg != NULL) {
 		eptinfo[nroute].endx = seg->x2;
 		eptinfo[nroute].endy = seg->y2;
 		eptinfo[nroute].endl = seg->layer;
-		eptinfo[nroute].endtype = seg->segtype;
+
+		/* If a via, check if direction is up or down */
+		if (seg->segtype & ST_VIA) {
+		    if (testl <= seg->layer)
+			eptinfo[nroute].endl++;
+		}
 	    }
 	    nroute++;
 	}
@@ -601,14 +585,15 @@ int write_delays(char *filename)
 	j = 0;
 	for (rt = droutes; rt; rt = rt->next) {
 	    ROUTE testroute;
-	    int startx, starty, startl, starttype;
-	    int endx, endy, endl, endtype;
-	    int brkx, brky, brki, startcompat, endcompat;
+	    int startx, starty, startl;
+	    int endx, endy, endl;
+	    int brkx, brky, brkl, brki, startcompat, endcompat;
 	    int initial, final;
 	    int x1, y1, x2, y2;
 
 	    /* Check all segments (but not the endpoints) */
-	    for (seg = rt->segments; seg; seg = seg->next) {
+	    lastseg = NULL;
+	    for (seg = rt->segments; seg; lastseg = seg, seg = seg->next) {
 		initial = (seg == rt->segments) ? 1 : 0;
 		final = (seg->next == NULL) ? 1 : 0;
 
@@ -678,42 +663,21 @@ int write_delays(char *filename)
 		    startx = eptinfo[i].startx;
 		    starty = eptinfo[i].starty;
 		    startl = eptinfo[i].startl;
-		    starttype = eptinfo[i].starttype;
 		    endx = eptinfo[i].endx;
 		    endy = eptinfo[i].endy;
 		    endl = eptinfo[i].endl;
-		    endtype = eptinfo[i].endtype;
 
 		    /* Check various combinations of wire and via layers */
-		    if (seg->segtype & ST_WIRE) {
-			if (starttype & ST_WIRE)
-			    startcompat = (startl == seg->layer);
-			else
-			    startcompat = (startl == seg->layer)
-					|| (startl + 1 == seg->layer);
 
-			if (endtype & ST_WIRE)
-			    endcompat = (endl == seg->layer);
-			else
-			    endcompat = (endl == seg->layer)
-					|| (endl + 1 == seg->layer);
+		    if (seg->segtype & ST_WIRE) {
+			startcompat = (startl == seg->layer);
+			endcompat = (endl == seg->layer);
 		    }
 		    else {
-			if (starttype & ST_WIRE)
-			    startcompat = (startl == seg->layer)
+			startcompat = (startl == seg->layer)
 					|| (startl == seg->layer + 1);
-			else
-			    startcompat = (startl == seg->layer)
-					|| (startl == seg->layer + 1)
-					|| (startl + 1 == seg->layer);
-
-			if (endtype & ST_WIRE)
-			    endcompat = (endl == seg->layer)
+			endcompat = (endl == seg->layer)
 					|| (endl == seg->layer + 1);
-			else
-			    endcompat = (endl == seg->layer)
-					|| (endl == seg->layer + 1)
-					|| (endl + 1 == seg->layer);
 		    }
 
 		    if (x1 == x2) {
@@ -723,6 +687,7 @@ int write_delays(char *filename)
 					starty <= y1) {
 				    brkx = startx;
 				    brky = starty;
+				    brkl = startl;
 				    y2 = brky;
 				    brki = i;
 				}
@@ -732,6 +697,7 @@ int write_delays(char *filename)
 					starty <= y2) {
 				    brkx = startx;
 				    brky = starty;
+				    brkl = startl;
 				    y2 = brky;
 				    brki = i;
 				}
@@ -743,6 +709,7 @@ int write_delays(char *filename)
 					endy <= y1) {
 				    brkx = endx;
 				    brky = endy;
+				    brkl = endl;
 				    y2 = brky;
 				    brki = i;
 				}
@@ -752,6 +719,7 @@ int write_delays(char *filename)
 					endy <= y2) {
 				    brkx = endx;
 				    brky = endy;
+				    brkl = endl;
 				    y2 = brky;
 				    brki = i;
 				}
@@ -765,6 +733,7 @@ int write_delays(char *filename)
 					startx <= x1) {
 				    brkx = startx;
 				    brky = starty;
+				    brkl = startl;
 				    x2 = brkx;
 				    brki = i;
 				}
@@ -774,6 +743,7 @@ int write_delays(char *filename)
 					startx <= x2) {
 				    brkx = startx;
 				    brky = starty;
+				    brkl = startl;
 				    x2 = brkx;
 				    brki = i;
 				}
@@ -785,6 +755,7 @@ int write_delays(char *filename)
 					endx <= x1) {
 				    brkx = endx;
 				    brky = endy;
+				    brkl = endl;
 				    x2 = brkx;
 				    brki = i;
 				}
@@ -794,6 +765,7 @@ int write_delays(char *filename)
 					endx <= x2) {
 				    brkx = endx;
 				    brky = endy;
+				    brkl = endl;
 				    x2 = brkx;
 				    brki = i;
 				}
@@ -806,22 +778,59 @@ int write_delays(char *filename)
 		    eptinfo[brki].endl = -2;
 
 		    /* Break route at this point */
-		    /* Make a copy of the segment where the break occurs */
+		    /* If route type is a wire, then make a copy of the	*/
+		    /* segment where the break occurs.  If a via, then	*/
+		    /* determine which side of the break the via goes	*/
+		    /* to.						*/
+
 		    newroute = (ROUTE)malloc(sizeof(struct route_));
-		    newseg = (SEG)malloc(sizeof(struct seg_));
-		    newseg->segtype = seg->segtype;
-		    newseg->x1 = brkx;
-		    newseg->y1 = brky;
-		    newseg->x2 = seg->x2;
-		    newseg->y2 = seg->y2;
-		    newseg->layer = seg->layer;
 
-		    newseg->next = seg->next;
-		    seg->next = NULL;
-		    seg->x2 = brkx;
-		    seg->y2 = brky;
+		    if (seg->segtype & ST_WIRE) {
+			newseg = (SEG)malloc(sizeof(struct seg_));
+			newseg->segtype = seg->segtype;
+			newseg->x1 = brkx;
+			newseg->y1 = brky;
+			newseg->x2 = seg->x2;
+			newseg->y2 = seg->y2;
+			newseg->layer = seg->layer;
 
-		    newroute->segments = newseg;
+			newseg->next = seg->next;
+			seg->next = NULL;
+			seg->x2 = brkx;
+			seg->y2 = brky;
+
+			newroute->segments = newseg;
+		    }
+		    else if (lastseg == NULL) {
+			/* Via is the route before the break */
+			newroute->segments = seg->next;
+			seg->next = NULL;
+		    }
+		    else if (lastseg->layer <= seg->layer) {
+			if (brkl > seg->layer) {
+			    /* Via goes at the end of the route before the break */
+			    newroute->segments = seg->next;
+			    seg->next = NULL;
+			}
+			else {
+			    /* Via goes at the start of the route after the break */
+			    newroute->segments = seg;
+			    lastseg->next = NULL;
+			}
+		    }
+		    else {	/* (lastseg->layer > seg->layer) */
+			if (brkl > seg->layer) {
+			    /* Via goes at the start of the route after the break */
+			    newroute->segments = seg;
+			    lastseg->next = NULL;
+			}
+			else {
+			    /* Via goes at the end of the route before the break */
+			    newroute->segments = seg->next;
+			    seg->next = NULL;
+			}
+		    }
+
 		    newroute->netnum = rt->netnum;
 		    newroute->flags = (u_char)0;
 		    newroute->next = rt->next;
@@ -870,7 +879,9 @@ int write_delays(char *filename)
 	    eptinfo[nroute].startx = seg->x1;
 	    eptinfo[nroute].starty = seg->y1;
 	    eptinfo[nroute].startl = seg->layer;
-	    eptinfo[nroute].starttype = seg->segtype;
+	    /* Check for via in down direction rather than the default up */
+	    if ((seg->segtype & ST_VIA) && seg->next && seg->next->layer <= seg->layer)
+		eptinfo[nroute].startl++;
 	    nodeptr = (seg->layer < Pinlayers) ?
 			NODEIPTR(seg->x1, seg->y1, seg->layer) : NULL;
 	    eptinfo[nroute].startnode = nodeptr ? nodeptr->nodesav : NULL;
@@ -916,7 +927,14 @@ int write_delays(char *filename)
 	    eptinfo[nroute].endx = seg->x2;
 	    eptinfo[nroute].endy = seg->y2;
 	    eptinfo[nroute].endl = seg->layer;
-	    eptinfo[nroute].endtype = seg->segtype;
+	    /* Check for via in down direction rather than default up */
+	    if (seg->segtype & ST_VIA) {
+		if (lastseg && lastseg->layer <= seg->layer)
+		    eptinfo[nroute].endl++;
+		else if (!lastseg && eptinfo[nroute].startl <= seg->layer)
+		    eptinfo[nroute].endl++;
+	    }
+
 	    nodeptr = (seg->layer < Pinlayers) ?
 			NODEIPTR(seg->x2, seg->y2, seg->layer) : NULL;
 	    eptinfo[nroute].endnode = nodeptr ? nodeptr->nodesav : NULL;
