@@ -931,12 +931,12 @@ int write_delays(char *filename)
 	    if (seg->segtype & ST_VIA) {
 		if (lastseg && lastseg->layer <= seg->layer)
 		    eptinfo[nroute].endl++;
-		else if (!lastseg && eptinfo[nroute].startl <= seg->layer)
+		else if (!lastseg && eptinfo[nroute].endl <= seg->layer)
 		    eptinfo[nroute].endl++;
 	    }
 
-	    nodeptr = (seg->layer < Pinlayers) ?
-			NODEIPTR(seg->x2, seg->y2, seg->layer) : NULL;
+	    nodeptr = (eptinfo[nroute].endl < Pinlayers) ?
+			NODEIPTR(seg->x2, seg->y2, eptinfo[nroute].endl) : NULL;
 	    eptinfo[nroute].endnode = nodeptr ? nodeptr->nodesav : NULL;
 
 	    /* Look up node */
