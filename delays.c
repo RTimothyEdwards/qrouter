@@ -598,7 +598,10 @@ int write_delays(char *filename)
 		final = (seg->next == NULL) ? 1 : 0;
 
 		if (initial && (seg->segtype & ST_VIA)) continue;
-		if (final && (seg->segtype & ST_VIA)) continue;
+		if (final && (seg->segtype & ST_VIA) &&
+				((lastseg != rt->segments) ||
+				(!(rt->segments->segtype & ST_VIA))))
+		    continue;
 
 		x1 = seg->x1;
 		x2 = seg->x2;
@@ -629,8 +632,10 @@ int write_delays(char *filename)
 			    x2++;
 			else if (x1 < x2)
 			    x2--;
-			else
-			    continue;	/* shouldn't happen */
+			/* x1 == x2 here implies that the route is made of */
+			/* exactly two vias.  To continue would be to miss */
+			/* the center point between the vias.  This unique */
+			/* condition is type == ST_VIA, final == TRUE.	   */
 		    }
 		    else {
 			if (y1 > y2)
@@ -672,6 +677,18 @@ int write_delays(char *filename)
 		    if (seg->segtype & ST_WIRE) {
 			startcompat = (startl == seg->layer);
 			endcompat = (endl == seg->layer);
+		    }
+		    else if (final) {
+			/* Unique condition: route is two vias.  Look	*/
+			/* only at the point between the vias.		*/
+			if (lastseg->layer < seg->layer) {
+			    startcompat = (startl == seg->layer);
+			    endcompat = (endl == seg->layer);
+			}
+			else {
+			    startcompat = (startl == seg->layer + 1);
+			    endcompat = (endl == seg->layer + 1);
+			}
 		    }
 		    else {
 			startcompat = (startl == seg->layer)
