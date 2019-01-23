@@ -3102,7 +3102,7 @@ find_route_blocks()
    GATE g;
    NODEINFO lnode;
    DSEG ds;
-   struct dseg_ dt;
+   struct dseg_ dt, lds;
    int i, gridx, gridy;
    double dx, dy, w, v, s, u;
    double dist;
@@ -3115,38 +3115,59 @@ find_route_blocks()
 	    // Work through each rectangle in the tap geometry
 
             for (ds = g->taps[i]; ds; ds = ds->next) {
-	       w = 0.5 * LefGetRouteWidth(ds->layer);
-	       v = 0.5 * LefGetXYViaWidth(ds->layer, ds->layer, 0, orient);
-	       s = LefGetRouteSpacing(ds->layer);
+	       lds = *ds;	/* Make local copy of tap rect */
+
+	       /* Trim to array bounds and reject if out-of-bounds */
+	       gridx = (int)((lds.x1 - Xlowerbound) / PitchX);
+	       if (gridx >= NumChannelsX) continue;
+	       if (gridx < 0) lds.x1 = Xlowerbound;
+
+	       gridx = (int)((lds.x2 - Xlowerbound) / PitchX);
+	       if (gridx < 0) continue;
+	       if (gridx >= NumChannelsX)
+		   lds.x2 = Xlowerbound + (NumChannelsX * PitchX);
+	       
+	       gridy = (int)((lds.y1 - Ylowerbound) / PitchY);
+	       if (gridy >= NumChannelsY) continue;
+	       if (gridy < 0) lds.y1 = Ylowerbound;
+
+	       gridy = (int)((lds.y2 - Ylowerbound) / PitchY);
+	       if (gridy < 0) continue;
+	       if (gridy >= NumChannelsY)
+		   lds.y2 = Ylowerbound + (NumChannelsY * PitchY);
+	       
+	       w = 0.5 * LefGetRouteWidth(lds.layer);
+	       v = 0.5 * LefGetXYViaWidth(lds.layer, lds.layer, 0, orient);
+	       s = LefGetRouteSpacing(lds.layer);
 
 	       // Look west
 
-	       gridx = (int)((ds->x1 - Xlowerbound) / PitchX);
+	       gridx = (int)((lds.x1 - Xlowerbound) / PitchX);
 	       dx = (gridx * PitchX) + Xlowerbound;
-	       dist = ds->x1 - dx - w;
+	       dist = lds.x1 - dx - w;
 	       if (dist > 0 && dist < s && gridx >= 0) {
 		  dt.x1 = dt.x2 = dx;
-		  dt.y1 = ds->y1;
-		  dt.y2 = ds->y2;
+		  dt.y1 = lds.y1;
+		  dt.y2 = lds.y2;
 
 		  // Check for other taps covering this edge
 		  // (to do)
 
 		  // Find all grid points affected
-	          gridy = (int)((ds->y1 - Ylowerbound - PitchY) / PitchY);
+	          gridy = (int)((lds.y1 - Ylowerbound - PitchY) / PitchY);
 	          dy = (gridy * PitchY) + Ylowerbound;
-		  while (dy < ds->y1 - s) {
+		  while (dy < lds.y1 - s) {
 		     dy += PitchY;
 		     gridy++;
 		  }
-		  while (dy < ds->y2 + s) {
-		     lnode = NODEIPTR(gridx, gridy, ds->layer);
-		     u = ((OBSVAL(gridx, gridy, ds->layer) & STUBROUTE)
+		  while (dy < lds.y2 + s) {
+		     lnode = NODEIPTR(gridx, gridy, lds.layer);
+		     u = ((OBSVAL(gridx, gridy, lds.layer) & STUBROUTE)
 				&& (lnode->flags & NI_STUB_EW)) ? v : w;
-		     if (dy + EPS < ds->y2 - u)
-			block_route(gridx, gridy, ds->layer, NORTH);
-		     if (dy - EPS > ds->y1 + u)
-			block_route(gridx, gridy, ds->layer, SOUTH);
+		     if (dy + EPS < lds.y2 - u)
+			block_route(gridx, gridy, lds.layer, NORTH);
+		     if (dy - EPS > lds.y1 + u)
+			block_route(gridx, gridy, lds.layer, SOUTH);
 		     dy += PitchY;
 		     gridy++;
 		  }
@@ -3154,32 +3175,32 @@ find_route_blocks()
 
 	       // Look east
 
-	       gridx = (int)(1.0 + (ds->x2 - Xlowerbound) / PitchX);
+	       gridx = (int)(1.0 + (lds.x2 - Xlowerbound) / PitchX);
 	       dx = (gridx * PitchX) + Xlowerbound;
-	       dist = dx - ds->x2 - w;
+	       dist = dx - lds.x2 - w;
 	       if (dist > 0 && dist < s && gridx < NumChannelsX) {
 		  dt.x1 = dt.x2 = dx;
-		  dt.y1 = ds->y1;
-		  dt.y2 = ds->y2;
+		  dt.y1 = lds.y1;
+		  dt.y2 = lds.y2;
 
 		  // Check for other taps covering this edge
 		  // (to do)
 
 		  // Find all grid points affected
-	          gridy = (int)((ds->y1 - Ylowerbound - PitchY) / PitchY);
+	          gridy = (int)((lds.y1 - Ylowerbound - PitchY) / PitchY);
 	          dy = (gridy * PitchY) + Ylowerbound;
-		  while (dy < ds->y1 - s) {
+		  while (dy < lds.y1 - s) {
 		     dy += PitchY;
 		     gridy++;
 		  }
-		  while (dy < ds->y2 + s) {
-		     lnode = NODEIPTR(gridx, gridy, ds->layer);
-		     u = ((OBSVAL(gridx, gridy, ds->layer) & STUBROUTE)
+		  while (dy < lds.y2 + s) {
+		     lnode = NODEIPTR(gridx, gridy, lds.layer);
+		     u = ((OBSVAL(gridx, gridy, lds.layer) & STUBROUTE)
 				&& (lnode->flags & NI_STUB_EW)) ? v : w;
-		     if (dy + EPS < ds->y2 - u)
-			block_route(gridx, gridy, ds->layer, NORTH);
-		     if (dy - EPS > ds->y1 + u)
-			block_route(gridx, gridy, ds->layer, SOUTH);
+		     if (dy + EPS < lds.y2 - u)
+			block_route(gridx, gridy, lds.layer, NORTH);
+		     if (dy - EPS > lds.y1 + u)
+			block_route(gridx, gridy, lds.layer, SOUTH);
 		     dy += PitchY;
 		     gridy++;
 		  }
@@ -3187,32 +3208,32 @@ find_route_blocks()
 
 	       // Look south
 
-	       gridy = (int)((ds->y1 - Ylowerbound) / PitchY);
+	       gridy = (int)((lds.y1 - Ylowerbound) / PitchY);
 	       dy = (gridy * PitchY) + Ylowerbound;
-	       dist = ds->y1 - dy - w;
+	       dist = lds.y1 - dy - w;
 	       if (dist > 0 && dist < s && gridy >= 0) {
-		  dt.x1 = ds->x1;
-		  dt.x2 = ds->x2;
+		  dt.x1 = lds.x1;
+		  dt.x2 = lds.x2;
 		  dt.y1 = dt.y2 = dy;
 
 		  // Check for other taps covering this edge
 		  // (to do)
 
 		  // Find all grid points affected
-	          gridx = (int)((ds->x1 - Xlowerbound - PitchX) / PitchX);
+	          gridx = (int)((lds.x1 - Xlowerbound - PitchX) / PitchX);
 	          dx = (gridx * PitchX) + Xlowerbound;
-		  while (dx < ds->x1 - s) {
+		  while (dx < lds.x1 - s) {
 		     dx += PitchX;
 		     gridx++;
 		  }
-		  while (dx < ds->x2 + s) {
-		     lnode = NODEIPTR(gridx, gridy, ds->layer);
-		     u = ((OBSVAL(gridx, gridy, ds->layer) & STUBROUTE)
+		  while (dx < lds.x2 + s) {
+		     lnode = NODEIPTR(gridx, gridy, lds.layer);
+		     u = ((OBSVAL(gridx, gridy, lds.layer) & STUBROUTE)
 				&& (lnode->flags & NI_STUB_NS)) ? v : w;
-		     if (dx + EPS < ds->x2 - u)
-			block_route(gridx, gridy, ds->layer, EAST);
-		     if (dx - EPS > ds->x1 + u)
-			block_route(gridx, gridy, ds->layer, WEST);
+		     if (dx + EPS < lds.x2 - u)
+			block_route(gridx, gridy, lds.layer, EAST);
+		     if (dx - EPS > lds.x1 + u)
+			block_route(gridx, gridy, lds.layer, WEST);
 		     dx += PitchX;
 		     gridx++;
 		  }
@@ -3220,32 +3241,32 @@ find_route_blocks()
 
 	       // Look north
 
-	       gridy = (int)(1.0 + (ds->y2 - Ylowerbound) / PitchY);
+	       gridy = (int)(1.0 + (lds.y2 - Ylowerbound) / PitchY);
 	       dy = (gridy * PitchY) + Ylowerbound;
-	       dist = dy - ds->y2 - w;
+	       dist = dy - lds.y2 - w;
 	       if (dist > 0 && dist < s && gridy < NumChannelsY) {
-		  dt.x1 = ds->x1;
-		  dt.x2 = ds->x2;
+		  dt.x1 = lds.x1;
+		  dt.x2 = lds.x2;
 		  dt.y1 = dt.y2 = dy;
 
 		  // Check for other taps covering this edge
 		  // (to do)
 
 		  // Find all grid points affected
-	          gridx = (int)((ds->x1 - Xlowerbound - PitchX) / PitchX);
+	          gridx = (int)((lds.x1 - Xlowerbound - PitchX) / PitchX);
 	          dx = (gridx * PitchX) + Xlowerbound;
-		  while (dx < ds->x1 - s) {
+		  while (dx < lds.x1 - s) {
 		     dx += PitchX;
 		     gridx++;
 		  }
-		  while (dx < ds->x2 + s) {
-		     lnode = NODEIPTR(gridx, gridy, ds->layer);
-		     u = ((OBSVAL(gridx, gridy, ds->layer) & STUBROUTE)
+		  while (dx < lds.x2 + s) {
+		     lnode = NODEIPTR(gridx, gridy, lds.layer);
+		     u = ((OBSVAL(gridx, gridy, lds.layer) & STUBROUTE)
 				&& (lnode->flags & NI_STUB_NS)) ? v : w;
-		     if (dx + EPS < ds->x2 - u)
-			block_route(gridx, gridy, ds->layer, EAST);
-		     if (dx - EPS > ds->x1 + u)
-			block_route(gridx, gridy, ds->layer, WEST);
+		     if (dx + EPS < lds.x2 - u)
+			block_route(gridx, gridy, lds.layer, EAST);
+		     if (dx - EPS > lds.x1 + u)
+			block_route(gridx, gridy, lds.layer, WEST);
 		     dx += PitchX;
 		     gridx++;
 		  }
