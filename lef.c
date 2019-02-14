@@ -2594,8 +2594,9 @@ enum lef_layer_keys {LEF_LAYER_TYPE=0, LEF_LAYER_WIDTH,
 	LEF_LAYER_PITCH, LEF_LAYER_DIRECTION, LEF_LAYER_OFFSET,
 	LEF_LAYER_WIREEXT,
 	LEF_LAYER_RES, LEF_LAYER_CAP, LEF_LAYER_EDGECAP,
-	LEF_LAYER_THICKNESS, LEF_LAYER_HEIGHT,
-	LEF_LAYER_MINDENSITY, LEF_LAYER_ANTENNA,
+	LEF_LAYER_THICKNESS, LEF_LAYER_HEIGHT, LEF_LAYER_MINIMUMCUT,
+	LEF_LAYER_MINDENSITY, LEF_LAYER_ACDENSITY, LEF_LAYER_DCDENSITY,
+	LEF_LAYER_PROPERTY, LEF_LAYER_ANTENNAMODEL, LEF_LAYER_ANTENNA,
 	LEF_LAYER_ANTENNADIFF, LEF_LAYER_ANTENNASIDE,
 	LEF_LAYER_AGG_ANTENNA, LEF_LAYER_AGG_ANTENNADIFF,
 	LEF_LAYER_AGG_ANTENNASIDE,
@@ -2648,7 +2649,12 @@ LefReadLayerSection(f, lname, mode, lefl)
 	"EDGECAPACITANCE",
 	"THICKNESS",
 	"HEIGHT",
+	"MINIMUMCUT",
 	"MINIMUMDENSITY",
+	"ACCURRENTDENSITY",
+	"DCCURRENTDENSITY",
+	"PROPERTY",
+	"ANTENNAMODEL",
 	"ANTENNAAREARATIO",
 	"ANTENNADIFFAREARATIO",
 	"ANTENNASIDEAREARATIO",
@@ -2695,6 +2701,10 @@ LefReadLayerSection(f, lname, mode, lefl)
 	}
 	switch (keyword)
 	{
+	    case LEF_LAYER_PROPERTY:
+		/* Some kind of forward-compatibility thing. */
+		LefEndStatement(f);
+		break;
 	    case LEF_LAYER_TYPE:
 		token = LefNextToken(f, TRUE);
 		if (*token != '\n')
@@ -2871,12 +2881,12 @@ LefReadLayerSection(f, lname, mode, lefl)
 		    else
 			entries++;
 		}
-		if (*token != ';')
-		    newrule = (lefSpacingRule *)malloc(sizeof(lefSpacingRule));
 
 		while (*token != ';') {
 		    token = LefNextToken(f, TRUE);	// Minimum width value
 		    sscanf(token, "%lg", &dvalue);
+
+		    newrule = (lefSpacingRule *)malloc(sizeof(lefSpacingRule));
 		    newrule->width = dvalue / (double)oscale;
 
 		    for (i = 0; i < entries; i++) {
@@ -2884,7 +2894,6 @@ LefReadLayerSection(f, lname, mode, lefl)
 		    }
 		    sscanf(token, "%lg", &dvalue);
 		    newrule->spacing = dvalue / (double)oscale;
-		    token = LefNextToken(f, TRUE);
 
 		    for (testrule = lefl->info.route.spacing; testrule;
 				testrule = testrule->next)
@@ -3016,6 +3025,13 @@ LefReadLayerSection(f, lname, mode, lefl)
 		}
 		LefEndStatement(f);
 		break;
+	    case LEF_LAYER_MINIMUMCUT:
+		/* Not handling minimum cuts for wide wires yet */
+		LefEndStatement(f);
+	    case LEF_LAYER_ANTENNAMODEL:
+		/* Not handling antenna models yet */
+		LefEndStatement(f);
+		break;
 	    case LEF_LAYER_ANTENNA:
 	    case LEF_LAYER_ANTENNASIDE:
 	    case LEF_LAYER_AGG_ANTENNA:
@@ -3045,6 +3061,26 @@ LefReadLayerSection(f, lname, mode, lefl)
 		/* (antenna ratios for antennas connected to diodes,	*/
 		/* which can still blow gates if the diode area is	*/
 		/* insufficiently large.)				*/
+		LefEndStatement(f);
+		break;
+	    case LEF_LAYER_ACDENSITY:
+		/* The idiocy of the LEF format on display. */
+		token = LefNextToken(f, TRUE);	    /* value type */
+		token = LefNextToken(f, TRUE);	    /* value, FREQUENCY */
+		if (!strcmp(token, "FREQUENCY")) {
+		    LefEndStatement(f);
+		    token = LefNextToken(f, TRUE);	    /* value, FREQUENCY */
+		    if (!strcmp(token, "WIDTH"))    /* Optional width */
+			LefEndStatement(f);    /* Additional statement TABLEENTRIES */
+		}
+		LefEndStatement(f);
+		break;
+	    case LEF_LAYER_DCDENSITY:
+		/* The idiocy of the LEF format still on display. */
+		token = LefNextToken(f, TRUE);	    /* value type */
+		token = LefNextToken(f, TRUE);	    /* value, WIDTH */
+		if (!strcmp(token, "WIDTH"))
+		    LefEndStatement(f);	    /* Additional statement TABLEENTRIES */
 		LefEndStatement(f);
 		break;
 	    case LEF_LAYER_MINDENSITY:
