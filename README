@@ -118,7 +118,7 @@ the standard compile and install sequence:
 
 Options to configure:
 
-	--with-prefix=<prefix>
+	--prefix=<prefix>
 		overrides the standard install
 		location of /usr/local
 
