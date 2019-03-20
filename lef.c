@@ -2737,32 +2737,11 @@ LefReadLayerSection(f, lname, mode, lefl)
 			lefl->info.route.respersq = 0.0;
 			lefl->info.route.edgecap = 0.0;
 
-			/* A routing type has been declared.  Assume	*/
-			/* this takes the name "metal1", "M1", or some	*/
-			/* variant thereof.				*/
+			/* A routing type has been declared.  Route	*/
+			/* layers are supposed to be in order from	*/
+			/* bottom to top in the technology LEF file.	*/
 
-		        for (tp = lefl->lefName; *tp != '\0'; tp++) {
-			    if (*tp >= '0' && *tp <= '9') {
-				sscanf(tp, "%d", &lefl->type);
-
-				/* "metal1", e.g., is assumed to be layer #0 */
-				/* This may not be a proper assumption, always */
-
-				lefl->type--;
-				break;
-			    }
-			}
-
-			/* This is probably some special non-numerical 	*/
-			/* name for a top metal layer.  Take a stab at	*/
-			/* it, defining it to be the next layer up from	*/
-			/* whatever the previous topmost route layer	*/
-			/* was.  This should work unless the LEF file	*/
-			/* is incorrectly written.			*/
-
-			if (lefl->type < 0) {
-			    lefl->type = LefGetMaxRouteLayer();
-			}
+			lefl->type = LefGetMaxRouteLayer();
 		    }
 		    else if (typekey == CLASS_CUT || typekey == CLASS_VIA) {
 			lefl->info.via.area.x1 = 0.0;
