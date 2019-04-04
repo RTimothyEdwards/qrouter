@@ -139,6 +139,7 @@ count_reachable_taps()
 			deltay = 0.5 * LefGetXYViaWidth(ds->layer, ds->layer, 1, orient);
 
 			gridx = (int)((ds->x1 - Xlowerbound) / PitchX) - 1;
+			if (gridx < 0) gridx = 0;
 			while (1) {
 			    dx = (gridx * PitchX) + Xlowerbound;
 			    if (dx > ds->x2 || gridx >= NumChannelsX) break;
@@ -147,6 +148,7 @@ count_reachable_taps()
 					((ds->x2 - dx + EPS) > deltax)) {
 				gridy = (int)((ds->y1 - Ylowerbound)
 					/ PitchY) - 1;
+				if (gridy < 0) gridy = 0;
 				while (1) {
 				    dy = (gridy * PitchY) + Ylowerbound;
 				    if (dy > ds->y2 || gridy >= NumChannelsY)
@@ -219,6 +221,7 @@ count_reachable_taps()
 			deltay = 0.5 * LefGetXYViaWidth(ds->layer, ds->layer, 1, orient);
 
 			gridx = (int)((ds->x1 - Xlowerbound) / PitchX) - 1;
+			if (gridx < 0) gridx = 0;
 			while (1) {
 			    dx = (gridx * PitchX) + Xlowerbound;
 			    if (dx > ds->x2 || gridx >= NumChannelsX) break;
@@ -226,6 +229,7 @@ count_reachable_taps()
 			    if (((dx - ds->x1 + EPS) > -deltax) &&
 					((ds->x2 - dx + EPS) > -deltax)) {
 				gridy = (int)((ds->y1 - Ylowerbound) / PitchY) - 1;
+				if (gridy < 0) gridy = 0;
 
 				while (1) {
 				    dy = (gridy * PitchY) + Ylowerbound;
@@ -1062,11 +1066,13 @@ void create_obstructions_inside_nodes(void)
 
              for (ds = g->taps[i]; ds; ds = ds->next) {
 		gridx = (int)((ds->x1 - Xlowerbound) / PitchX) - 1;
+		if (gridx < 0) gridx = 0;
 		while (1) {
 		   dx = (gridx * PitchX) + Xlowerbound;
 		   if (dx > ds->x2 || gridx >= NumChannelsX) break;
 		   else if (dx >= ds->x1 && gridx >= 0) {
 		      gridy = (int)((ds->y1 - Ylowerbound) / PitchY) - 1;
+		      if (gridy < 0) gridy = 0;
 		      while (1) {
 		         dy = (gridy * PitchY) + Ylowerbound;
 		         if (dy > ds->y2 || gridy >= NumChannelsY) break;
@@ -1338,6 +1344,7 @@ void create_obstructions_outside_nodes(void)
  
 		deltax = get_via_clear(ds->layer, 1, orient, ds);
 		gridx = (int)((ds->x1 - Xlowerbound - deltax) / PitchX) - 1;
+		if (gridx < 0) gridx = 0;
 
 		while (1) {
 		   dx = (gridx * PitchX) + Xlowerbound;
@@ -1354,6 +1361,7 @@ void create_obstructions_outside_nodes(void)
 		   else if ((dx - EPS) > (ds->x1 - deltax) && gridx >= 0) {
 		      deltay = get_via_clear(ds->layer, 0, orient, ds);
 		      gridy = (int)((ds->y1 - Ylowerbound - deltay) / PitchY) - 1;
+		      if (gridy < 0) gridy = 0;
 
 		      while (1) {
 		         dy = (gridy * PitchY) + Ylowerbound;
@@ -2479,11 +2487,13 @@ make_routable(NODE node)
 	  if (g->noderec[i] == node) {
              for (ds = g->taps[i]; ds; ds = ds->next) {
 		gridx = (int)((ds->x1 - Xlowerbound) / PitchX) - 1;
+		if (gridx < 0) gridx = 0;
 		while (1) {
 		   dx = (gridx * PitchX) + Xlowerbound;
 		   if (dx > ds->x2 || gridx >= NumChannelsX) break;
 		   else if (dx >= ds->x1 && gridx >= 0) {
 		      gridy = (int)((ds->y1 - Ylowerbound) / PitchY) - 1;
+		      if (gridy < 0) gridy = 0;
 		      while (1) {
 		         dy = (gridy * PitchY) + Ylowerbound;
 		         if (dy > ds->y2 || gridy >= NumChannelsY) break;

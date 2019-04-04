@@ -3264,12 +3264,22 @@ LefAssignLayerVias()
 	    if (lefl->info.via.generated == TRUE) {
 		/* Find the base layer and set hasGenerate[] for that layer */
 		baselayer = lefl->info.via.area.layer;
-		if (lefl->info.via.lr)
+		if (lefl->info.via.lr) {
+		    if (lefl->info.via.lr->layer < 0) {
+			lefl->info.via.generated = FALSE;
+			continue;
+		    }
 		    if ((baselayer < 0) || (lefl->info.via.lr->layer < baselayer))
 			baselayer = lefl->info.via.lr->layer;
-		if (lefl->info.via.lr->next)
+		}
+		if (lefl->info.via.lr->next) {
+		    if (lefl->info.via.lr->next->layer < 0) {
+			lefl->info.via.generated = FALSE;
+			continue;
+		    }
 		    if ((baselayer < 0) || (lefl->info.via.lr->next->layer < baselayer))
 			baselayer = lefl->info.via.lr->next->layer;
+		}
 		if ((baselayer >= 0) && (baselayer < MAX_LAYERS))
 		    hasGenerate[baselayer] = TRUE;
 	    }
