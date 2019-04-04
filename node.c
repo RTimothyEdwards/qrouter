@@ -233,13 +233,20 @@ count_reachable_taps()
 					break;
 
 				    // Check that the grid position is inside the
-				    // tap rectangle.  However, if the point above
-				    // the grid is blocked, then a via cannot be
-				    // placed here, so skip it.
+				    // tap rectangle.
+
+				    // NOTE: If the point above the grid is blocked,
+				    // then a via cannot be placed here, so skip it.
+				    // This currently looks only for completely
+				    // obstructed positions.  To do:  For directionally
+				    // obstructed positions, see if the obstruction
+				    // is in the opposite direction of the via's
+				    // offset and at least the same distance.
+				    // Otherwise, it won't clear.
 
 				    if (((ds->layer == Num_layers - 1) ||
 						!(OBSVAL(gridx, gridy, ds->layer + 1)
-						& NO_NET)) &&
+						& (NO_NET || OBSTRUCT_MASK))) &&
 						((dy - ds->y1 + EPS) > -deltay) &&
 						((ds->y2 - dy + EPS) > -deltay)) {
 
