@@ -143,6 +143,19 @@ veryclean:
 	$(RM) qrouter.tcl
 	$(RM) qrouter.sh
 
+distclean:
+	$(RM) $(OBJECTS)
+	$(RM) $(OBJECTS2)
+	$(RM) $(OBJECTS3)
+	$(RM) $(OBJECTS4)
+	$(RM) $(OBJECTS5)
+	$(RM) qrouterexec$(EXEEXT)
+	$(RM) qrouternullg$(EXEEXT)
+	$(RM) qrouter$(EXEEXT)
+	$(RM) qrouter$(SHDLIB_EXT)
+	$(RM) qrouter.tcl
+	$(RM) qrouter.sh
+
 .c.o:
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(SHLIB_CFLAGS) $(DEFS) $(STUB_DEFS) \
 		$(EXTRA_DEFS) $(INC_SPECS) -c $< -o $@
