@@ -214,9 +214,6 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
     refp.x1 = 0;
     refp.y1 = 0;
 
-    /* Set pitches and allocate memory for Obs[] if we haven't yet. */
-    set_num_channels();
-
     /* Don't create obstructions or routes on routed specialnets inputs	*/
     /* except for power and ground nets.				*/
     noobstruct = ((special == (char)1) && (!(net->flags & NET_IGNORED)) &&
@@ -630,8 +627,8 @@ DefReadGatePin(NET net, NODE node, char *instname, char *pinname, double *home)
 
 		    if (gridx < 0) gridx = 0;
 		    while (1) {
+			if (gridx >= NumChannelsX) break;
 			dx = (gridx * PitchX) + Xlowerbound;
-			// if (dx >= NumChannelsX) break;
 			if (dx > drect->x2 + home[drect->layer] - EPS) break;
 			if (dx < drect->x1 - home[drect->layer] + EPS) {
 			    gridx++;
@@ -641,8 +638,8 @@ DefReadGatePin(NET net, NODE node, char *instname, char *pinname, double *home)
 
 			if (gridy < 0) gridy = 0;
 			while (1) {
+			    if (gridy >= NumChannelsY) break;
 			    dy = (gridy * PitchY) + Ylowerbound;
-			    // if (dy >= NumChannelsY) break;
 			    if (dy > drect->y2 + home[drect->layer] - EPS) break;
 			    if (dy < drect->y1 - home[drect->layer] + EPS) {
 				gridy++;
@@ -748,6 +745,9 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 	"PROPERTY",
 	NULL
     };
+
+    /* Set pitches and allocate memory for Obs[] if we haven't yet. */
+    set_num_channels();
 
     if (Numnets == 0)
     {
