@@ -3036,6 +3036,7 @@ LefReadLayerSection(f, lname, mode, lefl)
 		else
 		    lefl->info.route.method = CALC_AGG_SIDEAREA;
 		LefEndStatement(f);
+		break;
 	    case LEF_LAYER_ANTENNADIFF:
 	    case LEF_LAYER_AGG_ANTENNADIFF:
 		/* Not specifically handling these antenna types */
