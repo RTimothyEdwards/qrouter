@@ -957,6 +957,7 @@ int dofirststage(u_char graphdebug, int debug_netnum)
 	    if (Verbose > 0)
 	       Fprintf(stdout, "Finished routing net %s\n", net->netname);
 	    Fprintf(stdout, "Nets remaining: %d\n", remaining);
+	    Flush(stdout);
 	 }
 	 else {
 	    if (Verbose > 0)
@@ -1414,6 +1415,7 @@ int dothirdstage(u_char graphdebug, int debug_netnum, u_int effort)
 	       Fprintf(stdout, "Finished routing net %s\n", net->netname);
 	    remaining--;
 	    Fprintf(stdout, "Nets remaining: %d\n", remaining);
+	    Flush(stdout);
 	    remove_routes(rt, FALSE);	/* original is no longer needed */
 	 }
 	 else if (!failed) {

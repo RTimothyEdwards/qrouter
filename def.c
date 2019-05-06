@@ -898,9 +898,12 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 			    while (token && (*token != ';'))
 			        token = DefAddRoutes(f, oscale, net, special);
 			    // Treat power and ground nets in specialnets as fixed 
-			    if (subkey == DEF_NETPROP_ROUTED && special == (char)1)
+			    if ((subkey == DEF_NETPROP_ROUTED ||
+				    subkey == DEF_NETPROP_FIXED) &&
+				    special == (char)1) {
 				if (net->netnum == VDD_NET || net->netnum == GND_NET)
 				    fixed++;
+			    }
 			    break;
 		    }
 		}
@@ -935,8 +938,8 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 
     if (processed == total) {
 	if (Verbose > 0)
-	    Fprintf(stdout, "  Processed %d%s nets total.\n", processed,
-			(special) ? " special" : "");
+	    Fprintf(stdout, "  Processed %d%s nets total (%d fixed).\n",
+			processed, (special) ? " special" : "", fixed);
     }
     else
 	LefError(DEF_WARNING, "Warning:  Number of nets read (%d) does not match "
