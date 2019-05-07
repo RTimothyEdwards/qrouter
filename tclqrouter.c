@@ -314,7 +314,7 @@ void tcl_stdflush(FILE *f)
    char *stdptr = stdstr + 11;
     
    Tcl_SaveResult(qrouterinterp, &state);
-   strcpy(stdptr, (f == stderr) ? "err" : "out");
+   strncpy(stdptr, (f == stderr) ? "err" : "out", 3);
    Tcl_Eval(qrouterinterp, stdstr);
    Tcl_RestoreResult(qrouterinterp, &state);
 }
