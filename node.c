@@ -17,6 +17,7 @@
 #include "node.h"
 #include "qconfig.h"
 #include "lef.h"
+#include "def.h"
 #include "output.h"
 
 /*--------------------------------------------------------------*/
@@ -438,16 +439,15 @@ void check_variable_pitch(int l, int *hptr, int *vptr)
       vpitch = 0.5 * (LefGetRouteWidth(l) + wvia) + LefGetRouteSpacing(l);
    }
 
-   vnum = 1;
-   while (vpitch > PitchY + EPS) {
-      vpitch /= 2.0;
-      vnum++;
-   }
-   hnum = 1;
-   while (hpitch > PitchX + EPS) {
-      hpitch /= 2.0;
-      hnum++;
-   }
+   vnum = (int)((vpitch / PitchY) - EPS) + 1;
+   hnum = (int)((hpitch / PitchX) - EPS) + 1;
+
+   // To mark blockages, either none of (hnum & vnum) should be
+   // larger than 1, or both of them should be.  Further info in
+   // create_obstructions_from_variable_pitch(), below.
+
+   if (vnum > 1 && hnum == 1) hnum++;
+   if (hnum > 1 && vnum == 1) vnum++;
 
    *vptr = vnum;
    *hptr = hnum;
@@ -469,12 +469,55 @@ void check_variable_pitch(int l, int *hptr, int *vptr)
 
 void create_obstructions_from_variable_pitch(void)
 {
-   int l, vnum, hnum, x, y;
+   int l, vnum, hnum, hoff, voff, x, y;
    NODEINFO lnode;
+   TRACKS tracksinfo, tracksinfoother;
 
    for (l = 0; l < Num_layers; l++) {
 
+      // check_variable_pitch() guarantees that either hnum
+      // and vnum are both one, or both are larger than 1.
+
       check_variable_pitch(l, &hnum, &vnum);
+
+      if (hnum == 1 && vnum == 1) continue;	// No obstructions needed
+
+      // Compute the offset of the tracks to mark obstructions
+      tracksinfo = DefGetTracks(l);
+      if (tracksinfo == NULL) {
+	 // Should look at standard cell placement and LEF offset
+	 // to determine offset here.  For now, just use 0.
+	 hoff = voff = 0;
+      }
+      else {
+	 // Use the start position relative to lowerbound to determine
+	 // the offset.  use the offset of the higher or lower layer
+	 // for determining the offset in the opposite direction of
+	 // the current layer orientation.
+	 if (l < Num_layers - 1) {
+	    // If not the top layer, then use the upper layer as the other layer
+	    tracksinfoother = DefGetTracks(l + 1);
+	 }
+	 else if (l > 0) {
+	    // Otherwise, use the lower layer
+	    tracksinfoother = DefGetTracks(l - 1);
+         }
+	 else {
+	    // Should not happen, as it means routing is done with one layer. . .
+	    tracksinfoother = (TRACKS)NULL;
+	 }
+
+	 if (Vert[l]) {
+	    hoff = (int)((tracksinfo->start - Xlowerbound) / PitchX + 0.5);
+	    voff = (tracksinfoother == (TRACKS)NULL) ?
+		    0 : (int)((tracksinfoother->start - Ylowerbound) / PitchY + 0.5);
+	 }
+	 else {
+	    voff = (int)((tracksinfo->start - Ylowerbound) / PitchY + 0.5);
+	    hoff = (tracksinfoother == (TRACKS)NULL) ?
+		    0 : (int)((tracksinfoother->start - Xlowerbound) / PitchX + 0.5);
+	 }
+      }
 
       // This could be better handled by restricting
       // access from specific directions rather than
@@ -484,14 +527,11 @@ void create_obstructions_from_variable_pitch(void)
       // the other value, then we force both values to
       // be at least 2.
 
-      if (vnum > 1 && hnum == 1) hnum++;
-      if (hnum > 1 && vnum == 1) vnum++;
-
       if (vnum > 1 || hnum > 1) {
 	 for (x = 0; x < NumChannelsX; x++) {
-	    if (x % hnum == 0) continue;
+	    if ((x - hoff) % hnum == 0) continue;
 	    for (y = 0; y < NumChannelsY; y++) {
-	       if (y % vnum == 0) continue;
+	       if ((y - voff) % vnum == 0) continue;
 
 	       // If the grid position itself is a node, don't restrict
 	       // routing based on variable pitch.

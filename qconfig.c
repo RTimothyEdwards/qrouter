@@ -221,7 +221,7 @@ int read_config(FILE *fconfig, int is_info)
 	       // should get the information about gate pins & obstructions
 	       OK = 1;
 	       mscale = LefRead(sarg);
-	       if (mscale > Scales.mscale) Scales.mscale = mscale;
+	       update_mscale(mscale);
 	    }
 	}
 

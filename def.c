@@ -32,6 +32,7 @@
 #include "lef.h"
 #include "def.h"
 
+TRACKS *Tracks = NULL;
 int numSpecial = 0;		/* Tracks number of specialnets */
 
 #ifndef TCL_QROUTER
@@ -174,6 +175,27 @@ DefHashNet(NET net)
 }
 
 #endif	/* TCL_QROUTER */
+
+/*
+ *------------------------------------------------------------
+ *
+ * DefGetTracks --
+ *
+ *	Get tracks information for the given layer.
+ *	If no TRACKS were specified for the layer, NULL will be
+ *	returned.
+ *
+ *------------------------------------------------------------
+ */
+
+TRACKS
+DefGetTracks(int layer)
+{
+    if (Tracks)
+	return Tracks[layer];
+    else
+	return NULL;
+}
 
 /*
  *------------------------------------------------------------
@@ -2065,6 +2087,19 @@ DefRead(char *inName, float *retscale)
 		if (!strcmp(token, "LAYER")) {
 		    curlayer = LefReadLayer(f, FALSE);
 		}
+		if (Tracks && (Tracks[curlayer] != NULL)) {
+		    LefError(DEF_ERROR, "Only one TRACKS line per layer allowed; "
+				"last one is used.");
+		}
+		else {
+		    if (Tracks == NULL)
+			Tracks = (TRACKS *)calloc(Num_layers, sizeof(TRACKS));
+		    Tracks[curlayer] = (TRACKS)malloc(sizeof(struct tracks_));
+		}
+		Tracks[curlayer]->start = start / oscale;
+		Tracks[curlayer]->ntracks = channels;
+		Tracks[curlayer]->pitch = step / oscale;
+
 		if (corient == 'x') {
 		    Vert[curlayer] = 1;
 		    locpitch = step / oscale;
