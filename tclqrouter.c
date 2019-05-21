@@ -141,6 +141,12 @@ static int qrouter_print(
 static int qrouter_quit(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_pitchx(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_pitchy(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
 
 static cmdstruct qrouter_commands[] =
 {
@@ -161,6 +167,8 @@ static cmdstruct qrouter_commands[] =
    {"obstruction", qrouter_obs},
    {"ignore", qrouter_ignore},
    {"priority", qrouter_priority},
+   {"pitchx", qrouter_pitchx},
+   {"pitchy", qrouter_pitchy},
    {"via", qrouter_via},
    {"resolution", qrouter_resolution},
    {"congested", qrouter_congested},
@@ -1602,7 +1610,7 @@ qrouter_readlef(ClientData clientData, Tcl_Interp *interp,
     LEFfile = Tcl_GetString(objv[1]);
 
     mscale = LefRead(LEFfile);
-    if (Scales.mscale < mscale) Scales.mscale = mscale;
+    update_mscale(mscale);
  
     for (i = 0; i < Num_layers; i++) {
 
@@ -2984,6 +2992,96 @@ qrouter_print(ClientData clientData, Tcl_Interp *interp,
             print_gate(gate);
     }
 
+    return QrouterTagCallback(interp, objc, objv);
+}
+
+/*------------------------------------------------------*/
+/* Command "pitchx"					*/
+/*							*/
+/* Set the base pitch for vertical routing layers.	*/
+/* Values larger than current value will be ignored.	*/
+/* Without an argument, current value is returned.	*/
+/*							*/
+/* Options:						*/
+/*							*/
+/*	pitchx [<value>]				*/
+/*------------------------------------------------------*/
+
+static int
+qrouter_pitchx(ClientData clientData, Tcl_Interp *interp,
+               int objc, Tcl_Obj *CONST objv[])
+{
+    int result;
+    double value;
+
+    if (objc == 1) {
+	Tcl_SetObjResult(interp, Tcl_NewDoubleObj(PitchX));
+    }
+    else if (objc == 2) {
+	result = Tcl_GetDoubleFromObj(interp, objv[1], &value);
+	if (result != TCL_OK) return result;
+	if (value <= 0.0) {
+	    Tcl_SetResult(interp, "PitchX value has to be a positive value"
+	                  "; ignored", NULL);
+	    return TCL_ERROR;
+	}
+	else if ((PitchX > 0.0) && (value > PitchX)) {
+	    Tcl_SetResult(interp, "PitchX is larger than current value"
+	                  "; ignored", NULL);
+        }
+	else {
+	    PitchX = value;
+	}
+    }
+    else {
+	Tcl_WrongNumArgs(interp, 1, objv, "option ?arg?");
+	return TCL_ERROR;
+    }
+    return QrouterTagCallback(interp, objc, objv);
+}
+
+/*------------------------------------------------------*/
+/* Command "pitchy"					*/
+/*							*/
+/* Set the base pitch for horizontal routing layers.	*/
+/* Values larger than current value will be ignored.	*/
+/* Without an argument, current value is returned.	*/
+/*							*/
+/* Options:						*/
+/*							*/
+/*	pitchy [<value>]				*/
+/*------------------------------------------------------*/
+
+static int
+qrouter_pitchy(ClientData clientData, Tcl_Interp *interp,
+               int objc, Tcl_Obj *CONST objv[])
+{
+    int result;
+    double value;
+
+    if (objc == 1) {
+	Tcl_SetObjResult(interp, Tcl_NewDoubleObj(PitchY));
+    }
+    else if (objc == 2) {
+	result = Tcl_GetDoubleFromObj(interp, objv[1], &value);
+	if (result != TCL_OK) return result;
+	if (value <= 0.0) {
+	    Tcl_SetResult(interp, "PitchY value has to be a positive value"
+	                  "; ignored", NULL);
+	    return TCL_ERROR;
+	}
+	else if ((PitchY > 0.0) && (value > PitchY)) {
+	    Tcl_SetResult(interp, "PitchY is larger than current value"
+	                  "; ignored", NULL);
+        }
+	else {
+	    PitchY = value;
+	}
+    }
+    else {
+	Tcl_WrongNumArgs(interp, 1, objv, "option ?arg?");
+	return TCL_ERROR;
+    }
     return QrouterTagCallback(interp, objc, objv);
 }
 

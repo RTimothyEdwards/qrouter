@@ -70,6 +70,33 @@ char *delayfilename = NULL;
 ScaleRec Scales;	// record of input and output scales
 
 /*--------------------------------------------------------------*/
+/* Upate the output scale factor.  It has to be a valid DEF	*/
+/* scale factor and it has to be a multiple of the given scale	*/
+/* factor.							*/
+/*--------------------------------------------------------------*/
+
+void
+update_mscale(int mscale)
+{
+    static int valid_mscales[] = {100, 200, 1000, 2000, 10000, 20000};
+    int nscales = sizeof(valid_mscales) / sizeof(valid_mscales[0]);
+    int mscale2, i;
+
+    if ((Scales.mscale % mscale) != 0) {
+	// Check valid scale values;  if none is appropriate, don't update
+	for (i = 0; i < nscales; i++) {
+	    mscale2 = valid_mscales[i];
+	    if (mscale2 <= Scales.mscale) continue;
+	    if ((mscale2 % mscale) == 0) {
+		Scales.mscale = mscale2;
+		break;
+	    }
+	}
+    }
+}
+
+
+/*--------------------------------------------------------------*/
 /* Check track pitch and set the number of channels (may be	*/
 /* called from DefRead)						*/
 /*--------------------------------------------------------------*/
@@ -382,8 +409,6 @@ runqrouter(int argc, char *argv[])
 	 char *layername = LefGetRouteName(i);
 
 	 check_variable_pitch(i, &hnum, &vnum);
-	 if (vnum > 1 && hnum == 1) hnum++;	// see note in node.c
-	 if (hnum > 1 && vnum == 1) vnum++;
 		
 	 if (layername != NULL) {
 	    pitch = (o == 1) ? PitchY : PitchX,
