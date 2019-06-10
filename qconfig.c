@@ -63,6 +63,25 @@ char    *ViaYX[MAX_LAYERS];
 char    *ViaYY[MAX_LAYERS];
 
 /*--------------------------------------------------------------*/
+/* init_config ---						*/
+/*								*/
+/* Initialize arrays						*/
+/*--------------------------------------------------------------*/
+
+void
+init_config()
+{
+    int i;
+
+    for (i = 0; i < MAX_LAYERS; i++) {
+	ViaXX[i] = NULL;
+	ViaXY[i] = NULL;
+	ViaYX[i] = NULL;
+	ViaYY[i] = NULL;
+    }
+}
+
+/*--------------------------------------------------------------*/
 /* post_config ---						*/
 /*								*/
 /* Resolve PitchX and PitchY, which are the minimum pitches	*/

@@ -427,7 +427,7 @@ Copyright (C) 2012 Free Software Foundation, Inc.
 This config.status script is free software; the Free Software Foundation
 gives unlimited permission to copy, distribute and modify it."
 
-ac_pwd='/home/tim/gitsrc/qrouter-1.4'
+ac_pwd='/home/tim/gitsrc/qrouter'
 srcdir='.'
 INSTALL='/bin/install -c'
 test -n "$AWK" || AWK=awk
@@ -625,7 +625,7 @@ S["CPPFLAGS"]=" -m64 -fPIC"
 S["LDFLAGS"]=""
 S["CFLAGS"]="-g -O2"
 S["CC"]="gcc"
-S["REVISION"]="7"
+S["REVISION"]="49"
 S["VERSION"]="1.4"
 S["target_os"]="linux-gnu"
 S["target_vendor"]="unknown"
@@ -649,7 +649,7 @@ S["ECHO_C"]=""
 S["DEFS"]="-DPACKAGE_NAME=\\\"\\\" -DPACKAGE_TARNAME=\\\"\\\" -DPACKAGE_VERSION=\\\"\\\" -DPACKAGE_STRING=\\\"\\\" -DPACKAGE_BUGREPORT=\\\"\\\" -DPACKAGE_URL=\\\"\\\" -DSTDC_HEADERS=1"\
 " -DHAVE_SETENV=1 -DHAVE_PUTENV=1 -DHAVE_VA_COPY=1 -DHAVE___VA_COPY=1 -DHAVE_LIBXT=1 -DHAVE_SYS_TYPES_H=1 -DHAVE_SYS_STAT_H=1 -DHAVE_STDLIB_H=1 -DHAV"\
 "E_STRING_H=1 -DHAVE_MEMORY_H=1 -DHAVE_STRINGS_H=1 -DHAVE_INTTYPES_H=1 -DHAVE_STDINT_H=1 -DHAVE_UNISTD_H=1 -DHAVE_SYS_MMAN_H=1 -DTCL_QROUTER=1 -DLINU"\
-"X=1 -DSYSV=1 -DVERSION=\\\"1.4\\\" -DREVISION=\\\"7\\\""
+"X=1 -DSYSV=1 -DVERSION=\\\"1.4\\\" -DREVISION=\\\"49\\\""
 S["mandir"]="${datarootdir}/man"
 S["localedir"]="${datarootdir}/locale"
 S["libdir"]="${exec_prefix}/lib"

@@ -628,6 +628,7 @@ qrouter_start(ClientData clientData, Tcl_Interp *interp,
 	argv[argc++] = strdup(Tcl_GetString(objv[i]));
     }
 
+    init_config();
     result = runqrouter(argc, argv);
     if ((result == 0) && (batchmode == 0)) GUI_init(interp);
 

@@ -48,6 +48,7 @@ extern char    *ViaYY[MAX_LAYERS];	// Top and bottom vertical
 
 int  read_config(FILE *configfileptr, int is_info);
 void post_config(u_char noprint);
+void init_config();
 
 #define QCONFIG_H
 #endif 
