@@ -2087,6 +2087,17 @@ DefRead(char *inName, float *retscale)
 		if (!strcmp(token, "LAYER")) {
 		    curlayer = LefReadLayer(f, FALSE);
 		}
+		if (curlayer < 0) {
+		    LefError(DEF_ERROR, "Failed to read layer; cannot parse TRACKS.");
+		    LefEndStatement(f);
+		    break;
+		}
+		else if (curlayer >= Num_layers) {
+		    LefError(DEF_WARNING, "Ignoring TRACKS above number of "
+				"specified route layers.");
+		    LefEndStatement(f);
+		    break;
+		}
 		if (Tracks && (Tracks[curlayer] != NULL)) {
 		    LefError(DEF_ERROR, "Only one TRACKS line per layer allowed; "
 				"last one is used.");

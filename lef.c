@@ -865,7 +865,10 @@ LefGetXYViaWidth(int base, int layer, int dir, int orient)
 	    viatable = ViaYY;
 	    break;
     }
-    lefl = LefFindLayer(*(viatable + base));
+    if (*viatable == NULL)
+	lefl = NULL;
+    else
+	lefl = LefFindLayer(*(viatable + base));
 
     /* The routine LefAssignLayerVias() should assign all Via** types.	*/
     /* Below are fallback assignments.					*/
