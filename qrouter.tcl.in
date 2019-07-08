@@ -94,7 +94,7 @@ proc qrouter::write_congested {filename} {
 # Standard routing script
 #------------------------------------------------------
 
-proc qrouter::standard_route {{filename ""} {doquit true}} {
+proc qrouter::standard_route {{filename ""} {doquit true} {nocleanup false}} {
     puts stdout "*** Running stage1 routing with defaults"
     # Pull root name from filename
     set rootname [file root $filename]
@@ -138,7 +138,9 @@ proc qrouter::standard_route {{filename ""} {doquit true}} {
 
     # There is no point in running a cleanup stage if there are lots of
     # unrouted nets.
-    if {$result < 10} {
+    if {$nocleanup == true} {
+	puts stdout "*** Cleanup stage (stage3) bypassed"
+    } elseif {$result < 10} {
 	puts stdout "*** Running stage3 routing with defaults, 1st round"
 	set result [stage3]
 	if {$result > 0} {
