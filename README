@@ -116,6 +116,8 @@ the standard compile and install sequence:
 	make
 	make install
 
+For FreeBSD, use 'gmake' instead of 'make'.
+
 Options to configure:
 
 	--prefix=<prefix>
