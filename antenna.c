@@ -20,6 +20,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <regex.h>
+#include <assert.h>
 
 /* This entire file is dependent on the Tcl/Tk version */
 #ifdef TCL_QROUTER
@@ -561,7 +562,7 @@ get_route_area_forward_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
 	    /* antenna area forward and reverse from that segment.	*/
 
 	    rt2 = rt->end.route;
-	    if (rt2 == NULL) return;  /* This should not happen */
+            assert( rt2 != NULL ) ;
 
 	    for (rseg = rt2->segments; rseg; rseg = rseg->next) {
 		if (rseg->segtype & ST_WIRE) {
@@ -612,7 +613,7 @@ get_route_area_forward_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
 		    }
 		}
 	    }
-	    if (rseg == NULL) return;  /* This should not happen */
+            assert( rseg != NULL ) ;
 
 	    if (rseg->next != NULL)
 	        area += get_route_area_forward_fromseg(net, rt2, rseg->next,
