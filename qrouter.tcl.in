@@ -111,8 +111,9 @@ proc qrouter::standard_route {{filename ""} {doquit true} {nocleanup false}} {
 	    if {!$result} {break}
 	    if {$result > $lastresult} {
 		puts -nonewline stdout "*** Running stage2 routing"
-		puts stdout " with options mask none, effort 20"
-		set result [stage2 mask none effort 20]
+		set tempmsize [expr $msize + 80]
+		puts stdout " with options mask $tempmsize, effort 20"
+		set result [stage2 mask $tempmsize effort 20]
 		if {!$result} {break}
 		if {$result < 5} {
 		    puts -nonewline stdout "*** Running stage2 routing"
@@ -124,16 +125,17 @@ proc qrouter::standard_route {{filename ""} {doquit true} {nocleanup false}} {
 	    incr msize 10
 	}
     }
-    # Attempt a couple of runs at "mask none" if not solved yet
+    # Attempt a few runs at "mask none" if not solved yet
     if {$result > 0} {
-	puts -nonewline stdout "*** Running stage2 routing"
-	puts stdout " with options mask none, effort 30"
-	set result [stage2 mask none effort 30]
-    }
-    if {$result > 0} {
-	puts -nonewline stdout "*** Running stage2 routing"
-	puts stdout " with options mask none, effort 40"
-	set result [stage2 mask none effort 40]
+	set esize 20
+	while {$esize <= 100} {
+	    puts -nonewline stdout "*** Running stage2 routing"
+	    puts stdout " with options mask none, effort $esize"
+	    set result [stage2 mask none effort $esize]
+
+	    if {!$result} {break}
+	    incr esize 20
+	}
     }
 
     # There is no point in running a cleanup stage if there are lots of

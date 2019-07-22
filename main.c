@@ -31,7 +31,8 @@ main(int argc, char *argv[])
     if (result < 5)
 	dosecondstage(0, FALSE, FALSE, (u_int)100);
     write_def(NULL);
-    write_delays((delayfilename == NULL) ? "stdout" : delayfilename);
+    /* write_delays() cannot work in a non-Tcl build */
+    // write_delays((delayfilename == NULL) ? "stdout" : delayfilename);
     return 0;
 }
 
