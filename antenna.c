@@ -55,6 +55,42 @@ struct antennainfo_ {
 
 ANTENNAINFO AntennaList;
 
+typedef struct annotateinfo_  *ANNOTATEINFO;
+
+struct annotateinfo_ {
+    ANNOTATEINFO next;
+    NET net;
+    char *instance;
+    char *pin;
+    int flag;		/* Flag for checking output status	*/
+};
+
+ANNOTATEINFO AnnotateList = NULL;
+
+#define ANNO_INIT 0
+#define ANNO_OUTPUT 1
+
+/*----------------------------------------------------------------------*/
+/* Report connection of a fixed antenna violation, given the net.	*/
+/*----------------------------------------------------------------------*/
+
+char *get_annotate_info(NET net, char **pinptr)
+{
+    ANNOTATEINFO annotate;
+
+    for (annotate = AnnotateList; annotate; annotate = annotate->next) {
+	if (annotate->net->netnum == net->netnum) {
+	    if (annotate->flag == ANNO_INIT) {
+		annotate->flag = ANNO_OUTPUT;	    /* Mark as having been output */
+		*pinptr = annotate->pin;
+		return annotate->instance;
+	    }
+	}
+    }
+    *pinptr = NULL;
+    return NULL;
+}
+
 /*--------------------------------------------------------------*/
 /* Regular expression matching of the given string in		*/
 /* "antennacell" to the string "strtest".  If the regular	*/
@@ -1252,8 +1288,20 @@ resolve_antenna(char *antennacell, u_char do_fix)
     if ((FixedList != NULL) || (BadList != NULL))
 	fout = fopen("antenna.out", "w");
 
+    /* Clear any existing list of instance connections (annotations) */
+
+    if (AnnotateList) {
+	ANNOTATEINFO nextannotate;
+	while (AnnotateList != NULL) {
+	    nextannotate = AnnotateList->next;
+	    free(AnnotateList);
+	    AnnotateList = nextannotate;
+	}
+    }
+
     if (FixedList != NULL) {
 	ROUTE rt;
+	ANNOTATEINFO newannotate;
 	fprintf(fout, "Revised netlist: New antenna anchor connections\n");
 
 	for (nextviolation = FixedList; nextviolation;
@@ -1265,6 +1313,16 @@ resolve_antenna(char *antennacell, u_char do_fix)
 	    fprintf(fout, "Net=%s Instance=%s Cell=%s Pin=%s\n",
 			nextviolation->net->netname, g->gatename,
 			g->gatetype->gatename, g->gatetype->node[i]);
+
+	    // Create an annotation entry for this fixed violation
+
+	    newannotate = (ANNOTATEINFO)malloc(sizeof(struct annotateinfo_));
+	    newannotate->net = nextviolation->net;
+	    newannotate->instance = g->gatename;
+	    newannotate->pin = g->gatetype->node[i];
+	    newannotate->flag = ANNO_INIT;
+	    newannotate->next = AnnotateList;
+	    AnnotateList = newannotate;
 	}
 	fprintf(fout, "\n");
     }
@@ -1291,10 +1349,12 @@ resolve_antenna(char *antennacell, u_char do_fix)
 
     /* Free up the violation lists */
 
-    while (FixedList != NULL) {
-	nextviolation = FixedList->next;
-	free(FixedList);
-	FixedList = nextviolation;
+    if (FixedList != NULL) {
+	while (FixedList != NULL) {
+	    nextviolation = FixedList->next;
+	    free(FixedList);
+	    FixedList = nextviolation;
+	}
     }
     while (BadList != NULL) {
 	nextviolation = BadList->next;

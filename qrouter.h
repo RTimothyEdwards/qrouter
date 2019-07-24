@@ -500,6 +500,8 @@ int    runqrouter(int argc, char *argv[]);
 void   remove_failed();
 void   apply_drc_blocks(int, double, double);
 void   remove_top_route(NET net);
+char  *get_annotate_info(NET net, char **pinptr);
+
 
 int    read_def(char *filename);
 
