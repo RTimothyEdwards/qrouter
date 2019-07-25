@@ -2634,11 +2634,13 @@ static void emit_routes(char *filename, double oscale, int iscale)
 	  if ((lptr = strchr(line, ';')) != NULL) {
 	     *lptr = '\n';
 	     *(lptr + 1) = '\0';
+#ifdef TCL_QROUTER
 	     net = DefFindNet(netname);
 	     while ((instname = get_annotate_info(net, &pinname)) != NULL) {
 		 /* Output antenna connections that were added to the net */
 		 fprintf(Cmd, "  ( %s %s )\n", instname, pinname);
 	     }
+#endif
 	     break;
 	  }
 	  else {
@@ -2651,11 +2653,13 @@ static void emit_routes(char *filename, double oscale, int iscale)
 		fputs(line, Cmd);
 	     }
 	     else if (*lptr == '+') {
+#ifdef TCL_QROUTER
 		net = DefFindNet(netname);
 		while ((instname = get_annotate_info(net, &pinname)) != NULL) {
 		    /* Output antenna connections that were added to the net */
 		    fprintf(Cmd, "  ( %s %s )\n", instname, pinname);
 		}
+#endif
 		lptr++;
                 while (isspace(*lptr)) lptr++;
 		if (!strncmp(lptr, "ROUTED", 6)) {
