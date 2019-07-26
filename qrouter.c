@@ -82,6 +82,8 @@ update_mscale(int mscale)
     int nscales = sizeof(valid_mscales) / sizeof(valid_mscales[0]);
     int mscale2, i;
 
+    if (mscale == 0) return;
+
     if ((Scales.mscale % mscale) != 0) {
 	// Check valid scale values;  if none is appropriate, don't update
 	for (i = 0; i < nscales; i++) {
