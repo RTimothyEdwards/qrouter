@@ -63,8 +63,9 @@ typedef int (*__compar_fn_t)(const void*, const void*);
 // define possible gate orientations
 
 #define MNONE	0
-#define MX	1
-#define MY	2
+#define MX	1   // flipped in X
+#define MY	2   // flipped in Y
+#define R90	4   // rotated clockwise 90 degrees
 
 // define search directions
 
