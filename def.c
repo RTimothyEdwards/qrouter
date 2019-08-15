@@ -998,7 +998,7 @@ DefReadLocation(gate, f, oscale)
     int keyword;
     char *token;
     float x, y;
-    char mxflag, myflag;
+    char mxflag, myflag, r90flag;
 
     static char *orientations[] = {
 	"N", "S", "E", "W", "FN", "FS", "FE", "FW"
@@ -1021,7 +1021,7 @@ DefReadLocation(gate, f, oscale)
 	return -1;
     }
 
-    mxflag = myflag = (char)0;
+    mxflag = myflag = r90flag = (char)0;
 
     switch (keyword)
     {
@@ -1038,10 +1038,20 @@ DefReadLocation(gate, f, oscale)
 	    myflag = 1;
 	    break;
 	case DEF_EAST:
+	    r90flag = 1;
+	    break;
 	case DEF_WEST:
+	    r90flag = 1;
+	    mxflag = 1;
+	    myflag = 1;
+	    break;
 	case DEF_FLIPPED_EAST:
+	    r90flag = 1;
+	    mxflag = 1;
+	    break;
 	case DEF_FLIPPED_WEST:
-	    LefError(DEF_ERROR, "Error:  Cannot handle 90-degree rotated components!\n");
+	    r90flag = 1;
+	    myflag = 1;
 	    break;
     }
 
@@ -1051,6 +1061,7 @@ DefReadLocation(gate, f, oscale)
 	gate->orient = MNONE;
 	if (mxflag) gate->orient |= MX;
 	if (myflag) gate->orient |= MY;
+	if (r90flag) gate->orient |= R90;
     }
     return 0;
 
@@ -1787,6 +1798,18 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 			    drect->y2 -= gateginfo->placedY;
 
 			    // handle rotations and orientations here
+			    if (gate->orient & R90) {
+				tmp = drect->y1;
+				drect->y1 = -drect->x1;
+				drect->y1 += gateginfo->width;
+				drect->x1 = tmp;
+
+				tmp = drect->y2;
+				drect->y2 = -drect->x2;
+				drect->y2 += gateginfo->width;
+				drect->x2 = tmp;
+			    }
+			    
 			    if (gate->orient & MX) {
 				tmp = drect->x1;
 				drect->x1 = -drect->x2;
@@ -1830,6 +1853,18 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 			drect->y2 -= gateginfo->placedY;
 
 			// handle rotations and orientations here
+			if (gate->orient & R90) {
+			    tmp = drect->y1;
+			    drect->y1 = -drect->x1;
+			    drect->y1 += gateginfo->width;
+			    drect->x1 = tmp;
+
+			    tmp = drect->y2;
+			    drect->y2 = -drect->x2;
+			    drect->y2 += gateginfo->width;
+			    drect->x2 = tmp;
+			}
+			    
 			if (gate->orient & MX) {
 			    tmp = drect->x1;
 			    drect->x1 = -drect->x2;
