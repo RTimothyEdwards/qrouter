@@ -426,7 +426,8 @@ void print_net(NET net) {
 
     Fprintf(stdout, "Net %d: %s", net->netnum, net->netname);
     for (node = net->netnodes; node != NULL; node = node->next) {
-        Fprintf(stdout, "\n  Node %d: \n    Taps: ", node->nodenum);
+        Fprintf(stdout, "\n  Node %d (%s): \n    Taps: ",
+		node->nodenum, print_node_name(node));
         for (tap = node->taps, i = 0, first = TRUE;
              tap != NULL;
              tap = tap->next, i = (i + 1) % 4, first = FALSE) {
@@ -605,6 +606,262 @@ void print_nlnets( char *filename )
     fflush(o);
 
 } /* print_nlnets() */
+
+/*--------------------------------------------------------------*/
+/* print_grid_information()					*/
+/*								*/
+/*  For help in debugging routing problems, print information	*/
+/*  about blockages marked at a specific grid position.		*/
+/*--------------------------------------------------------------*/
+
+void
+print_grid_information(int gridx, int gridy, int layer)
+{
+    u_int obsval;
+    int i, apos;
+    int netidx;
+    NET net;
+    NODE node;
+    NODEINFO lnode;
+
+    apos = OGRID(gridx, gridy);
+    obsval = Obs[layer][apos];
+
+    lnode = Nodeinfo[layer][apos];
+    if (lnode != NULL) {
+	node = lnode->nodesav;
+	if (node != NULL) {
+	    Fprintf(stdout, "Grid position %d %d is an active node tap.\n",
+		    gridx, gridy);
+
+	    if (node->netname)
+		Fprintf(stdout, "Node at grid position is %s and belongs "
+			"to net \"%s\".\n", print_node_name(node), node->netname);
+	    else
+		Fprintf(stdout, "Node at grid position is %s and is not routed.\n",
+			print_node_name(node));
+	    if (lnode->nodeloc == NULL) {
+		Fprintf(stdout, "Position temporarily disabled to avoid "
+			"blocking the tap.\n");
+	    }
+	}
+	else
+	    Fprintf(stdout, "Grid position %d %d is a disabled node tap.\n",
+		    gridx, gridy);
+
+	if (lnode->flags & NI_VIA_X)
+	    Fprintf(stdout, "Via may be placed horizontally on tap.\n");
+	if (lnode->flags & NI_VIA_Y)
+	    Fprintf(stdout, "Via may be placed vertically on tap.\n");
+	if (lnode->flags & NI_NO_VIAX)
+	    Fprintf(stdout, "Horizontal vias are prohibited on tap.\n");
+	if (lnode->flags & NI_NO_VIAY)
+	    Fprintf(stdout, "Vertical vias are prohibited on tap.\n");
+	if (lnode->flags & NI_OFFSET_EW) {
+	    if (lnode->offset > 0.0)
+		Fprintf(stdout, "Tap connection offset to the east %gum\n",
+			    lnode->offset);
+	    else
+		Fprintf(stdout, "Tap connection offset to the west %gum\n",
+			    -lnode->offset);
+	}
+	if (lnode->flags & NI_OFFSET_NS) {
+	    if (lnode->offset > 0.0)
+		Fprintf(stdout, "Tap connection offset to the north %gum\n",
+			    lnode->offset);
+	    else
+		Fprintf(stdout, "Tap connection offset to the south %gum\n",
+			    -lnode->offset);
+	}
+	if (lnode->flags & NI_STUB_EW) {
+	    if (lnode->stub > 0.0)
+		Fprintf(stdout, "Stub connection to the east length %gum\n",
+			    lnode->stub);
+	    else
+		Fprintf(stdout, "Stub connection to the west length %gum\n",
+			    -lnode->stub);
+	}
+	if (lnode->flags & NI_STUB_NS) {
+	    if (lnode->stub > 0.0)
+		Fprintf(stdout, "Stub connection to the north length %gum\n",
+			    lnode->stub);
+	    else
+		Fprintf(stdout, "Stub connection to the south length %gum\n",
+			    -lnode->stub);
+	}
+	if ((lnode->flags == 0) || (lnode->flags == NI_VIA_X | NI_VIA_Y))
+	    Fprintf(stdout, "Node is cleanly routable with no restrictions.\n");
+    }
+    else
+	Fprintf(stdout, "Grid position is not associated with a node tap.\n");
+
+    if (obsval & OFFSET_TAP)
+	Fprintf(stdout, "Grid position requires a route position offset.\n");
+    if (obsval & STUBROUTE)
+	Fprintf(stdout, "Grid position requires a stub route to reach tap.\n");
+    if (obsval & ROUTED_NET)
+	Fprintf(stdout, "Grid position is assigned to routed net.\n");
+    if (obsval & BLOCKED_N)
+	Fprintf(stdout, "Grid position cannot be reached from the north.\n");
+    if (obsval & BLOCKED_S)
+	Fprintf(stdout, "Grid position cannot be reached from the south.\n");
+    if (obsval & BLOCKED_E)
+	Fprintf(stdout, "Grid position cannot be reached from the east.\n");
+    if (obsval & BLOCKED_W)
+	Fprintf(stdout, "Grid position cannot be reached from the west.\n");
+    if (obsval & BLOCKED_U)
+	Fprintf(stdout, "Grid position cannot be reached from above.\n");
+    if (obsval & BLOCKED_D)
+	Fprintf(stdout, "Grid position cannot be reached from below.\n");
+    if ((obsval & (OBSTRUCT_MASK | NO_NET)) == (OBSTRUCT_MASK | NO_NET))
+	Fprintf(stdout, "Grid position is completely obstructed\n");
+    else if (obsval & NO_NET) {
+	if ((obsval & OBSTRUCT_MASK != 0) && (lnode == NULL)) {
+	    Fprintf(stdout, "Error:  Position marked as node obstruction has "
+		    "no node assigned!\n");
+	}
+	else if (lnode != NULL) {
+	    if (obsval & OBSTRUCT_N)
+		Fprintf(stdout, "Grid position is obstructed to the north at %gum.\n",
+			lnode->offset);
+	    if (obsval & OBSTRUCT_S)
+		Fprintf(stdout, "Grid position is obstructed to the south at %gum.\n",
+			lnode->offset);
+	    if (obsval & OBSTRUCT_E)
+		Fprintf(stdout, "Grid position is obstructed to the east at %gum.\n",
+			lnode->offset);
+	    if (obsval & OBSTRUCT_W)
+		Fprintf(stdout, "Grid position is obstructed to the west at %gum.\n",
+			lnode->offset);
+	}
+    }
+    if ((obsval & DRC_BLOCKAGE) == DRC_BLOCKAGE) {
+	Fprintf(stdout, "Grid position disabled by neighboring route to prevent"
+		" DRC violations.\n");
+    }
+    if (((obsval & ROUTED_NET_MASK) != 0) && ((obsval & NO_NET) == 0)) {
+	netidx = obsval & NETNUM_MASK;
+	for (i = 0; i < Numnets; i++) {
+	    net = Nlnets[i];
+	    if (net->netnum == netidx) break;
+	}
+
+	if ((netidx > MAX_NETNUMS) || (i >= Numnets)) {
+	    Fprintf(stdout, "Error: Grid position marked with a bad net number.\n");
+	}
+	else {
+	    net = Nlnets[i];
+	    Fprintf(stdout, "Grid position assigned to routed net \"%s\".\n",
+		    net->netname);
+	}
+    }
+}
+
+/*--------------------------------------------------------------*/
+/* print_instance_information()					*/
+/*								*/
+/*  For help in debugging routing problems, print information	*/
+/*  about an instance.						*/
+/*--------------------------------------------------------------*/
+
+void
+print_instance_information(char *instname)
+{
+    NET net;
+    GATE gate;
+
+    for (gate = Nlgates; gate; gate = gate->next) {
+	if (!strcmp(gate->gatename, instname)) {
+	    print_gate(gate);
+	    break;
+	}
+    }
+}
+
+/*--------------------------------------------------------------*/
+/* print_node_information()					*/
+/*								*/
+/*  For help in debugging routing problems, print information	*/
+/*  about a node (instance and pin).				*/
+/*--------------------------------------------------------------*/
+
+void
+print_node_information(char *nodename)
+{
+    int i, j, k, l, apos;
+    NET net;
+    NODE node;
+    NODEINFO lnode;
+    GATE gate;
+    char *pptr, *instname, *pinname;
+
+    pptr = strchr(nodename, '/');
+    if (pptr == NULL) {
+	Fprintf(stderr, "Node name is not in <instance>/<pin> format!\n");
+	return;
+    }
+    *pptr = '\0';
+    instname = nodename;
+    pinname = pptr + 1;
+
+    for (gate = Nlgates; gate; gate = gate->next) {
+	if (!strcmp(gate->gatename, instname)) {
+	    for (i = 0; i < gate->nodes; i++) {
+		if (!strcmp(gate->node[i], pinname)) {
+		    node = gate->noderec[i];
+		    Fprintf(stdout, "Instance name is %s\n", gate->gatename);
+		    if (gate->gatetype)
+		        Fprintf(stdout, "Gate type is %s\n", gate->gatetype->gatename);
+		    else
+		        Fprintf(stdout, "Node name is %s\n", print_node_name(node));
+		    Fprintf(stdout, "Net connecting to node is %s\n", node->netname);
+
+		    /* Find all grid positions that route to this node */
+		    Fprintf(stdout, "Grid positions assigned to node:\n");
+		    for (j = 0; j < NumChannelsX; j++) {
+			for (k = 0; k < NumChannelsY; k++) {
+			    for (l = 0; l < Pinlayers; l++) {
+				apos = OGRID(j, k);
+				lnode = Nodeinfo[l][apos];
+				if (lnode && lnode->nodesav == node) {
+				    Fprintf(stdout, "  (%g %g)um  x=%d y=%d layer=%d\n",
+					    Xlowerbound + j * PitchX,
+					    Ylowerbound + k * PitchY,
+					    j, k, l);
+				}
+			    }
+			}
+		    }
+		    break;
+		}
+	    }
+	    break;
+	}
+    }
+    *pptr = '/';
+}
+
+/*--------------------------------------------------------------*/
+/* print_net_information()					*/
+/*								*/
+/*  For help in debugging routing problems, print information	*/
+/*  about a net.						*/
+/*--------------------------------------------------------------*/
+
+void
+print_net_information(char *netname)
+{
+    int i;
+    NET net;
+
+    for (i = 0; i < Numnets; i++) {
+	net = Nlnets[i];
+	if (!strcmp(net->netname, netname)) {
+	    print_net(net);
+	    break;
+	}
+    }
+}
 
 /*--------------------------------------------------------------*/
 /* link_up_seg ---						*/

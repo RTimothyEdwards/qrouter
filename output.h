@@ -23,4 +23,10 @@ void   print_nlgates(char *filename);
 void   print_net(NET net);
 void   print_gate(GATE gate);
 
+/* Additional diagnostic routines */
+void   print_grid_information(int, int, int);
+void   print_instance_information(char *);
+void   print_node_information(char *);
+void   print_net_information(char *);
+
 #endif /* _OUTPUTINT_H */

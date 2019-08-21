@@ -2424,113 +2424,160 @@ qrouter_resolution(ClientData clientData, Tcl_Interp *interp,
 /*------------------------------------------------------*/
 /* Command "query"					*/
 /*							*/
-/* Print information about a specific grid point	*/
+/* Print information about a specific grid point,	*/
+/* instance, node, or net.				*/
 /*							*/
 /* Options:						*/
 /*							*/
-/*	query <x> <y> <layer> [index]			*/
+/*	query grid <ix> <iy> <layer>			*/
+/*	query position <dx> <dy> <layer>		*/
+/*	query instance <instance>			*/
+/*	query node <instance>/<pin>			*/
+/*	query net <name>				*/
 /*							*/
 /* <layer> may be either a layer name or integer index.	*/
-/* <x> and <y> should be given in microns, unless	*/
-/* "index" is passed as an argument, in which case <x>	*/
-/* and <y> are integer grid indexes.			*/
+/* <dx> and <dy> should be given in microns. <ix> and	*/
+/* <iy> are integer indexes.  All other arguments are	*/
+/* strings.						*/
 /*------------------------------------------------------*/
 
 static int
 qrouter_query(ClientData clientData, Tcl_Interp *interp,
                int objc, Tcl_Obj *CONST objv[])
 {
-    char *layername;
-    int result, layer;
+    char *layername, *instname, *netname, *pinname;
+    int idx, result, layer;
     int gridx, gridy;
     double dx, dy;
-    unsigned char is_index = 0;
+    unsigned char is_index;
 
-    if (objc == 5) {
-	if (!strcmp(Tcl_GetString(objv[4]), "index")) {
-	    is_index = 1;
-	    objc--;
-	}
-    }
-    
-    if (objc != 4) {
+    static char *subCmds[] = {
+	"grid", "position", "instance", "node", "net", NULL
+    };
+    enum SubIdx {
+	GridIdx, PosIdx, InstIdx, NodeIdx, NetIdx
+    };
+   
+    if (objc < 2) {
 	Fprintf(stderr, "Usage:\n");
-	Fprintf(stderr, "   query <gridx> <gridy> <layer> index\n");
-	Fprintf(stderr, "or\n");
-	Fprintf(stderr, "   query <x_microns> <y_microns> <layer>\n");
+	Fprintf(stderr, "   query position <x_microns> <y_microns> <layer>\n");
+	Fprintf(stderr, "   query grid <gridx> <gridy> <layer>\n");
+	Fprintf(stderr, "   query instance <inst_name>\n");
+	Fprintf(stderr, "   query node <inst_name>/<pin_name>\n");
+	Fprintf(stderr, "   query net <net_name>\n");
 	Tcl_WrongNumArgs(interp, 1, objv, "option ?arg?");
 	return TCL_ERROR;
     }
-
-    layername = Tcl_GetString(objv[3]);
-    layer = LefFindLayerNum(layername);
-    if (layer < 0) {
-	result = Tcl_GetIntFromObj(interp, objv[3], &layer);
-	if (result != TCL_OK) {
-	    Tcl_SetResult(interp, "No such layer name.\n", NULL);
-	    return result;
-	}
-    }
-    if (layer >= Num_layers) {
-	Tcl_SetResult(interp, "Bad layer number.\n", NULL);
+    else if ((result = Tcl_GetIndexFromObj(interp, objv[1],
+		(CONST84 char **)subCmds, "option", 0, &idx)) != TCL_OK)
 	return result;
-    }
 
-    if (is_index) {
-	result = Tcl_GetIntFromObj(interp, objv[1], &gridx);
-	if (result != TCL_OK) {
-	    Tcl_SetResult(interp, "Cannot parse grid X index\n", NULL);
-	    return result;
-	}
-	result = Tcl_GetIntFromObj(interp, objv[2], &gridy);
-	if (result != TCL_OK) {
-	    Tcl_SetResult(interp, "Cannot parse grid Y index\n", NULL);
-	    return result;
-	}
-	/* Translate gridx, gridy into dx, dy */
-	dx = (gridx * PitchX) + Xlowerbound;
-	dy = (gridy * PitchY) + Ylowerbound;
-    }
-    else {
-	result = Tcl_GetDoubleFromObj(interp, objv[1], &dx);
-	if (result != TCL_OK) {
-	    Tcl_SetResult(interp, "Cannot parse grid X position\n", NULL);
-	    return result;
-	}
-	result = Tcl_GetDoubleFromObj(interp, objv[2], &dy);
-	if (result != TCL_OK) {
-	    Tcl_SetResult(interp, "Cannot parse grid Y position\n", NULL);
-	    return result;
-	}
-	/* Translate dx, dy into gridx, gridy */
-	gridx = (int)((dx - Xlowerbound) / PitchX) - 1;
-	gridy = (int)((dy - Ylowerbound) / PitchY) - 1;
+    switch (idx) {
+	case GridIdx:
+	case PosIdx:
+	    if (objc != 5) {
+		Tcl_WrongNumArgs(interp, 1, objv, "option ?arg?");
+		return TCL_ERROR;
+	    }
+	    is_index = (idx == GridIdx) ? 1 : 0;
 
-	Fprintf(stdout, "Grid position index is (%d %d)\n", gridx, gridy);
-    }
-    if (gridx < 0) {
-	Tcl_SetResult(interp, "Grid X position must not be negative.\n", NULL);
-	return result;
-    }
-    if (gridy < 0) {
-	Tcl_SetResult(interp, "Grid Y position must not be negative.\n", NULL);
-	return result;
-    }
-    if (gridx >= NumChannelsX) {
-	Tcl_SetResult(interp, "Grid X position is larger than the number"
-		" of horizontal route tracks.\n", NULL);
-	return result;
-    }
-    if (gridy >= NumChannelsY) {
-	Tcl_SetResult(interp, "Grid Y position is larger than the number"
-		" of vertical route tracks.\n", NULL);
-	return result;
-    }
+	    layername = Tcl_GetString(objv[4]);
+	    layer = LefFindLayerNum(layername);
+	    if (layer < 0) {
+		result = Tcl_GetIntFromObj(interp, objv[4], &layer);
+		if (result != TCL_OK) {
+		    Tcl_SetResult(interp, "No such layer name.\n", NULL);
+		    return result;
+		}
+	    }
+	    if (layer >= Num_layers) {
+		Tcl_SetResult(interp, "Bad layer number.\n", NULL);
+		return result;
+	    }
+	    if (is_index) {
+		result = Tcl_GetIntFromObj(interp, objv[2], &gridx);
+		if (result != TCL_OK) {
+		    Tcl_SetResult(interp, "Cannot parse grid X index\n", NULL);
+		    return result;
+		}
+		result = Tcl_GetIntFromObj(interp, objv[3], &gridy);
+		if (result != TCL_OK) {
+		    Tcl_SetResult(interp, "Cannot parse grid Y index\n", NULL);
+		    return result;
+		}
+		/* Translate gridx, gridy into dx, dy */
+		dx = (gridx * PitchX) + Xlowerbound;
+		dy = (gridy * PitchY) + Ylowerbound;
+	    }
+	    else {
+		result = Tcl_GetDoubleFromObj(interp, objv[2], &dx);
+		if (result != TCL_OK) {
+		    Tcl_SetResult(interp, "Cannot parse grid X position\n", NULL);
+		    return result;
+		}
+		result = Tcl_GetDoubleFromObj(interp, objv[3], &dy);
+		if (result != TCL_OK) {
+		    Tcl_SetResult(interp, "Cannot parse grid Y position\n", NULL);
+	    	    return result;
+	    	}
+	    	/* Translate dx, dy into gridx, gridy */
+	    	gridx = (int)((dx - Xlowerbound) / PitchX) - 1;
+	    	gridy = (int)((dy - Ylowerbound) / PitchY) - 1;
 
-    Fprintf(stdout, "Querying grid position (%g %g) index (%d %d) layer %d:\n",
-	    dx, dy, gridx, gridy, layer);
-    print_information(gridx, gridy, layer);
+	    Fprintf(stdout, "Grid position index is (%d %d)\n", gridx, gridy);
+	    }
+	    if (gridx < 0) {
+	    	Tcl_SetResult(interp, "Grid X position must not be negative.\n",
+			    NULL);
+	    	return result;
+	    }
+	    if (gridy < 0) {
+	    	Tcl_SetResult(interp, "Grid Y position must not be negative.\n",
+			    NULL);
+	    	return result;
+	    }
+	    if (gridx >= NumChannelsX) {
+	    	Tcl_SetResult(interp, "Grid X position is larger than the number"
+	    		" of horizontal route tracks.\n", NULL);
+	    	return result;
+	    }
+	    if (gridy >= NumChannelsY) {
+		Tcl_SetResult(interp, "Grid Y position is larger than the number"
+			" of vertical route tracks.\n", NULL);
+		return result;
+	    }
+	    Fprintf(stdout, "Querying grid position (%g %g)um index (%d %d)"
+		    " layer %d:\n", dx, dy, gridx, gridy, layer);
+	    print_grid_information(gridx, gridy, layer);
+	    break;
 
+	case InstIdx:
+	    if (objc != 3) {
+		Tcl_WrongNumArgs(interp, 1, objv, "option ?arg?");
+		return TCL_ERROR;
+	    }
+	    instname = Tcl_GetString(objv[2]);
+	    print_instance_information(instname);
+	    break;
+
+	case NodeIdx:
+	    if (objc != 3) {
+		Tcl_WrongNumArgs(interp, 1, objv, "option ?arg?");
+		return TCL_ERROR;
+	    }
+	    instname = Tcl_GetString(objv[2]);
+	    print_node_information(instname);
+	    break;
+
+	case NetIdx:
+	    if (objc != 3) {
+		Tcl_WrongNumArgs(interp, 1, objv, "option ?arg?");
+		return TCL_ERROR;
+	    }
+	    netname = Tcl_GetString(objv[2]);
+	    print_net_information(netname);
+	    break;
+    }
     return QrouterTagCallback(interp, objc, objv);
 }
 
