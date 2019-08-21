@@ -81,6 +81,148 @@ FreeNodeinfo(int gridx, int gridy, int layer)
 }
 
 /*--------------------------------------------------------------*/
+/* print_information()						*/
+/*								*/
+/*  For help in debugging routing problems, print information	*/
+/*  about blockages marked at a specific grid position.		*/
+/*--------------------------------------------------------------*/
+
+void
+print_information(int gridx, int gridy, int layer)
+{
+    u_int obsval;
+    int i, apos;
+    int netidx;
+    NET net;
+    NODE node;
+    NODEINFO lnode;
+
+    apos = OGRID(gridx, gridy);
+    obsval = Obs[layer][apos];
+
+    lnode = Nodeinfo[layer][apos];
+    if (lnode != NULL) {
+	node = lnode->nodeloc;
+	if (node != NULL) {
+	    Fprintf(stdout, "Grid position %d %d is an active node tap.\n",
+		    gridx, gridy);
+
+	    Fprintf(stdout, "Node at grid position is %s and belongs to net \"%s\".\n",
+		    print_node_name(node), node->netname);
+	}
+	else
+	    Fprintf(stdout, "Grid position %d %d is a disabled node tap.\n",
+		    gridx, gridy);
+
+	if (lnode->flags & NI_VIA_X)
+	    Fprintf(stdout, "Via may be placed horizontally on tap.\n");
+	if (lnode->flags & NI_VIA_Y)
+	    Fprintf(stdout, "Via may be placed vertically on tap.\n");
+	if (lnode->flags & NI_NO_VIAX)
+	    Fprintf(stdout, "Horizontal vias are prohibited on tap.\n");
+	if (lnode->flags & NI_NO_VIAY)
+	    Fprintf(stdout, "Vertical vias are prohibited on tap.\n");
+	if (lnode->flags & NI_OFFSET_EW) {
+	    if (lnode->offset > 0.0)
+		Fprintf(stdout, "Tap connection offset to the east %gum\n",
+			    lnode->offset);
+	    else
+		Fprintf(stdout, "Tap connection offset to the west %gum\n",
+			    -lnode->offset);
+	}
+	if (lnode->flags & NI_OFFSET_NS) {
+	    if (lnode->offset > 0.0)
+		Fprintf(stdout, "Tap connection offset to the north %gum\n",
+			    lnode->offset);
+	    else
+		Fprintf(stdout, "Tap connection offset to the south %gum\n",
+			    -lnode->offset);
+	}
+	if (lnode->flags & NI_STUB_EW) {
+	    if (lnode->stub > 0.0)
+		Fprintf(stdout, "Stub connection to the east length %gum\n",
+			    lnode->stub);
+	    else
+		Fprintf(stdout, "Stub connection to the west length %gum\n",
+			    -lnode->stub);
+	}
+	if (lnode->flags & NI_STUB_NS) {
+	    if (lnode->stub > 0.0)
+		Fprintf(stdout, "Stub connection to the north length %gum\n",
+			    lnode->stub);
+	    else
+		Fprintf(stdout, "Stub connection to the south length %gum\n",
+			    -lnode->stub);
+	}
+	if ((lnode->flags == 0) || (lnode->flags == NI_VIA_X | NI_VIA_Y))
+	    Fprintf(stdout, "Node is cleanly routable with no restrictions.\n");
+    }
+    else
+	Fprintf(stdout, "Grid position is not associated with a node tap.\n");
+
+    if (obsval & OFFSET_TAP)
+	Fprintf(stdout, "Grid position requires a route position offset.\n");
+    if (obsval & STUBROUTE)
+	Fprintf(stdout, "Grid position requires a stub route to reach tap.\n");
+    if (obsval & ROUTED_NET)
+	Fprintf(stdout, "Grid position is assigned to routed net.\n");
+    if (obsval & BLOCKED_N)
+	Fprintf(stdout, "Grid position cannot be reached from the north.\n");
+    if (obsval & BLOCKED_S)
+	Fprintf(stdout, "Grid position cannot be reached from the south.\n");
+    if (obsval & BLOCKED_E)
+	Fprintf(stdout, "Grid position cannot be reached from the east.\n");
+    if (obsval & BLOCKED_W)
+	Fprintf(stdout, "Grid position cannot be reached from the west.\n");
+    if (obsval & BLOCKED_U)
+	Fprintf(stdout, "Grid position cannot be reached from above.\n");
+    if (obsval & BLOCKED_D)
+	Fprintf(stdout, "Grid position cannot be reached from below.\n");
+    if ((obsval & (OBSTRUCT_MASK | NO_NET)) == (OBSTRUCT_MASK | NO_NET))
+	Fprintf(stdout, "Grid position is completely obstructed\n");
+    else if (obsval & NO_NET) {
+	if ((obsval & OBSTRUCT_MASK != 0) && (lnode == NULL)) {
+	    Fprintf(stdout, "Error:  Position marked as node obstruction has "
+		    "no node assigned!\n");
+	}
+	else if (lnode != NULL) {
+	    if (obsval & OBSTRUCT_N)
+		Fprintf(stdout, "Grid position is obstructed to the north at %gum.\n",
+			lnode->offset);
+	    if (obsval & OBSTRUCT_S)
+		Fprintf(stdout, "Grid position is obstructed to the south at %gum.\n",
+			lnode->offset);
+	    if (obsval & OBSTRUCT_E)
+		Fprintf(stdout, "Grid position is obstructed to the east at %gum.\n",
+			lnode->offset);
+	    if (obsval & OBSTRUCT_W)
+		Fprintf(stdout, "Grid position is obstructed to the west at %gum.\n",
+			lnode->offset);
+	}
+    }
+    if ((obsval & DRC_BLOCKAGE) == DRC_BLOCKAGE) {
+	Fprintf(stdout, "Grid position disabled by neighboring route to prevent"
+		" DRC violations.\n");
+    }
+    if (((obsval & ROUTED_NET_MASK) != 0) && ((obsval & NO_NET) == 0)) {
+	netidx = obsval & NETNUM_MASK;
+	for (i = 0; i < Numnets; i++) {
+	    net = Nlnets[i];
+	    if (net->netnum == netidx) break;
+	}
+
+	if ((netidx > MAX_NETNUMS) || (i >= Numnets)) {
+	    Fprintf(stdout, "Error: Grid position marked with a bad net number.\n");
+	}
+	else {
+	    net = Nlnets[i];
+	    Fprintf(stdout, "Grid position assigned to routed net \"%s\".\n",
+		    net->netname);
+	}
+    }
+}
+
+/*--------------------------------------------------------------*/
 /* count_reachable_taps()					*/
 /*								*/
 /*  For each grid point in the layout, find if it corresponds	*/
@@ -383,6 +525,45 @@ count_reachable_taps()
 			print_node_name(node), node->netname);
 		Fprintf(stderr, "Qrouter will not be able to completely"
 			" route this net.\n");
+		if (Verbose > 1) {
+		    Fprintf(stderr, "Tap position blockage analysis:\n");
+
+		    /* Unreachable taps are the most common problem with    */
+		    /* new processes or buggy code, so make a detailed	    */
+		    /* report of blockages affecting routing for debugging. */
+
+		    for (ds = g->taps[i]; ds; ds = ds->next) {
+			unsigned char is_inside;
+
+			Fprintf(stderr, "Tap geometry (%g %g) to (%g %g):\n",
+				ds->x1, ds->y1, ds->x2, ds->y2);
+
+			gridx = (int)(((ds->x1 - 1) - Xlowerbound) / PitchX) - 1;
+			if (gridx < 0) gridx = 0;
+			while (1) {
+			    dx = (gridx * PitchX) + Xlowerbound;
+			    if (dx > (ds->x2 + 1) || gridx >= NumChannelsX) break;
+			    gridy = (int)(((ds->y1 - 1) - Ylowerbound) / PitchY) - 1;
+			    if (gridy < 0) gridy = 0;
+			    while (1) {
+				dy = (gridy * PitchY) + Ylowerbound;
+				if (dy > (ds->y2 + 1) || gridy >= NumChannelsY)
+				    break;
+
+				is_inside = (dx > ds->x1 && dx < ds->x2 &&
+					     dy > ds->y1 && dy < ds->y2) ? 1 : 0;
+
+				Fprintf(stderr, "Grid position (%d %d) at (%g %g) "
+					    "layer %d is %s tap geometry.\n",
+					    gridx, gridy, dx, dy, ds->layer,
+					    (is_inside == 1) ? "inside" : "outside");
+				print_information(gridx, gridy, ds->layer);
+				gridy++;
+			    }
+			    gridx++;
+			}
+		    }
+		}
 	    }
 	}
     }

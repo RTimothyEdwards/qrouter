@@ -123,6 +123,9 @@ static int qrouter_layers(
 static int qrouter_drc(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_query(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
 static int qrouter_passes(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
@@ -175,6 +178,7 @@ static cmdstruct qrouter_commands[] =
    {"layers", qrouter_layers},
    {"drc", qrouter_drc},
    {"passes", qrouter_passes},
+   {"query", qrouter_query},
    {"vdd", qrouter_vdd},
    {"gnd", qrouter_gnd},
    {"failing", qrouter_failing},
@@ -2414,6 +2418,119 @@ qrouter_resolution(ClientData clientData, Tcl_Interp *interp,
 	Tcl_WrongNumArgs(interp, 1, objv, "option ?arg?");
 	return TCL_ERROR;
     }
+    return QrouterTagCallback(interp, objc, objv);
+}
+
+/*------------------------------------------------------*/
+/* Command "query"					*/
+/*							*/
+/* Print information about a specific grid point	*/
+/*							*/
+/* Options:						*/
+/*							*/
+/*	query <x> <y> <layer> [index]			*/
+/*							*/
+/* <layer> may be either a layer name or integer index.	*/
+/* <x> and <y> should be given in microns, unless	*/
+/* "index" is passed as an argument, in which case <x>	*/
+/* and <y> are integer grid indexes.			*/
+/*------------------------------------------------------*/
+
+static int
+qrouter_query(ClientData clientData, Tcl_Interp *interp,
+               int objc, Tcl_Obj *CONST objv[])
+{
+    char *layername;
+    int result, layer;
+    int gridx, gridy;
+    double dx, dy;
+    unsigned char is_index = 0;
+
+    if (objc == 5) {
+	if (!strcmp(Tcl_GetString(objv[4]), "index")) {
+	    is_index = 1;
+	    objc--;
+	}
+    }
+    
+    if (objc != 4) {
+	Fprintf(stderr, "Usage:\n");
+	Fprintf(stderr, "   query <gridx> <gridy> <layer> index\n");
+	Fprintf(stderr, "or\n");
+	Fprintf(stderr, "   query <x_microns> <y_microns> <layer>\n");
+	Tcl_WrongNumArgs(interp, 1, objv, "option ?arg?");
+	return TCL_ERROR;
+    }
+
+    layername = Tcl_GetString(objv[3]);
+    layer = LefFindLayerNum(layername);
+    if (layer < 0) {
+	result = Tcl_GetIntFromObj(interp, objv[3], &layer);
+	if (result != TCL_OK) {
+	    Tcl_SetResult(interp, "No such layer name.\n", NULL);
+	    return result;
+	}
+    }
+    if (layer >= Num_layers) {
+	Tcl_SetResult(interp, "Bad layer number.\n", NULL);
+	return result;
+    }
+
+    if (is_index) {
+	result = Tcl_GetIntFromObj(interp, objv[1], &gridx);
+	if (result != TCL_OK) {
+	    Tcl_SetResult(interp, "Cannot parse grid X index\n", NULL);
+	    return result;
+	}
+	result = Tcl_GetIntFromObj(interp, objv[2], &gridy);
+	if (result != TCL_OK) {
+	    Tcl_SetResult(interp, "Cannot parse grid Y index\n", NULL);
+	    return result;
+	}
+	/* Translate gridx, gridy into dx, dy */
+	dx = (gridx * PitchX) + Xlowerbound;
+	dy = (gridy * PitchY) + Ylowerbound;
+    }
+    else {
+	result = Tcl_GetDoubleFromObj(interp, objv[1], &dx);
+	if (result != TCL_OK) {
+	    Tcl_SetResult(interp, "Cannot parse grid X position\n", NULL);
+	    return result;
+	}
+	result = Tcl_GetDoubleFromObj(interp, objv[2], &dy);
+	if (result != TCL_OK) {
+	    Tcl_SetResult(interp, "Cannot parse grid Y position\n", NULL);
+	    return result;
+	}
+	/* Translate dx, dy into gridx, gridy */
+	gridx = (int)((dx - Xlowerbound) / PitchX) - 1;
+	gridy = (int)((dy - Ylowerbound) / PitchY) - 1;
+
+	Fprintf(stdout, "Grid position index is (%d %d)\n", gridx, gridy);
+    }
+    if (gridx < 0) {
+	Tcl_SetResult(interp, "Grid X position must not be negative.\n", NULL);
+	return result;
+    }
+    if (gridy < 0) {
+	Tcl_SetResult(interp, "Grid Y position must not be negative.\n", NULL);
+	return result;
+    }
+    if (gridx >= NumChannelsX) {
+	Tcl_SetResult(interp, "Grid X position is larger than the number"
+		" of horizontal route tracks.\n", NULL);
+	return result;
+    }
+    if (gridy >= NumChannelsY) {
+	Tcl_SetResult(interp, "Grid Y position is larger than the number"
+		" of vertical route tracks.\n", NULL);
+	return result;
+    }
+
+    Fprintf(stdout, "Querying grid position (%g %g) index (%d %d) layer %d:\n",
+	    dx, dy, gridx, gridy, layer);
+    print_information(gridx, gridy, layer);
+
     return QrouterTagCallback(interp, objc, objv);
 }
 
