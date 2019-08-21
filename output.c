@@ -619,10 +619,12 @@ print_grid_information(int gridx, int gridy, int layer)
 {
     u_int obsval;
     int i, apos;
+    double dx, dy;
     int netidx;
     NET net;
     NODE node;
     NODEINFO lnode;
+    DSEG ds;
 
     apos = OGRID(gridx, gridy);
     obsval = Obs[layer][apos];
@@ -713,8 +715,22 @@ print_grid_information(int gridx, int gridy, int layer)
 	Fprintf(stdout, "Grid position cannot be reached from above.\n");
     if (obsval & BLOCKED_D)
 	Fprintf(stdout, "Grid position cannot be reached from below.\n");
-    if ((obsval & (OBSTRUCT_MASK | NO_NET)) == (OBSTRUCT_MASK | NO_NET))
+    if ((obsval & (OBSTRUCT_MASK | NO_NET)) == (OBSTRUCT_MASK | NO_NET)) {
 	Fprintf(stdout, "Grid position is completely obstructed\n");
+
+	/* Check if grid position is completely obstructed by a UserObs object */
+	dx = Xlowerbound + gridx * PitchX;
+	dy = Ylowerbound + gridy * PitchY;
+	for (ds = UserObs; ds; ds = ds->next) {
+	    if (ds->layer == layer) {
+		if (ds->x1 < dx && ds->x2 > dx && ds->y1 < dy && ds->y2 > dy) {
+		    Fprintf(stdout, "Defined obstruction at (%g, %g) to (%g, %g) "
+			    "covers the tap point.\n",
+			    ds->x1, ds->y1, ds->x2, ds->y2);
+		}
+	    }
+	}
+    }
     else if (obsval & NO_NET) {
 	if ((obsval & OBSTRUCT_MASK != 0) && (lnode == NULL)) {
 	    Fprintf(stdout, "Error:  Position marked as node obstruction has "
@@ -824,7 +840,7 @@ print_node_information(char *nodename)
 				apos = OGRID(j, k);
 				lnode = Nodeinfo[l][apos];
 				if (lnode && lnode->nodesav == node) {
-				    Fprintf(stdout, "  (%g %g)um  x=%d y=%d layer=%d\n",
+				    Fprintf(stdout, "  (%g, %g)um  x=%d y=%d layer=%d\n",
 					    Xlowerbound + j * PitchX,
 					    Ylowerbound + k * PitchY,
 					    j, k, l);
@@ -1635,7 +1651,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
 		     	Flush(stdout);
 			Fprintf(stderr, "Warning:  non-Manhattan wire in route"
-				" at (%d %d) to (%d %d)\n", x, y, x2, y2);
+				" at (%d, %d) to (%d, %d)\n", x, y, x2, y2);
 		     }
 		     if (special == (u_char)0) {
 			if (lastseg && (lastseg->segtype & ST_OFFSET_START) &&
