@@ -13,8 +13,6 @@
 
 void find_bounding_box(NET net);
 void defineRouteTree(NET);
-void print_nodes(char *filename);
-void print_nlnets(char *filename);
 void count_reachable_taps();
 void check_variable_pitch(int, int *, int *);
 void create_obstructions_from_variable_pitch(void);

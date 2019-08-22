@@ -383,6 +383,48 @@ count_reachable_taps()
 			print_node_name(node), node->netname);
 		Fprintf(stderr, "Qrouter will not be able to completely"
 			" route this net.\n");
+		if (Verbose > 1) {
+		    Fprintf(stderr, "Tap position blockage analysis:\n");
+
+		    /* Unreachable taps are the most common problem with    */
+		    /* new processes or buggy code, so make a detailed	    */
+		    /* report of blockages affecting routing for debugging. */
+
+		    for (ds = g->taps[i]; ds; ds = ds->next) {
+			unsigned char is_inside;
+
+			Fprintf(stderr, "Tap geometry (%g %g) to (%g %g):\n",
+				ds->x1, ds->y1, ds->x2, ds->y2);
+
+			gridx = (int)(((ds->x1 - 1) - Xlowerbound) / PitchX) - 1;
+			if (gridx < 0) gridx = 0;
+			while (1) {
+			    dx = (gridx * PitchX) + Xlowerbound;
+			    if (dx > (ds->x2 + 1) || gridx >= NumChannelsX) break;
+			    gridy = (int)(((ds->y1 - 1) - Ylowerbound) / PitchY) - 1;
+			    if (gridy < 0) gridy = 0;
+			    while (1) {
+				dy = (gridy * PitchY) + Ylowerbound;
+				if (dy > (ds->y2 + 1) || gridy >= NumChannelsY)
+				    break;
+
+			        lnode = NODEIPTR(gridx, gridy, ds->layer);
+			        if (lnode && (lnode->nodesav == node)) {
+				    is_inside = (dx > ds->x1 && dx < ds->x2 &&
+					     dy > ds->y1 && dy < ds->y2) ? 1 : 0;
+
+				    Fprintf(stderr, "Grid position (%d %d) at (%g %g) "
+					    "layer %d is %s tap geometry.\n",
+					    gridx, gridy, dx, dy, ds->layer,
+					    (is_inside == 1) ? "inside" : "outside");
+				    print_grid_information(gridx, gridy, ds->layer);
+				}
+				gridy++;
+			    }
+			    gridx++;
+			}
+		    }
+		}
 	    }
 	}
     }
