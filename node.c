@@ -408,8 +408,8 @@ count_reachable_taps()
 				if (dy > (ds->y2 + 1) || gridy >= NumChannelsY)
 				    break;
 
-			        if (NODEIPTR(gridx, gridy, ds->layer)->nodesav
-						== node) {
+			        lnode = NODEIPTR(gridx, gridy, ds->layer);
+			        if (lnode && (lnode->nodesav == node)) {
 				    is_inside = (dx > ds->x1 && dx < ds->x2 &&
 					     dy > ds->y1 && dy < ds->y2) ? 1 : 0;
 
@@ -417,7 +417,7 @@ count_reachable_taps()
 					    "layer %d is %s tap geometry.\n",
 					    gridx, gridy, dx, dy, ds->layer,
 					    (is_inside == 1) ? "inside" : "outside");
-				    print_information(gridx, gridy, ds->layer);
+				    print_grid_information(gridx, gridy, ds->layer);
 				}
 				gridy++;
 			    }
