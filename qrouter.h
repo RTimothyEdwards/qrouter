@@ -435,6 +435,7 @@ extern NETLIST FailedNets;	// nets that have failed the first pass
 extern char    *DEFfilename;
 extern char    *delayfilename;
 extern ScaleRec Scales;
+extern DPOINT	testpoint;	// for debugging routing problems
 
 extern GATE   GateInfo;		// standard cell macro information
 extern GATE   PinMacro;		// macro definition for a pin

@@ -67,6 +67,8 @@ u_char ripLimit = 10;	// Fail net rather than rip up more than
 char *DEFfilename = NULL;
 char *delayfilename = NULL;
 
+DPOINT testpoint = NULL;	// used for debugging route problems
+
 ScaleRec Scales;	// record of input and output scales
 
 /*--------------------------------------------------------------*/
