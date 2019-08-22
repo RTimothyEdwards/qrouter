@@ -2554,15 +2554,25 @@ qrouter_query(ClientData clientData, Tcl_Interp *interp,
 	    if (do_watch) {
 		DPOINT newtest;
 		newtest = (DPOINT)malloc(sizeof(struct dpoint_));
-		newtest->x = dx;
-		newtest->y = dy;
-		newtest->gridx = gridx;
-		newtest->gridy = gridy;
 		newtest->layer = layer;
 		newtest->next = testpoint;
+		if (idx == GridIdx) {
+		    newtest->gridx = gridx;
+		    newtest->gridy = gridy;
+		    newtest->x = 0;
+		    newtest->y = 0;
+		    Fprintf(stdout, "Watching grid position index (%d %d)"
+			    " layer %d.\n", gridx, gridy, layer);
+		}
+		else {
+		    newtest->x = dx;
+		    newtest->y = dy;
+		    newtest->gridx = -1;
+		    newtest->gridy = -1;
+		    Fprintf(stdout, "Watching grid position (%g %g)um"
+			    " layer %d.\n", dx, dy, layer);
+		}
 		testpoint = newtest;
-		Fprintf(stdout, "Watching grid position (%g %g)um index (%d %d)"
-			" layer %d.\n", dx, dy, gridx, gridy, layer);
 	    }
 	    else if (do_unwatch) {
 		DPOINT ptest, ltest;

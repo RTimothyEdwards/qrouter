@@ -1148,24 +1148,24 @@ is_testpoint(int gridx, int gridy, GATE g, int nidx, DSEG ds)
 		if (onode != NULL) {
 		    if (onode->netnum != node->netnum) {
 			if (onode->netname)
-			    Fprintf(stderr, "   Position was previously assigned"
+			    Fprintf(stderr, "  Position was previously assigned"
 				    " to node %s on net %s\n", print_node_name(onode),
 				    onode->netname);
 			else
-			    Fprintf(stderr, "   Position was previously assigned"
+			    Fprintf(stderr, "  Position was previously assigned"
 				    " to node %s on different net\n",
 				    print_node_name(onode));
 		    }
 		    else {
-			Fprintf(stderr, "   Position was previously assigned"
+			Fprintf(stderr, "  Position was previously assigned"
 			    " to node %s on the same net\n",
 			    print_node_name(onode));
 		    }
 		}
-		else Fprintf(stderr, "   Position was previously assigned"
+		else Fprintf(stderr, "  Position was previously assigned"
 			    " to a node that has been disabled.\n");
 	    }
-	    else Fprintf(stderr, "   Position was not previously assigned"
+	    else Fprintf(stderr, "  Position was not previously assigned"
 			    " to a node\n");
 
 	    Fprintf(stderr, "Disabled position because:\n");

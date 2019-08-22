@@ -805,6 +805,7 @@ static int post_def_setup()
 {
    NET net;
    ROUTE rt;
+   DPOINT tpoint;
    int i;
 
    if (DEFfilename == NULL) {
@@ -852,6 +853,23 @@ static int post_def_setup()
    if (Verbose > 1)
       Fprintf(stderr, "Diagnostic: memory block is %d bytes\n",
 		(int)sizeof(u_int) * NumChannelsX * NumChannelsY);
+
+   /* If any watch points were made, make sure that they have	*/
+   /* the correct geometry values, since they were made before	*/
+   /* the DEF file was read.					*/
+
+   for (tpoint = testpoint; tpoint; tpoint = tpoint->next) {
+	if (tpoint->gridx < 0) {
+	    /* Compute gridx,y from x,y */
+	    tpoint->gridx = (int)(round((tpoint->x - Xlowerbound) / PitchX));
+	    tpoint->gridy = (int)(round((tpoint->y - Xlowerbound) / PitchX));
+	}
+	else {
+	    /* Compute x,y from gridx,y */
+	    tpoint->x = (tpoint->gridx * PitchX) + Xlowerbound;
+	    tpoint->y = (tpoint->gridy * PitchY) + Ylowerbound;
+	}
+   }
 
    /* Be sure to create obstructions from gates first, since we don't	*/
    /* want improperly defined or positioned obstruction layers to over-	*/
