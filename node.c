@@ -919,8 +919,11 @@ void create_obstructions_from_gates(void)
 		      }
 		      else edist = 0;
 
-		      if ((edist + EPS) < (s * s))
+		      if ((edist + EPS) < (s * s)) {
 			 check_obstruct(gridx, gridy, ds, dx, dy, s);
+			 if (is_testpoint(gridx, gridy, g, -1, ds) != NULL)
+			    Fprintf(stderr, " Position blocked by gate obstruction.\n");
+		      }
 		      else
 			 edist = 0;	// diagnostic break
 		   }
@@ -987,8 +990,12 @@ void create_obstructions_from_gates(void)
 		            }
 			    else edist = 0;
 
-		            if ((edist + EPS) < (s * s))
+		            if ((edist + EPS) < (s * s)) {
 			       check_obstruct(gridx, gridy, ds, dx, dy, s);
+			       if (is_testpoint(gridx, gridy, g, i, ds) != NULL)
+				  Fprintf(stderr, " Position blocked by unused"
+					    " gate pin.\n");
+			    }
 			 }
 		         gridy++;
 		      }
@@ -1023,8 +1030,11 @@ void create_obstructions_from_gates(void)
 		    dy = (gridy * PitchY) + Ylowerbound;
 		    if (dy > (ds->y2 + delta[ds->layer])
 				|| gridy >= NumChannelsY) break;
-		    if (dy >= (ds->y1 - delta[ds->layer]) && gridy >= 0)
+		    if (dy >= (ds->y1 - delta[ds->layer]) && gridy >= 0) {
 		       check_obstruct(gridx, gridy, ds, dx, dy, delta[i]);
+		       if (is_testpoint(gridx, gridy, NULL, -1, ds) != NULL)
+			  Fprintf(stderr, " Position blocked by defined obstruction.\n");
+		    }
 
 		    gridy++;
 		}
@@ -1122,7 +1132,7 @@ is_testpoint(int gridx, int gridy, GATE g, int nidx, DSEG ds)
 {
     int layer;
     DPOINT trypoint;
-    NODE node, onode;
+    NODE node = NULL, onode;
     NODEINFO lnode;
 
     layer = ds->layer;
@@ -1133,20 +1143,28 @@ is_testpoint(int gridx, int gridy, GATE g, int nidx, DSEG ds)
 		    " grid (%d, %d):\n",
 		    trypoint->x, trypoint->y, trypoint->layer,
 		    trypoint->gridx, trypoint->gridy); 
-	    Fprintf(stderr, "  Gate instance = \"%s\"\n", g->gatename);
-	    if (g->gatetype)
-		Fprintf(stderr, "  Gate cell = \"%s\"\n", g->gatetype->gatename);
-	    Fprintf(stderr, "  Gate pin = \"%s\"\n", g->node[nidx]);
-	    Fprintf(stderr, "  Pin geometry = (%g, %g) to (%g, %g)\n",
-		    ds->x1, ds->y1, ds->x2, ds->y2);
-	    node = g->noderec[nidx];
-	    Fprintf(stderr, "  Connects to net \"%s\"\n", node->netname);
+	    if (g != NULL) {
+		Fprintf(stderr, "  Gate instance = \"%s\"\n", g->gatename);
+		if (g->gatetype)
+		    Fprintf(stderr, "  Gate cell = \"%s\"\n", g->gatetype->gatename);
 
+		if (nidx >= 0) {
+		    Fprintf(stderr, "  Gate pin = \"%s\"\n", g->node[nidx]);
+		    Fprintf(stderr, "  Pin geometry = (%g, %g) to (%g, %g)\n",
+			    ds->x1, ds->y1, ds->x2, ds->y2);
+		    node = g->noderec[nidx];
+		    Fprintf(stderr, "  Connects to net \"%s\"\n", node->netname);
+		}
+	    }
+	    if (nidx < 0) {
+		Fprintf(stderr, "  Obstruction geometry = (%g, %g) to (%g, %g)\n",
+			ds->x1, ds->y1, ds->x2, ds->y2);
+	    }
 	    lnode = NODEIPTR(gridx, gridy, layer);
 	    if (lnode != NULL) {
 		onode = lnode->nodesav;
 		if (onode != NULL) {
-		    if (onode->netnum != node->netnum) {
+		    if (node && (onode->netnum != node->netnum)) {
 			if (onode->netname)
 			    Fprintf(stderr, "  Position was previously assigned"
 				    " to node %s on net %s\n", print_node_name(onode),
@@ -1276,11 +1294,9 @@ void create_obstructions_inside_nodes(void)
 				// that it falls through on all subsequent
 				// processing.
 
-				if ((tpoint = is_testpoint(gridx, gridy, g, i, ds))
-					    != NULL) {
+				if (is_testpoint(gridx, gridy, g, i, ds) != NULL)
 				    Fprintf(stderr, " Position is inside pin but cannot "
 					    "be routed without causing violation.\n");
-				}
 				disable_gridpos(gridx, gridy, ds->layer);
 				gridy++;
 				continue;
@@ -1624,8 +1640,9 @@ void create_obstructions_outside_nodes(void)
 				            if ((ds->layer < Num_layers - 1) &&
 							(gridy > 0) &&
 							(OBSVAL(gridx, gridy - 1,
-							ds->layer + 1) & OBSTRUCT_MASK))
+							ds->layer + 1) & OBSTRUCT_MASK)) {
 					       block_route(gridx, gridy, ds->layer, UP);
+					    }
 					 }
 				      }
 				   }
@@ -1648,8 +1665,9 @@ void create_obstructions_outside_nodes(void)
 				             if ((ds->layer < Num_layers - 1) &&
 							(gridy < NumChannelsY - 1) &&
 						   	(OBSVAL(gridx, gridy + 1,
-							ds->layer + 1) & OBSTRUCT_MASK))
+							ds->layer + 1) & OBSTRUCT_MASK)) {
 					        block_route(gridx, gridy, ds->layer, UP);
+					     }
 					 }
 				      }
 				   }
@@ -1672,8 +1690,9 @@ void create_obstructions_outside_nodes(void)
 				             if ((ds->layer < Num_layers - 1) &&
 							(gridx > 0) &&
 							(OBSVAL(gridx - 1, gridy,
-							ds->layer + 1) & OBSTRUCT_MASK))
+							ds->layer + 1) & OBSTRUCT_MASK)) {
 					        block_route(gridx, gridy, ds->layer, UP);
+					     }
 					 }
 				      }
 				   }
@@ -1696,21 +1715,20 @@ void create_obstructions_outside_nodes(void)
 				            if ((ds->layer < Num_layers - 1) &&
 							(gridx < NumChannelsX - 1) &&
 							(OBSVAL(gridx + 1, gridy,
-							ds->layer + 1) & OBSTRUCT_MASK))
+							ds->layer + 1) & OBSTRUCT_MASK)) {
 					       block_route(gridx, gridy, ds->layer, UP);
+					    }
 					 }
 				      }
 				   }
 				}
 
 			        if (maxerr == 1) {
-				    if ((tpoint = is_testpoint(gridx, gridy, g, i, ds))
-					    != NULL) {
+				    if (is_testpoint(gridx, gridy, g, i, ds) != NULL)
 					Fprintf(stderr,
 					    "Attempted to clear obstruction with"
 					    " offset, but offset is more than 1/2"
 					    " route pitch.\n");
-				    }
 				    disable_gridpos(gridx, gridy, ds->layer);
 				}
 
@@ -1825,8 +1843,9 @@ void create_obstructions_outside_nodes(void)
 							(gridx > 0) &&
 							(OBSVAL(gridx - 1, gridy,
 							ds->layer + 1)
-							& OBSTRUCT_MASK))
+							& OBSTRUCT_MASK)) {
 					       block_route(gridx, gridy, ds->layer, UP);
+					    }
 					 }
 				      }
 				      else if ((dx <= ds->x1) &&
@@ -1841,8 +1860,9 @@ void create_obstructions_outside_nodes(void)
 							(NumChannelsX - 1)
 							&& (OBSVAL(gridx + 1, gridy,
 							ds->layer + 1)
-							& OBSTRUCT_MASK))
+							& OBSTRUCT_MASK)) {
 					       block_route(gridx, gridy, ds->layer, UP);
+					    }
 					 }
 				      }
 			 	   }	
@@ -1860,8 +1880,9 @@ void create_obstructions_outside_nodes(void)
 							(NumChannelsY - 1)
 							&& (OBSVAL(gridx, gridy - 1,
 							ds->layer + 1)
-							& OBSTRUCT_MASK))
+							& OBSTRUCT_MASK)) {
 					       block_route(gridx, gridy, ds->layer, UP);
+					    }
 					 }
 				      }
 				      else if ((dy <= ds->y1) &&
@@ -1875,8 +1896,9 @@ void create_obstructions_outside_nodes(void)
 							(gridy > 0) &&
 							(OBSVAL(gridx, gridy + 1,
 							ds->layer + 1)
-							& OBSTRUCT_MASK))
+							& OBSTRUCT_MASK)) {
 					       block_route(gridx, gridy, ds->layer, UP);
+					    }
 					 }
 				      }
 				   }
@@ -2150,12 +2172,10 @@ void create_obstructions_outside_nodes(void)
 				// called STUBROUTE_X).
 
 				if (dir == NI_STUB_MASK) {
-				    if ((tpoint = is_testpoint(gridx, gridy, g, i, ds))
-					    != NULL) {
+				    if (is_testpoint(gridx, gridy, g, i, ds) != NULL)
 					Fprintf(stderr, "Tap point is blocked in "
 					    "and cannot be routed without causing "
 					    "DRC violations.\n");
-				    }
 				    disable_gridpos(gridx, gridy, ds->layer);
 				}
 			    }
@@ -2195,8 +2215,7 @@ void create_obstructions_outside_nodes(void)
 				  // revisiting.
 				
 				  if ((k & PINOBSTRUCTMASK) != 0) {
-				     if ((tpoint = is_testpoint(gridx, gridy, g, i, ds))
-					    != NULL) {
+				     if (is_testpoint(gridx, gridy, g, i, ds) != NULL) {
 					if (k & STUBROUTE)
 					    Fprintf(stderr, "Position marked as a "
 						"stub route for the net.\n");
@@ -2241,12 +2260,14 @@ void create_obstructions_outside_nodes(void)
 				              if ((ds->layer < Num_layers - 1) &&
 							(gridx > 0) &&
 							(OBSVAL(gridx + 1, gridy,
-							ds->layer + 1) & OBSTRUCT_MASK))
+							ds->layer + 1) & OBSTRUCT_MASK)) {
 					         block_route(gridx, gridy, ds->layer, UP);
+					      }
 				              else if ((ds->layer < Num_layers - 1) &&
 							(gridx > 0) &&
-							(dist > PitchX / 2))
+							(dist > PitchX / 2)) {
 					         block_route(gridx, gridy, ds->layer, UP);
+					      }
 					   }
 					}
 				     }
@@ -2273,13 +2294,15 @@ void create_obstructions_outside_nodes(void)
 				              if ((ds->layer < Num_layers - 1) && gridx <
 							(NumChannelsX - 1) &&
 							(OBSVAL(gridx - 1, gridy,
-							ds->layer + 1) & OBSTRUCT_MASK))
+							ds->layer + 1) & OBSTRUCT_MASK)) {
 					         block_route(gridx, gridy, ds->layer, UP);
+					      }
 				              else if ((ds->layer < Num_layers - 1) &&
 							gridx <
 							(NumChannelsX - 1) &&
-							(dist < -PitchX / 2))
+							(dist < -PitchX / 2)) {
 					         block_route(gridx, gridy, ds->layer, UP);
+					      }
 					   }
 					}
 				     }
@@ -2307,12 +2330,14 @@ void create_obstructions_outside_nodes(void)
 				              if ((ds->layer < Num_layers - 1) &&
 							(gridy > 0) && (OBSVAL(gridx,
 							gridy + 1, ds->layer + 1)
-							& OBSTRUCT_MASK))
+							& OBSTRUCT_MASK)) {
 					         block_route(gridx, gridy, ds->layer, UP);
+					      }
 				              else if ((ds->layer < Num_layers - 1) &&
 							(gridy > 0) &&
-							(dist > PitchY / 2))
+							(dist > PitchY / 2)) {
 					         block_route(gridx, gridy, ds->layer, UP);
+					      }
 					   }
 					}
 				     }
@@ -2340,13 +2365,15 @@ void create_obstructions_outside_nodes(void)
 							gridx <
 							(NumChannelsX - 1) &&
 							(OBSVAL(gridx, gridy - 1,
-							ds->layer + 1) & OBSTRUCT_MASK))
+							ds->layer + 1) & OBSTRUCT_MASK)) {
 					         block_route(gridx, gridy, ds->layer, UP);
+					      }
 				              else if ((ds->layer < Num_layers - 1) &&
 							gridx <
 							(NumChannelsX - 1) &&
-							(dist < -PitchY / 2))
+							(dist < -PitchY / 2)) {
 					         block_route(gridx, gridy, ds->layer, UP);
+					      }
 					   }
 					}
 				     }
@@ -2360,11 +2387,10 @@ void create_obstructions_outside_nodes(void)
 				 	if (orient == 2) {
 					    // Maybe no need to revert the flag?
 					    lnode->flags &= ~NI_NO_VIAX;
-					    if ((tpoint = is_testpoint(gridx, gridy,
-						    g, i, ds)) != NULL) {
+					    if (is_testpoint(gridx, gridy,
+						    g, i, ds) != NULL)
 						Fprintf(stderr, "Unable to find "
 							"a viable offset for a tap.\n");
-					    }
 				            disable_gridpos(gridx, gridy, ds->layer);
 					}
 					else
@@ -2372,12 +2398,11 @@ void create_obstructions_outside_nodes(void)
 				     }
 				  }
 				  else {
-				     if ((tpoint = is_testpoint(gridx, gridy,
-						    g, i, ds)) != NULL) {
+				     if (is_testpoint(gridx, gridy,
+						    g, i, ds) != NULL)
 					Fprintf(stderr, "Tap point is too "
 						"close to two different nodes "
 						"and no offsets are possible.\n");
-				     }
 				     disable_gridpos(gridx, gridy, ds->layer);
 				  }
 			       }
@@ -2585,11 +2610,10 @@ void tap_to_tap_interactions(void)
 
 			    if ((de.x1 < ds->x2) && (ds->x1 < de.x2) &&
 					(de.y1 < ds->y2) && (ds->y1 < de.y2)) {
-			       if ((tpoint = is_testpoint(gridx, gridy,
-						    g, i, ds)) != NULL) {
+			       if (is_testpoint(gridx, gridy,
+						    g, i, ds) != NULL)
 				    Fprintf(stderr, "Offset tap interferes "
 					    "with position.\n");
-			       }
 			       disable_gridpos(gridx, gridy, ds->layer);
 			    }
 			 }
@@ -3396,10 +3420,12 @@ find_route_blocks()
 		     lnode = NODEIPTR(gridx, gridy, lds.layer);
 		     u = ((OBSVAL(gridx, gridy, lds.layer) & STUBROUTE)
 				&& (lnode->flags & NI_STUB_EW)) ? v : w;
-		     if (dy + EPS < lds.y2 - u)
+		     if (dy + EPS < lds.y2 - u) {
 			block_route(gridx, gridy, lds.layer, NORTH);
-		     if (dy - EPS > lds.y1 + u)
+		     }
+		     if (dy - EPS > lds.y1 + u) {
 			block_route(gridx, gridy, lds.layer, SOUTH);
+		     }
 		     dy += PitchY;
 		     gridy++;
 		  }
@@ -3429,10 +3455,12 @@ find_route_blocks()
 		     lnode = NODEIPTR(gridx, gridy, lds.layer);
 		     u = ((OBSVAL(gridx, gridy, lds.layer) & STUBROUTE)
 				&& (lnode->flags & NI_STUB_EW)) ? v : w;
-		     if (dy + EPS < lds.y2 - u)
+		     if (dy + EPS < lds.y2 - u) {
 			block_route(gridx, gridy, lds.layer, NORTH);
-		     if (dy - EPS > lds.y1 + u)
+		     }
+		     if (dy - EPS > lds.y1 + u) {
 			block_route(gridx, gridy, lds.layer, SOUTH);
+		     }
 		     dy += PitchY;
 		     gridy++;
 		  }
@@ -3462,10 +3490,12 @@ find_route_blocks()
 		     lnode = NODEIPTR(gridx, gridy, lds.layer);
 		     u = ((OBSVAL(gridx, gridy, lds.layer) & STUBROUTE)
 				&& (lnode->flags & NI_STUB_NS)) ? v : w;
-		     if (dx + EPS < lds.x2 - u)
+		     if (dx + EPS < lds.x2 - u) {
 			block_route(gridx, gridy, lds.layer, EAST);
-		     if (dx - EPS > lds.x1 + u)
+		     }
+		     if (dx - EPS > lds.x1 + u) {
 			block_route(gridx, gridy, lds.layer, WEST);
+		     }
 		     dx += PitchX;
 		     gridx++;
 		  }
@@ -3495,10 +3525,12 @@ find_route_blocks()
 		     lnode = NODEIPTR(gridx, gridy, lds.layer);
 		     u = ((OBSVAL(gridx, gridy, lds.layer) & STUBROUTE)
 				&& (lnode->flags & NI_STUB_NS)) ? v : w;
-		     if (dx + EPS < lds.x2 - u)
+		     if (dx + EPS < lds.x2 - u) {
 			block_route(gridx, gridy, lds.layer, EAST);
-		     if (dx - EPS > lds.x1 + u)
+		     }
+		     if (dx - EPS > lds.x1 + u) {
 			block_route(gridx, gridy, lds.layer, WEST);
+		     }
 		     dx += PitchX;
 		     gridx++;
 		  }
