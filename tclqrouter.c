@@ -11,6 +11,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <math.h>	/* for round() */
 
 #include <tk.h>
 
@@ -2425,12 +2426,15 @@ qrouter_resolution(ClientData clientData, Tcl_Interp *interp,
 /* Command "query"					*/
 /*							*/
 /* Print information about a specific grid point,	*/
-/* instance, node, or net.				*/
+/* instance, node, or net.  Option "watch" indicates to	*/
+/* monitor the position during DEF read-in and print	*/
+/* information when the node information changes,	*/
+/* especially if the grid position is disabled.		*/
 /*							*/
 /* Options:						*/
 /*							*/
-/*	query grid <ix> <iy> <layer>			*/
-/*	query position <dx> <dy> <layer>		*/
+/*	query grid <ix> <iy> <layer> [watch]		*/
+/*	query position <dx> <dy> <layer> [watch]	*/
 /*	query instance <instance>			*/
 /*	query node <instance>/<pin>			*/
 /*	query net <name>				*/
@@ -2449,7 +2453,7 @@ qrouter_query(ClientData clientData, Tcl_Interp *interp,
     int idx, result, layer;
     int gridx, gridy;
     double dx, dy;
-    unsigned char is_index;
+    unsigned char is_index, do_watch, do_unwatch;
 
     static char *subCmds[] = {
 	"grid", "position", "instance", "node", "net", NULL
@@ -2460,8 +2464,8 @@ qrouter_query(ClientData clientData, Tcl_Interp *interp,
    
     if (objc < 2) {
 	Fprintf(stderr, "Usage:\n");
-	Fprintf(stderr, "   query position <x_microns> <y_microns> <layer>\n");
-	Fprintf(stderr, "   query grid <gridx> <gridy> <layer>\n");
+	Fprintf(stderr, "   query position <x_microns> <y_microns> <layer> [watch]\n");
+	Fprintf(stderr, "   query grid <gridx> <gridy> <layer> [watch]\n");
 	Fprintf(stderr, "   query instance <inst_name>\n");
 	Fprintf(stderr, "   query node <inst_name>/<pin_name>\n");
 	Fprintf(stderr, "   query net <net_name>\n");
@@ -2472,14 +2476,25 @@ qrouter_query(ClientData clientData, Tcl_Interp *interp,
 		(CONST84 char **)subCmds, "option", 0, &idx)) != TCL_OK)
 	return result;
 
+    do_watch = do_unwatch = FALSE;
     switch (idx) {
 	case GridIdx:
 	case PosIdx:
+	    if (objc == 6) {
+		if (!strcmp(Tcl_GetString(objv[5]), "watch")) {
+		    do_watch = TRUE;
+		    objc--;
+		}
+		else if (!strcmp(Tcl_GetString(objv[5]), "unwatch")) {
+		    do_unwatch = TRUE;
+		    objc--;
+		}
+	    }
 	    if (objc != 5) {
 		Tcl_WrongNumArgs(interp, 1, objv, "option ?arg?");
 		return TCL_ERROR;
 	    }
-	    is_index = (idx == GridIdx) ? 1 : 0;
+	    is_index = (idx == GridIdx) ? TRUE : FALSE;
 
 	    layername = Tcl_GetString(objv[4]);
 	    layer = LefFindLayerNum(layername);
@@ -2520,11 +2535,11 @@ qrouter_query(ClientData clientData, Tcl_Interp *interp,
 		    Tcl_SetResult(interp, "Cannot parse grid Y position\n", NULL);
 	    	    return result;
 	    	}
-	    	/* Translate dx, dy into gridx, gridy */
-	    	gridx = (int)((dx - Xlowerbound) / PitchX) - 1;
-	    	gridy = (int)((dy - Ylowerbound) / PitchY) - 1;
+	    	/* Translate dx, dy into nearest gridx, gridy */
+	    	gridx = (int)(round((dx - Xlowerbound) / PitchX));
+	    	gridy = (int)(round((dy - Ylowerbound) / PitchY));
 
-	    Fprintf(stdout, "Grid position index is (%d %d)\n", gridx, gridy);
+		Fprintf(stdout, "Grid position index is (%d %d)\n", gridx, gridy);
 	    }
 	    if (gridx < 0) {
 	    	Tcl_SetResult(interp, "Grid X position must not be negative.\n",
@@ -2536,19 +2551,70 @@ qrouter_query(ClientData clientData, Tcl_Interp *interp,
 			    NULL);
 	    	return result;
 	    }
-	    if (gridx >= NumChannelsX) {
+	    if (do_watch) {
+		DPOINT newtest;
+		newtest = (DPOINT)malloc(sizeof(struct dpoint_));
+		newtest->layer = layer;
+		newtest->next = testpoint;
+		if (idx == GridIdx) {
+		    newtest->gridx = gridx;
+		    newtest->gridy = gridy;
+		    newtest->x = 0;
+		    newtest->y = 0;
+		    Fprintf(stdout, "Watching grid position index (%d %d)"
+			    " layer %d.\n", gridx, gridy, layer);
+		}
+		else {
+		    newtest->x = dx;
+		    newtest->y = dy;
+		    newtest->gridx = -1;
+		    newtest->gridy = -1;
+		    Fprintf(stdout, "Watching grid position (%g %g)um"
+			    " layer %d.\n", dx, dy, layer);
+		}
+		testpoint = newtest;
+	    }
+	    else if (do_unwatch) {
+		DPOINT ptest, ltest;
+		ltest = NULL;
+		for (ptest = testpoint; ptest; ptest = ptest->next) {
+		    if (ptest->x == dx && ptest->y == dy && ptest->layer == layer) {
+			if (ltest == NULL) {
+			    testpoint = testpoint->next;
+			    free(ptest);
+			}
+			else {
+			    ltest->next = ptest->next;
+			    free(ptest);
+			}
+			Fprintf(stdout, "No longer watching grid position (%g %g)um"
+				" index (%d %d) layer %d.\n",
+				dx, dy, gridx, gridy, layer);
+			break;
+		    }
+		    ltest = ptest;
+		}
+		if (ptest == NULL) {
+		    Fprintf(stdout, "Grid position (%g %g)um index (%d %d)"
+				" layer %d is not on the watch list.\n",
+				dx, dy, gridx, gridy, layer);
+		}
+	    }
+	    else if (gridx >= NumChannelsX) {
 	    	Tcl_SetResult(interp, "Grid X position is larger than the number"
 	    		" of horizontal route tracks.\n", NULL);
 	    	return result;
 	    }
-	    if (gridy >= NumChannelsY) {
+	    else if (gridy >= NumChannelsY) {
 		Tcl_SetResult(interp, "Grid Y position is larger than the number"
 			" of vertical route tracks.\n", NULL);
 		return result;
 	    }
-	    Fprintf(stdout, "Querying grid position (%g %g)um index (%d %d)"
-		    " layer %d:\n", dx, dy, gridx, gridy, layer);
-	    print_grid_information(gridx, gridy, layer);
+	    else {
+		Fprintf(stdout, "Querying grid position (%g %g)um index (%d %d)"
+			" layer %d:\n", dx, dy, gridx, gridy, layer);
+		print_grid_information(gridx, gridy, layer);
+	    }
 	    break;
 
 	case InstIdx:

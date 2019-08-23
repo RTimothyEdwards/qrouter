@@ -13,6 +13,7 @@
 
 void find_bounding_box(NET net);
 void defineRouteTree(NET);
+DPOINT is_testpoint(int, int, GATE, int, DSEG);
 void count_reachable_taps();
 void check_variable_pitch(int, int *, int *);
 void create_obstructions_from_variable_pitch(void);
