@@ -469,6 +469,7 @@ extern u_char forceRoutable;
 extern u_char maskMode;
 extern u_char mapType;
 extern u_char ripLimit;
+extern u_char unblockAll;
 
 extern char *vddnet;
 extern char *gndnet;

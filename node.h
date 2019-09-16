@@ -14,7 +14,7 @@
 void find_bounding_box(NET net);
 void defineRouteTree(NET);
 DPOINT is_testpoint(int, int, GATE, int, DSEG);
-void count_reachable_taps();
+void count_reachable_taps(u_char);
 void check_variable_pitch(int, int *, int *);
 void create_obstructions_from_variable_pitch(void);
 void count_pinlayers(void);
