@@ -151,6 +151,9 @@ static int qrouter_pitchx(
 static int qrouter_pitchy(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_unblock(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
 
 static cmdstruct qrouter_commands[] =
 {
@@ -173,6 +176,7 @@ static cmdstruct qrouter_commands[] =
    {"priority", qrouter_priority},
    {"pitchx", qrouter_pitchx},
    {"pitchy", qrouter_pitchy},
+   {"unblock", qrouter_unblock},
    {"via", qrouter_via},
    {"resolution", qrouter_resolution},
    {"congested", qrouter_congested},
@@ -3308,6 +3312,40 @@ qrouter_pitchy(ClientData clientData, Tcl_Interp *interp,
 	else {
 	    PitchY = value;
 	}
+    }
+    else {
+	Tcl_WrongNumArgs(interp, 1, objv, "option ?arg?");
+	return TCL_ERROR;
+    }
+    return QrouterTagCallback(interp, objc, objv);
+}
+
+/*------------------------------------------------------*/
+/* Command "unblock"					*/
+/*							*/
+/* Set the unblocking flag, which indicates to qrouter	*/
+/* that all grid points that lie cleanly inside pin	*/
+/* geometry should be marked routable.  This command	*/
+/* must be issued before read_def to be effective.	*/
+/*							*/
+/* Options:						*/
+/*							*/
+/*	unblock	[true|false]				*/
+/*------------------------------------------------------*/
+
+static int
+qrouter_unblock(ClientData clientData, Tcl_Interp *interp,
+               int objc, Tcl_Obj *CONST objv[])
+{
+    int result, value;
+
+    if (objc == 1) {
+	Tcl_SetObjResult(interp, Tcl_NewBooleanObj(unblockAll));
+    }
+    else if (objc == 2) {
+	result = Tcl_GetBooleanFromObj(interp, objv[1], &value);
+	if (result != TCL_OK) return result;
+	unblockAll = (value == 0) ? FALSE : TRUE;
     }
     else {
 	Tcl_WrongNumArgs(interp, 1, objv, "option ?arg?");

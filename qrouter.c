@@ -63,6 +63,7 @@ u_char maskMode = MASK_AUTO;
 u_char mapType = MAP_OBSTRUCT | DRAW_ROUTES;
 u_char ripLimit = 10;	// Fail net rather than rip up more than
 			// this number of other nets.
+u_char unblockAll = FALSE;
 
 char *DEFfilename = NULL;
 char *delayfilename = NULL;
@@ -887,7 +888,7 @@ static int post_def_setup()
    create_obstructions_from_variable_pitch();
    adjust_stub_lengths();
    find_route_blocks();
-   count_reachable_taps();
+   count_reachable_taps(unblockAll);
    count_pinlayers();
    
    // If any nets are pre-routed, calculate route endpoints, and

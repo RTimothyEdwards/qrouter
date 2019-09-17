@@ -95,10 +95,18 @@ FreeNodeinfo(int gridx, int gridy, int layer)
 /*  also, it should check for tap points that are routable	*/
 /*  by a wire and not a tap.  However, those conditions are	*/
 /*  rare and are left unhandled for now.			*/
+/*								*/
+/*  If "unblock_all" is 1, then unblock all grid points that	*/
+/*  are cleanly routable by being completely inside a pin with	*/
+/*  available margins for placing a via, regardless of whether	*/
+/*  or not the pin has other available tap points.  This should	*/
+/*  only be used if obstructions are drawn in the style where	*/
+/*  they can abut pins (e.g., part of the pin has been marked	*/
+/*  as an obstruction).						*/
 /*--------------------------------------------------------------*/
 
 void
-count_reachable_taps()
+count_reachable_taps(u_char unblock_all)
 {
     NODE node;
     NODEINFO lnode;
@@ -131,7 +139,7 @@ count_reachable_taps()
 	    node = g->noderec[i];
 	    if (node == NULL) continue;
 	    if (node->numnodes == 0) continue;	 // e.g., vdd or gnd bus
-	    if (node->numtaps == 0) {
+	    if ((node->numtaps == 0) || (unblock_all == TRUE)) {
 
 		/* Will try more than one via if available */
 		for (orient = 0; orient < 4; orient += 2) {
