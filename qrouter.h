@@ -98,6 +98,13 @@ typedef struct scalerec_ {
    double oscale;
 } ScaleRec;
 
+// structure to hold two offset values, one for x offset, one for y offset
+
+typedef struct obsinforec_ {
+    float xoffset;
+    float yoffset;
+} ObsInfoRec;
+
 // define a structure containing x, y, and layer
 
 typedef struct gridp_ GRIDP;
@@ -445,7 +452,7 @@ extern NET    *Nlnets;
 extern u_char *RMask;
 extern u_int  *Obs[MAX_LAYERS];		// obstructions by layer, y, x
 extern PROUTE *Obs2[MAX_LAYERS]; 	// working copy of Obs 
-extern float  *Obsinfo[MAX_LAYERS];	// temporary detailed obstruction info
+extern ObsInfoRec *Obsinfo[MAX_LAYERS];	// temporary detailed obstruction info
 extern NODEINFO *Nodeinfo[MAX_LAYERS];	// stub route distances to pins and
 					// pointers to node structures.
 

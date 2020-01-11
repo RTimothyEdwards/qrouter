@@ -42,7 +42,7 @@ NETLIST FailedNets;	// list of nets that failed to route
 
 u_int    *Obs[MAX_LAYERS];      // net obstructions in layer
 PROUTE   *Obs2[MAX_LAYERS];     // used for pt->pt routes on layer
-float    *Obsinfo[MAX_LAYERS];  // temporary array used for detailed obstruction info
+ObsInfoRec *Obsinfo[MAX_LAYERS];  // temporary array used for detailed obstruction info
 NODEINFO *Nodeinfo[MAX_LAYERS]; // nodes and stub information is here. . .
 DSEG      UserObs;		// user-defined obstruction layers
 
@@ -835,8 +835,8 @@ static int post_def_setup()
 
    for (i = 0; i < Num_layers; i++) {
 
-      Obsinfo[i] = (float *)calloc(NumChannelsX * NumChannelsY,
-			sizeof(float));
+      Obsinfo[i] = (ObsInfoRec *)calloc(NumChannelsX * NumChannelsY,
+			sizeof(ObsInfoRec));
       if (!Obsinfo[i]) {
 	 fprintf(stderr, "Out of memory 5.\n");
 	 exit(5);
