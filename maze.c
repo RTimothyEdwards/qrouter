@@ -1540,10 +1540,10 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	}
     }
     if (ept->lay != newpt.lay) thiscost += ViaCost;
-    if (ept->x != newpt.x) thiscost += (Vert[newpt.lay] * JogCost +
-			(1 - Vert[newpt.lay]) * SegCost);
-    if (ept->y != newpt.y) thiscost += (Vert[newpt.lay] * SegCost +
-			(1 - Vert[newpt.lay]) * JogCost);
+    if (Vert[newpt.lay])
+	thiscost += (ept->x == newpt.x) ? SegCost : JogCost;
+    else
+	thiscost += (ept->y == newpt.y) ? SegCost : JogCost;
 
     // Add the cost to the cost of the original position
     thiscost += ept->cost;

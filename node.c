@@ -692,11 +692,12 @@ count_pinlayers(void)
 static void
 check_obstruct(int gridx, int gridy, DSEG ds, double dx, double dy, double delta)
 {
+    ObsInfoRec *obsinfoptr;
     u_int *obsptr;
-    float dist;
+    u_int origmask;
+    float distx, disty;
 
     obsptr = &(OBSVAL(gridx, gridy, ds->layer));
-    dist = OBSINFO(gridx, gridy, ds->layer);
 
     // Grid point is inside obstruction + halo.
     *obsptr |= NO_NET;
@@ -706,37 +707,57 @@ check_obstruct(int gridx, int gridy, DSEG ds, double dx, double dy, double delta
        *obsptr |= OBSTRUCT_MASK;
 
     else {
-       // Make more detailed checks in each direction
+       // Make more detailed checks in each direction.  If obstructions
+       // are in multiple directions in X and Y, then mark both.  The
+       // Obsinfo array keeps information on one obstruction distance
+       // in X and one in Y.  If obstructions are on both X sides or
+       // both Y sides, then the position is marked completely unroutable.
+
+       // Note that an obstruction at a corner which blocks from two sides is
+       // very different from two obstructions that block from the two sides.
+       // As there is no mechanism in qrouter to offset a tap in both the
+       // X and Y direction, the second case is unroutable.  It needs to be
+       // detected and marked blocked if so.  Then all other code may assume
+       // that any blockage marked from two directions is catecorner to the
+       // grid position, and the tap may be moved in either direction to
+       // avoid the obstruction.
+
+       obsinfoptr = &(OBSINFO(gridx, gridy, ds->layer));
+
+       // Check for pre-existing conditions
+       disty = obsinfoptr->yoffset;
+       distx = obsinfoptr->xoffset;
+       origmask = *obsptr & OBSTRUCT_MASK;
 
        if (dy <= ds->y1) {
-	  if ((*obsptr & (OBSTRUCT_MASK & ~OBSTRUCT_N)) == 0) {
-	     if ((dist == 0) || ((ds->y1 - dy) < dist))
-		OBSINFO(gridx, gridy, ds->layer) = ds->y1 - dy;
+	  if ((origmask & ~OBSTRUCT_N) == 0) {
+	     if ((disty == 0) || ((ds->y1 - dy) < disty))
+		obsinfoptr->yoffset = ds->y1 - dy;
 	     *obsptr |= OBSTRUCT_N;
 	  }
 	  else *obsptr |= OBSTRUCT_MASK;
        }
        else if (dy >= ds->y2) {
-	  if ((*obsptr & (OBSTRUCT_MASK & ~OBSTRUCT_S)) == 0) {
-	     if ((dist == 0) || ((dy - ds->y2) < dist))
-		OBSINFO(gridx, gridy, ds->layer) = dy - ds->y2;
+	  if ((origmask & ~OBSTRUCT_S) == 0) {
+	     if ((disty == 0) || ((dy - ds->y2) < disty))
+		obsinfoptr->yoffset = dy - ds->y2;
 	     *obsptr |= OBSTRUCT_S;
 	  }
 	  else *obsptr |= OBSTRUCT_MASK;
        }
 
        if (dx <= ds->x1) {
-	  if ((*obsptr & (OBSTRUCT_MASK & ~OBSTRUCT_E)) == 0) {
-	     if ((dist == 0) || ((ds->x1 - dx) < dist))
-		OBSINFO(gridx, gridy, ds->layer) = ds->x1 - dx;
+	  if ((origmask & ~OBSTRUCT_E) == 0) {
+	     if ((distx == 0) || ((ds->x1 - dx) < distx))
+		obsinfoptr->xoffset = ds->x1 - dx;
              *obsptr |= OBSTRUCT_E;
 	  }
 	  else *obsptr |= OBSTRUCT_MASK;
        }
        else if (dx >= ds->x2) {
-	  if ((*obsptr & (OBSTRUCT_MASK & ~OBSTRUCT_W)) == 0) {
-	     if ((dist == 0) || ((dx - ds->x2) < dist))
-		OBSINFO(gridx, gridy, ds->layer) = dx - ds->x2;
+	  if ((origmask & ~OBSTRUCT_W) == 0) {
+	     if ((distx == 0) || ((dx - ds->x2) < distx))
+		obsinfoptr->xoffset = dx - ds->x2;
 	     *obsptr |= OBSTRUCT_W;
 	  }
 	  else *obsptr |= OBSTRUCT_MASK;
@@ -1588,17 +1609,23 @@ void create_obstructions_outside_nodes(void)
 
 			     else if ((orignet & NO_NET) && ((orignet & OBSTRUCT_MASK)
 					!= OBSTRUCT_MASK)) {
-				double sdistxx, sdistxy, sdistyx, sdistyy, offd;
+				double sdistxx, sdistxy, sdistyx, sdistyy;
+				float offdx, offdy;
+				ObsInfoRec *offdptr;
 
+				// width of horizontal via
 				sdistxx = LefGetXYViaWidth(ds->layer, ds->layer,
 					0, 0) / 2.0 +
 					LefGetRouteSpacing(ds->layer);
+				// width of vertical via
 				sdistxy = LefGetXYViaWidth(ds->layer, ds->layer,
 					0, 2) / 2.0 +
 					LefGetRouteSpacing(ds->layer);
+				// height of horizontal via
 				sdistyx = LefGetXYViaWidth(ds->layer, ds->layer,
 					1, 0) / 2.0 +
 					LefGetRouteSpacing(ds->layer);
+				// height of vertical via
 				sdistyy = LefGetXYViaWidth(ds->layer, ds->layer,
 					1, 2) / 2.0 +
 					LefGetRouteSpacing(ds->layer);
@@ -1627,19 +1654,34 @@ void create_obstructions_outside_nodes(void)
 			        	= (OBSVAL(gridx, gridy, ds->layer)
 					   & BLOCKED_MASK) | (u_int)node->netnum;
 
-			        offd = OBSINFO(gridx, gridy, ds->layer);
+			        offdptr = &(OBSINFO(gridx, gridy, ds->layer));
+			        offdx = offdptr->xoffset;
+			        offdy = offdptr->yoffset;
+
+				// If obstruction is on a corner (NE, SW, etc.) then
+				// only look at the case with the smaller offset
+				// required.
+
+				if ((orignet & (OBSTRUCT_N | OBSTRUCT_S)) &&
+					(orignet & (OBSTRUCT_E | OBSTRUCT_W))) {
+				    if (offdy > offdx)
+					orignet &= ~(OBSTRUCT_E | OBSTRUCT_W);
+				    else
+					orignet &= ~(OBSTRUCT_N | OBSTRUCT_S);
+				}
+
 				if (orignet & OBSTRUCT_N) {
-				   if (sdistyy - offd > EPS) {
+				   if (sdistyy - offdy > EPS) {
 				      lnode->flags |= NI_NO_VIAY;
-				      if (sdistyx - offd > EPS) {
+				      if (sdistyx - offdy > EPS) {
 					 /* Cannot route cleanly, so use offset */
-				         if (offd - sdistyx > PitchX / 2.0) 
+				         if (offdy - sdistyx > PitchY / 2.0) 
 					    /* Offset distance is too large */
 					    maxerr = 1;
 					 else {
 
 			                    OBSVAL(gridx, gridy, ds->layer) |= OFFSET_TAP;
-				            lnode->offset = offd - sdistyx;
+				            lnode->offset = offdy - sdistyx;
 				            lnode->flags |= NI_OFFSET_NS;
 
 				            /* If position above has obstruction, then */
@@ -1656,15 +1698,15 @@ void create_obstructions_outside_nodes(void)
 				   }
 				}
 				else if (orignet & OBSTRUCT_S) {
-				   if (sdistyy - offd > EPS) {
+				   if (sdistyy - offdy > EPS) {
 				      lnode->flags |= NI_NO_VIAY;
-				      if (sdistyx - offd > EPS) {
-				         if (offd - sdistyx > PitchX / 2.0)
+				      if (sdistyx - offdy > EPS) {
+				         if (offdy - sdistyx > PitchY / 2.0)
 					    /* Offset distance is too large */
 					    maxerr = 1;
 					 else {
 			                    OBSVAL(gridx, gridy, ds->layer) |= OFFSET_TAP;
-				            lnode->offset = sdistyx - offd;
+				            lnode->offset = sdistyx - offdy;
 				            lnode->flags |= NI_OFFSET_NS;
 
 				            /* If position above has obstruction, then */
@@ -1681,15 +1723,15 @@ void create_obstructions_outside_nodes(void)
 				   }
 				}
 				else if (orignet & OBSTRUCT_E) {
-				   if (sdistxx - offd > EPS) {
+				   if (sdistxx - offdx > EPS) {
 				      lnode->flags |= NI_NO_VIAX;
-				      if (sdistxy - offd > EPS) {
-				         if (offd - sdistxy > PitchY / 2.0)
+				      if (sdistxy - offdx > EPS) {
+				         if (offdx - sdistxy > PitchX / 2.0)
 					    /* Offset distance is too large */
 					    maxerr = 1;
 					 else {
 			                    OBSVAL(gridx, gridy, ds->layer) |= OFFSET_TAP;
-				            lnode->offset = offd - sdistxy;
+				            lnode->offset = offdx - sdistxy;
 				            lnode->flags |= NI_OFFSET_EW;
 
 				            /* If position above has obstruction, then */
@@ -1706,15 +1748,15 @@ void create_obstructions_outside_nodes(void)
 				   }
 				}
 				else if (orignet & OBSTRUCT_W) {
-				   if (sdistxx - offd > EPS) {
+				   if (sdistxx - offdx > EPS) {
 				      lnode->flags |= NI_NO_VIAX;
-				      if (sdistxy - offd > EPS) {
-				         if (offd - sdistxy > PitchY / 2.0)
+				      if (sdistxy - offdx > EPS) {
+				         if (offdx - sdistxy > PitchX / 2.0)
 					    /* Offset distance is too large */
 					    maxerr = 1;
 					 else {
 			                    OBSVAL(gridx, gridy, ds->layer) |= OFFSET_TAP;
-				            lnode->offset = sdistxy - offd;
+				            lnode->offset = sdistxy - offdx;
 				            lnode->flags |= NI_OFFSET_EW;
 
 				            /* If position above has obstruction, then */
@@ -1827,7 +1869,12 @@ void create_obstructions_outside_nodes(void)
 					&& (n2 == NULL)) {
 
 				if ((k & OBSTRUCT_MASK) != 0) {
-				   float sdist = OBSINFO(gridx, gridy, ds->layer);
+				   ObsInfoRec *obsinfoptr;
+				   float sdistx, sdisty;
+
+				   obsinfoptr = &(OBSINFO(gridx, gridy, ds->layer));
+				   sdistx = obsinfoptr->xoffset;
+				   sdisty = obsinfoptr->yoffset;
 
 				   // If the point is marked as close to an
 				   // obstruction, we can declare this an
@@ -1842,7 +1889,7 @@ void create_obstructions_outside_nodes(void)
 						dy <= (ds->y2 + xdist)) {
 				      if ((dx >= ds->x2) &&
 						((k & OBSTRUCT_MASK) == OBSTRUCT_E)) {
-				         dist = sdist - LefGetRouteKeepout(ds->layer);
+				         dist = sdistx - LefGetRouteKeepout(ds->layer);
 					 if ((dx - ds->x2 + dist) < xdist) {
 				 	    mask = OFFSET_TAP;
 				 	    dir = NI_OFFSET_EW;
@@ -1858,7 +1905,7 @@ void create_obstructions_outside_nodes(void)
 				      }
 				      else if ((dx <= ds->x1) &&
 						((k & OBSTRUCT_MASK) == OBSTRUCT_W)) {
-				         dist = LefGetRouteKeepout(ds->layer) - sdist;
+				         dist = LefGetRouteKeepout(ds->layer) - sdistx;
 					 if ((ds->x1 - dx - dist) < xdist) {
 				 	    mask = OFFSET_TAP;
 				            dir = NI_OFFSET_EW;
@@ -1878,7 +1925,7 @@ void create_obstructions_outside_nodes(void)
 						dx <= (ds->x2 + xdist)) {
 				      if ((dy >= ds->y2) &&
 						((k & OBSTRUCT_MASK) == OBSTRUCT_N)) {
-				         dist = sdist - LefGetRouteKeepout(ds->layer);
+				         dist = sdisty - LefGetRouteKeepout(ds->layer);
 					 if ((dy - ds->y2 + dist) < xdist) {
 				 	    mask = OFFSET_TAP;
 				            dir = NI_OFFSET_NS;
@@ -1895,7 +1942,7 @@ void create_obstructions_outside_nodes(void)
 				      }
 				      else if ((dy <= ds->y1) &&
 						((k & OBSTRUCT_MASK) == OBSTRUCT_S)) {
-				         dist = LefGetRouteKeepout(ds->layer) - sdist;
+				         dist = LefGetRouteKeepout(ds->layer) - sdisty;
 					 if ((ds->y1 - dy - dist) < xdist) {
 				 	    mask = OFFSET_TAP;
 				            dir = NI_OFFSET_NS;
@@ -2231,7 +2278,12 @@ void create_obstructions_outside_nodes(void)
 					    Fprintf(stderr, "Position marked as a "
 						"tap offset for the net.\n");
 				     }
-				     disable_gridpos(gridx, gridy, ds->layer);
+				     // Don't disable unless both via orientations
+				     // have been checked.
+				     if (orient == 2)
+					disable_gridpos(gridx, gridy, ds->layer);
+				     else
+					lnode->flags |= NI_NO_VIAX;
 				  }
 				  else if ((lnode = NODEIPTR(gridx, gridy, ds->layer))
 					!= NULL && (lnode->nodesav != NULL)) {

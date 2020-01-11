@@ -1622,6 +1622,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 	    dc = Ylowerbound + (double)seg->y2 * PitchY;
 	    if ((dir2 & OFFSET_TAP) && (lnode2->flags & NI_OFFSET_NS)) dc += offset2;
 	    y2 = (int)((REPS(dc)) * oscale);
+
 	    segtype = seg->segtype & ~(ST_OFFSET_START | ST_OFFSET_END);
 	    switch (segtype) {
 	       case ST_WIRE:
