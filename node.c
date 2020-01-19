@@ -3472,7 +3472,7 @@ find_route_blocks()
 		  // Find all grid points affected
 	          gridy = (int)((lds.y1 - Ylowerbound - PitchY) / PitchY);
 	          dy = (gridy * PitchY) + Ylowerbound;
-		  while (dy < lds.y1 - s) {
+		  while ((dy < lds.y1 - s) || (gridy < 0)) {
 		     dy += PitchY;
 		     gridy++;
 		  }
@@ -3507,7 +3507,7 @@ find_route_blocks()
 		  // Find all grid points affected
 	          gridy = (int)((lds.y1 - Ylowerbound - PitchY) / PitchY);
 	          dy = (gridy * PitchY) + Ylowerbound;
-		  while (dy < lds.y1 - s) {
+		  while ((dy < lds.y1 - s) || (gridy < 0)) {
 		     dy += PitchY;
 		     gridy++;
 		  }
@@ -3542,7 +3542,7 @@ find_route_blocks()
 		  // Find all grid points affected
 	          gridx = (int)((lds.x1 - Xlowerbound - PitchX) / PitchX);
 	          dx = (gridx * PitchX) + Xlowerbound;
-		  while (dx < lds.x1 - s) {
+		  while ((dx < lds.x1 - s) || (gridx < 0)) {
 		     dx += PitchX;
 		     gridx++;
 		  }
@@ -3577,7 +3577,7 @@ find_route_blocks()
 		  // Find all grid points affected
 	          gridx = (int)((lds.x1 - Xlowerbound - PitchX) / PitchX);
 	          dx = (gridx * PitchX) + Xlowerbound;
-		  while (dx < lds.x1 - s) {
+		  while ((dx < lds.x1 - s) || (gridx < 0)) {
 		     dx += PitchX;
 		     gridx++;
 		  }
