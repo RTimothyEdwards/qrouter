@@ -52,6 +52,9 @@ BININSTALL = ${prefix}/bin
 LIBINSTALL = ${prefix}/${QROUTER_LIB_DIR}
 EXTRA_DEFS = -DQROUTER_PATH=\"${LIBINSTALL}\"
 
+INSTALL_BININSTALL = @DIST_DIR@/bin
+INSTALL_LIBINSTALL = @DIST_DIR@/${QROUTER_LIB_DIR}
+
 all: $(ALL_TARGET)
 
 install: $(INSTALL_TARGET)
@@ -98,24 +101,24 @@ qrouternullg$(EXEEXT): $(OBJECTS4)
 
 install-nointerp:
 	@echo "Installing qrouter"
-	$(INSTALL) -d $(DESTDIR)${BININSTALL}
-	$(INSTALL) qrouter $(DESTDIR)${BININSTALL}
+	$(INSTALL) -d $(DESTDIR)${INSTALL_BININSTALL}
+	$(INSTALL) qrouter $(DESTDIR)${INSTALL_BININSTALL}
 
 install-tcl: qrouter.sh qrouter.tcl qrouter$(SHDLIB_EXT) \
 		qrouterexec$(EXEEXT) qrouternullg$(EXEEXT)
 	@echo "Installing qrouter"
-	$(INSTALL) -d $(DESTDIR)${BININSTALL}
-	$(INSTALL) -d $(DESTDIR)${LIBINSTALL}
-	$(INSTALL) qrouter.sh $(DESTDIR)${BININSTALL}/qrouter
-	$(INSTALL) qrouter$(SHDLIB_EXT) $(DESTDIR)${LIBINSTALL}
-	$(INSTALL) qrouterexec$(EXEEXT) $(DESTDIR)${LIBINSTALL}
-	$(INSTALL) qrouternullg$(EXEEXT) $(DESTDIR)${LIBINSTALL}
-	$(INSTALL) console.tcl $(DESTDIR)${LIBINSTALL}
-	$(INSTALL) tkcon.tcl $(DESTDIR)${LIBINSTALL}
-	$(INSTALL) qrouter.tcl $(DESTDIR)${LIBINSTALL}
+	$(INSTALL) -d $(DESTDIR)${INSTALL_BININSTALL}
+	$(INSTALL) -d $(DESTDIR)${INSTALL_LIBINSTALL}
+	$(INSTALL) qrouter.sh $(DESTDIR)${INSTALL_BININSTALL}/qrouter
+	$(INSTALL) qrouter$(SHDLIB_EXT) $(DESTDIR)${INSTALL_LIBINSTALL}
+	$(INSTALL) qrouterexec$(EXEEXT) $(DESTDIR)${INSTALL_LIBINSTALL}
+	$(INSTALL) qrouternullg$(EXEEXT) $(DESTDIR)${INSTALL_LIBINSTALL}
+	$(INSTALL) console.tcl $(DESTDIR)${INSTALL_LIBINSTALL}
+	$(INSTALL) tkcon.tcl $(DESTDIR)${INSTALL_LIBINSTALL}
+	$(INSTALL) qrouter.tcl $(DESTDIR)${INSTALL_LIBINSTALL}
 
 uninstall:
-	$(RM) $(DESTDIR)${BININSTALL}/qrouter
+	$(RM) $(DESTDIR)${INSTALL_BININSTALL}/qrouter
 
 clean:
 	$(RM) $(OBJECTS)
