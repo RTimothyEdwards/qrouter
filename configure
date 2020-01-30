@@ -623,6 +623,7 @@ ac_includes_default="\
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
 QROUTER_LIB_DIR
+DIST_DIR
 INSTALL_TARGET
 ALL_TARGET
 STDLIBS
@@ -720,6 +721,7 @@ ac_user_opts='
 enable_option_checking
 with_gnu_ld
 with_libdir
+with_distdir
 with_tcl
 with_tk
 with_tclincls
@@ -1367,6 +1369,7 @@ Optional Packages:
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
   --with-gnu-ld           assume the C compiler uses GNU ld [default=no]
   --with-libdir=DIR           path to qrouter default config files
+  --with-distdir=DIR       install into location DIR for distribution
  --with-tcl=DIR	Find tclConfig.sh in DIR
   --with-tk=DIR	   Find tkConfig.sh in DIR
   --with-tclincls=DIR	   Find tcl.h in DIR
@@ -4092,6 +4095,24 @@ qrouter_with_tk_libraries=""
 usingTcl=1
 stub_defs=""
 
+# For distributed installs, where the run-time files are installed in a
+# place that is a temporary staging area, like DESTDIR, but unlike DESTDIR,
+# the prefix is replaced by the destination directory, rather than appended
+# to it.
+DIST_DIR="\${exec_prefix}"
+
+# Check whether --with-distdir was given.
+if test "${with_distdir+set}" = set; then :
+  withval=$with_distdir;
+  if test "$withval" = "no" -o "$withval" = "NO" ; then
+     DIST_DIR="\${exec_prefix}"
+  else
+     DIST_DIR=${withval}
+  fi
+
+fi
+
+
 
 # Check whether --with-tcl was given.
 if test "${with_tcl+set}" = set; then :
@@ -5633,6 +5654,7 @@ fi
 
 
 fi
+
 
 
 
