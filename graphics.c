@@ -3,8 +3,8 @@
 /*------------------------------------------------------*/
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <stdarg.h>
+#include <stdlib.h>
 #include <math.h>
 
 #include <X11/Intrinsic.h>
