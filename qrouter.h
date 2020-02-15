@@ -512,6 +512,16 @@ void   apply_drc_blocks(int, double, double);
 void   remove_top_route(NET net);
 char  *get_annotate_info(NET net, char **pinptr);
 
+void   free_glist(struct routeinfo_ *iroute);
+
+#ifdef TCL_QROUTER
+void   find_free_antenna_taps(char *antennacell);
+#endif
+
+void   resolve_antenna(char *antennacell, u_char do_fix);
+
+void   createMask(NET net, u_char slack, u_char halo);
+void   createBboxMask(NET net, u_char halo);
 
 int    read_def(char *filename);
 

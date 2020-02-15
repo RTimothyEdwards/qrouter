@@ -19,12 +19,14 @@
 #include <X11/StringDefs.h>
 
 #include "qrouter.h"
+#include "mask.h"
 #include "maze.h"
 #include "qconfig.h"
 #include "lef.h"
 #include "def.h"
 #include "graphics.h"
 #include "node.h"
+#include "output.h"
 #include "tkSimple.h"
 
 /* Global variables */

@@ -877,9 +877,6 @@ static int post_def_setup()
    /* want improperly defined or positioned obstruction layers to over-	*/
    /* write our node list.						*/
 
-#ifdef TCL_QROUTER
-   find_free_antenna_taps(antenna_cell);
-#endif
    expand_tap_geometry();
    clip_gate_taps();
    create_obstructions_from_gates();
