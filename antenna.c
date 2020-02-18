@@ -29,6 +29,8 @@
 
 #include "qrouter.h"
 #include "qconfig.h"
+#include "mask.h"
+#include "maze.h"
 #include "node.h"
 #include "lef.h"
 #include "def.h"
@@ -313,7 +315,7 @@ get_route_area_forward_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
 		}
 	    }
 	    else if ((method == ANTENNA_ROUTE) && (iroute != NULL)) {
-		set_node_to_net(node, PR_SOURCE, iroute->glist[0], iroute->bbox, 0);
+		set_node_to_net(node, PR_SOURCE, &iroute->glist[0], &iroute->bbox, 0);
 	    }
 
 	    /* Walk all other routes that start or end on this node */
@@ -583,7 +585,7 @@ get_route_area_forward_fromseg(NET net, ROUTE rt, SEG nseg, int layer,
 		if (visited) visited[node->nodenum] = VISITED;
 	    }
 	    if ((method == ANTENNA_ROUTE) && (iroute != NULL)) {
-		set_node_to_net(node, PR_SOURCE, iroute->glist[0], iroute->bbox, 0);
+		set_node_to_net(node, PR_SOURCE, &iroute->glist[0], &iroute->bbox, 0);
 	    }
 	}
 	else {
