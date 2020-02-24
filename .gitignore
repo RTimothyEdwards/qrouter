@@ -10,4 +10,7 @@ qrouter.tcl
 *.o
 *.so
 *~
+<<<<<<< HEAD
 UPDATE_ME
+=======
+>>>>>>> master
