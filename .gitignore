@@ -10,5 +10,3 @@ qrouter.tcl
 *.o
 *.so
 *~
-UPDATE_ME
-VERSION
