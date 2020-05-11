@@ -1385,6 +1385,52 @@ LefReadLayer(FILE *f, u_char obstruct)
 
 /*
  *------------------------------------------------------------
+ * LefReadLefPoint --
+ *
+ *	Read a LEF point record from the file, and
+ *	return values for X and Y in the pointer arguments.
+ *
+ * Results:
+ *	0 on success, 1 on error.
+ *
+ * Side Effects:
+ *	Reads input from file f;
+ *	Writes values for the X and Y coordinates into the
+ *	pointer arguments. 
+ *
+ * Note:
+ *	LEF/DEF does NOT define a RECT record as having (...)
+ *	pairs, only routes.  However, at least one DEF file
+ *	contains this syntax, so it is checked.
+ *
+ *------------------------------------------------------------
+ */
+
+int
+LefReadLefPoint(FILE *f, float *x, float *y)
+{
+    char *token;
+    u_char needMatch = FALSE;
+
+    token = LefNextToken(f, TRUE);
+    if (*token == '(')
+    {
+	token = LefNextToken(f, TRUE);
+	needMatch = TRUE;
+    }
+    if (!token || sscanf(token, "%f", &x) != 1) return 1;
+    token = LefNextToken(f, TRUE);
+    if (!token || sscanf(token, "%f", &y) != 1) return 1;
+    if (needMatch)
+    {
+	token = LefNextToken(f, TRUE);
+	if (*token != ')') return 1;
+    }
+    return 0;
+}
+
+/*
+ *------------------------------------------------------------
  * LefReadRect --
  *
  *	Read a LEF "RECT" record from the file, and
@@ -2348,10 +2394,7 @@ size_error:
 		LefEndStatement(f);
 		break;
 	    case LEF_ORIGIN:
-		token = LefNextToken(f, TRUE);
-		if (!token || sscanf(token, "%f", &x) != 1) goto origin_error;
-		token = LefNextToken(f, TRUE);
-		if (!token || sscanf(token, "%f", &y) != 1) goto origin_error;
+		if (LefReadLefPoint(f, &x, &y) != 0) goto origin_error;
 
 		lefBBox.x1 = -x;
 		lefBBox.y1 = -y;
