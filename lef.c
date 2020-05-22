@@ -1413,14 +1413,15 @@ LefReadLefPoint(FILE *f, float *x, float *y)
     u_char needMatch = FALSE;
 
     token = LefNextToken(f, TRUE);
-    if (*token == '(')
+    if (!token) return 1;
+    else if (*token == '(')
     {
 	token = LefNextToken(f, TRUE);
 	needMatch = TRUE;
     }
-    if (!token || sscanf(token, "%f", &x) != 1) return 1;
+    if (!token || sscanf(token, "%f", x) != 1) return 1;
     token = LefNextToken(f, TRUE);
-    if (!token || sscanf(token, "%f", &y) != 1) return 1;
+    if (!token || sscanf(token, "%f", y) != 1) return 1;
     if (needMatch)
     {
 	token = LefNextToken(f, TRUE);
