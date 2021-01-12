@@ -230,6 +230,10 @@ countlist(NETLIST net)
    return count;
 }
 
+/* Forward declaration */
+
+static void helpmessage(void);
+
 /*--------------------------------------------------------------*/
 /* runqrouter - main program entry point, parse command line	*/
 /*								*/
@@ -1554,6 +1558,11 @@ free_glist(struct routeinfo_ *iroute)
       }
    }
 }
+
+/* Forward declarations */
+
+static int next_route_setup(struct routeinfo_ *iroute, u_char stage);
+static int route_setup(struct routeinfo_ *iroute, u_char stage);
 
 /*--------------------------------------------------------------*/
 /* doroute - basic route call					*/
