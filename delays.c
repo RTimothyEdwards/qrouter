@@ -27,7 +27,7 @@
 /* Find a node in the node list.				*/
 /*--------------------------------------------------------------*/
 
-GATE
+static GATE
 FindGateNode(Tcl_HashTable *NodeTable, NODE node, int *ridx)
 {
     GATENODE gn;
@@ -89,14 +89,14 @@ typedef struct _lefrcinfo {
 
 /* Forward declaration */
 
-void walk_route(int, int, endpointinfo *, int, lefrcinfo *);
+static void walk_route(int, int, endpointinfo *, int, lefrcinfo *);
 
 /*--------------------------------------------------------------*/
 /* Add route information to the endpoint record showing where	*/
 /* a route continues downstream.				*/
 /*--------------------------------------------------------------*/
 
-void
+static void
 add_route_to_endpoint(endpointinfo *eptinfo, int eidx, int didx)
 {
     int i;
@@ -117,7 +117,7 @@ add_route_to_endpoint(endpointinfo *eptinfo, int eidx, int didx)
 /* other check is from the end node of a route, and "end" is 1.	*/
 /*--------------------------------------------------------------*/
 
-void
+static void
 check_downstream(SEG walkseg, endpointinfo *eptinfo, int eidx,
 	int numroutes, lefrcinfo *lefrcvalues, u_char end)
 {
@@ -215,7 +215,7 @@ check_downstream(SEG walkseg, endpointinfo *eptinfo, int eidx,
 /* Return the R and C values for the segment			*/
 /*--------------------------------------------------------------*/
 
-void
+static void
 walk_route(int eidx, int driverend, endpointinfo *eptinfo,
 		int numroutes, lefrcinfo *lefrcvalues)
 {
@@ -327,7 +327,7 @@ walk_route(int eidx, int driverend, endpointinfo *eptinfo,
 /* Walk the sorted, directed routes and generate output.	*/
 /*--------------------------------------------------------------*/
 
-void
+static void
 walk_route_output(endpointinfo *eptinfo, int eidx,
 		Tcl_HashTable *NodeTable, FILE *delayFile)
 {
