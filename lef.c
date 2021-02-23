@@ -3411,18 +3411,164 @@ LefAssignLayerVias()
 			if (newViaXY[baselayer] != NULL) free(newViaXY[baselayer]);
 			newViaXY[baselayer] = strdup(lefl->lefName);      
 		    }
-		    else if ((xytdiff > EPS) || (xybdiff > EPS)) {
+		    else if ((xytdiff > EPS) && (xybdiff > EPS)) {
 			if (newViaXX[baselayer] != NULL) free(newViaXX[baselayer]);
 			newViaXX[baselayer] = strdup(lefl->lefName);      
 		    }
-		    else if ((xytdiff < -EPS) || (xybdiff < -EPS)) {
+		    else if ((xytdiff < -EPS) && (xybdiff < -EPS)) {
 			if (newViaYY[baselayer] != NULL) free(newViaYY[baselayer]);
 			newViaYY[baselayer] = strdup(lefl->lefName);
 		    }
-		    else {
-			if (newViaXX[baselayer] == NULL) {
-			    newViaXX[baselayer] = strdup(lefl->lefName);      
+		}
+	    }
+	}
+    }
+
+    /* Run the same thing again, checking for vias that are square on top   */
+    /* or bottom, and so have no preferential direction.  If there is no    */
+    /* other via definition for that layer, then save the non-directional   */
+    /* one, copying it into both X and Y positions.			    */
+
+    for (lefl = LefInfo; lefl; lefl = lefl->next) {
+	if (lefl->lefClass == CLASS_VIA) {
+	    if (lefl->info.via.lr) {
+		baselayer = toplayer = MAX_LAYERS;
+		if (lefl->info.via.area.layer >= minroute &&
+				lefl->info.via.area.layer <= maxroute) {
+		   baselayer = toplayer = lefl->info.via.area.layer;
+		   xybdiff = xytdiff =
+			(lefl->info.via.area.x2 - lefl->info.via.area.x1) -
+			(lefl->info.via.area.y2 - lefl->info.via.area.y1);
+		}
+
+		for (grect = lefl->info.via.lr; grect; grect = grect->next) {
+		    if (grect->layer >= minroute && grect->layer <= maxroute) {
+			if (grect->layer < baselayer) {
+			    baselayer = grect->layer;
+			    xybdiff = (grect->x2 - grect->x1) - (grect->y2 - grect->y1);
 			}
+		    }
+		}
+		toplayer = baselayer;
+
+		for (grect = lefl->info.via.lr; grect; grect = grect->next) {
+		    if (grect->layer >= minroute && grect->layer <= maxroute) {
+			if (grect->layer > toplayer) {
+			    toplayer = grect->layer;
+			    xytdiff = (grect->x2 - grect->x1) - (grect->y2 - grect->y1);
+			}
+		    }
+		}
+
+		/* Ignore vias on undefined layers (-1) */
+		if ((baselayer < MAX_LAYERS) && (toplayer < MAX_LAYERS) &&
+			(baselayer >= 0) && (toplayer >= 0)) {
+		    /* Assign only to layers in AllowedVias, if it is non-NULL */
+		    if (AllowedVias != NULL) {
+			for (viaName = AllowedVias; viaName; viaName = viaName->next) {
+			    if (!strcmp(viaName->name, lefl->lefName))
+				break;
+			}
+			if (viaName == NULL) continue;
+		    }
+		    else if (hasGenerate[baselayer] && lefl->info.via.generated == FALSE)
+			continue;
+
+		    if ((xytdiff < EPS) && (xytdiff > -EPS)) {
+			/* Square on the top */
+			if (xybdiff > EPS) {
+			    if (newViaXX[baselayer] == NULL)
+				newViaXX[baselayer] = strdup(lefl->lefName);      
+			    if (newViaXY[baselayer] == NULL)
+				newViaXY[baselayer] = strdup(lefl->lefName);      
+			}
+			if (xybdiff < -EPS) {
+			    if (newViaYX[baselayer] == NULL)
+				newViaYX[baselayer] = strdup(lefl->lefName);      
+			    if (newViaYY[baselayer] == NULL)
+				newViaYY[baselayer] = strdup(lefl->lefName);      
+			}
+		    }
+		    else if ((xybdiff < EPS) && (xybdiff > -EPS)) {
+			/* Square on the bottom */
+			if (xytdiff > EPS) {
+			    if (newViaXX[baselayer] == NULL)
+				newViaXX[baselayer] = strdup(lefl->lefName);      
+			    if (newViaYX[baselayer] == NULL)
+				newViaYX[baselayer] = strdup(lefl->lefName);      
+			}
+			if (xytdiff < -EPS) {
+			    if (newViaXY[baselayer] == NULL)
+				newViaXY[baselayer] = strdup(lefl->lefName);      
+			    if (newViaYY[baselayer] == NULL)
+				newViaYY[baselayer] = strdup(lefl->lefName);      
+			}
+		    }
+		}
+	    }
+	}
+    }
+
+    /* Finally, run a third pass to catch any via definitions that are	*/
+    /* square on both top and bottom, in positions that have not yet	*/
+    /* had a valid via recorded.					*/
+
+    for (lefl = LefInfo; lefl; lefl = lefl->next) {
+	if (lefl->lefClass == CLASS_VIA) {
+	    if (lefl->info.via.lr) {
+		baselayer = toplayer = MAX_LAYERS;
+		if (lefl->info.via.area.layer >= minroute &&
+				lefl->info.via.area.layer <= maxroute) {
+		   baselayer = toplayer = lefl->info.via.area.layer;
+		   xybdiff = xytdiff =
+			(lefl->info.via.area.x2 - lefl->info.via.area.x1) -
+			(lefl->info.via.area.y2 - lefl->info.via.area.y1);
+		}
+
+		for (grect = lefl->info.via.lr; grect; grect = grect->next) {
+		    if (grect->layer >= minroute && grect->layer <= maxroute) {
+			if (grect->layer < baselayer) {
+			    baselayer = grect->layer;
+			    xybdiff = (grect->x2 - grect->x1) - (grect->y2 - grect->y1);
+			}
+		    }
+		}
+		toplayer = baselayer;
+
+		for (grect = lefl->info.via.lr; grect; grect = grect->next) {
+		    if (grect->layer >= minroute && grect->layer <= maxroute) {
+			if (grect->layer > toplayer) {
+			    toplayer = grect->layer;
+			    xytdiff = (grect->x2 - grect->x1) - (grect->y2 - grect->y1);
+			}
+		    }
+		}
+
+		/* Ignore vias on undefined layers (-1) */
+		if ((baselayer < MAX_LAYERS) && (toplayer < MAX_LAYERS) &&
+			(baselayer >= 0) && (toplayer >= 0)) {
+		    /* Assign only to layers in AllowedVias, if it is non-NULL */
+		    if (AllowedVias != NULL) {
+			for (viaName = AllowedVias; viaName; viaName = viaName->next) {
+			    if (!strcmp(viaName->name, lefl->lefName))
+				break;
+			}
+			if (viaName == NULL) continue;
+		    }
+		    else if (hasGenerate[baselayer] && lefl->info.via.generated == FALSE)
+			continue;
+
+		    if (((xytdiff < EPS) && (xytdiff > -EPS)) &&
+				((xybdiff < EPS) && (xybdiff > -EPS))) {
+			/* Square on the top and bottom */
+			if (newViaXX[baselayer] == NULL)
+			    newViaXX[baselayer] = strdup(lefl->lefName);      
+			if (newViaXY[baselayer] == NULL)
+			    newViaXY[baselayer] = strdup(lefl->lefName);      
+			if (newViaYX[baselayer] == NULL)
+			    newViaYX[baselayer] = strdup(lefl->lefName);      
+			if (newViaYY[baselayer] == NULL)
+			    newViaYY[baselayer] = strdup(lefl->lefName);      
 		    }
 		}
 	    }
