@@ -521,7 +521,6 @@ void   createMask(NET net, u_char slack, u_char halo);
 void   createBboxMask(NET net, u_char halo);
 
 int    read_def(char *filename);
-int    write_def(char *filename);
 
 #ifdef TCL_QROUTER
 int    write_delays(char *filename);
