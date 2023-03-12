@@ -11,11 +11,7 @@ if {$tcllibdir == {}} {
 }
 unset tcllibdir
 
-if {[string compare $tcl_platform(platform) "windows"] == 0} {
-   set libext .dll
-} else {
-   set libext .so
-}
+set libext [info sharedlibextension]
 
 if {${tcl_version} >= 8.6} {
    if {[catch {load ${QROUTER_LIB_DIR}/qrouter$libext}]} {
