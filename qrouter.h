@@ -497,11 +497,8 @@ extern char *antenna_cell;
 /* Function prototypes */
 
 void update_mscale(int mscale);
-static int next_route_setup(struct routeinfo_ *iroute, u_char stage);
-static int route_setup(struct routeinfo_ *iroute, u_char stage);
 int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug);
 ROUTE createemptyroute(void);
-static void helpmessage(void);
 
 int    set_num_channels(void);
 int    allocate_obs_array(void);
@@ -524,7 +521,6 @@ void   createMask(NET net, u_char slack, u_char halo);
 void   createBboxMask(NET net, u_char halo);
 
 int    read_def(char *filename);
-int    write_def(char *filename);
 
 #ifdef TCL_QROUTER
 int    write_delays(char *filename);

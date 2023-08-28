@@ -6,6 +6,7 @@
 #include <stdarg.h>
 
 #include "qrouter.h"
+#include "output.h"
 
 /*--------------------------------------------------------------*/
 /* Procedure main() performs the basic route steps without any	*/
