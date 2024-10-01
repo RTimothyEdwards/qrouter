@@ -378,7 +378,7 @@ walk_route_output(endpointinfo *eptinfo, int eidx,
 /* Free data associated with each entry in the NodeTable hash.	*/
 /*--------------------------------------------------------------*/
 
-static void FreeNodeTable(Tcl_HashTable *NodeTable)
+void FreeNodeTable(Tcl_HashTable *NodeTable)
 {
     Tcl_HashEntry *entry;
     Tcl_HashSearch hs;
