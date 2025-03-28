@@ -3260,7 +3260,7 @@ LefWriteGeneratedVias(FILE *f, double oscale, int defvias)
 	    }
 
     if (defvias == 0) {
-	fprintf(f, "END VIAS\n", numvias);
+	fprintf(f, "END VIAS\n");
 	fprintf(f, "\n");
     }
 }
