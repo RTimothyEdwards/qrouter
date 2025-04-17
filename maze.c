@@ -432,7 +432,7 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist,
 
 	  rank = 0;
           if (lay < Pinlayers) {
-	     if (lnode = NODEIPTR(x, y, lay)) {
+	     if ((lnode = NODEIPTR(x, y, lay))) {
 		if (lnode->flags & NI_OFFSET_MASK) rank = 2;
 		if (lnode->flags & NI_STUB_MASK) rank++;
 	     }
@@ -1791,9 +1791,7 @@ void writeback_segment(SEG seg, int netnum)
 /*--------------------------------------------------------------*/
 
 void
-route_set_connections(net, route)
-   NET   net;
-   ROUTE route;
+route_set_connections(NET net, ROUTE route)
 {
    SEG      seg, s;
    ROUTE    nr;

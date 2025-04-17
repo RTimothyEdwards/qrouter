@@ -75,9 +75,8 @@ LinkedStringPtr AllowedVias = NULL;
  */
 
 int
-Lookup(str, table)
-    char *str;			/* Pointer to a string to be looked up */
-    char *(table[]);		/* Pointer to an array of string pointers
+Lookup(char *str,		/* Pointer to a string to be looked up */
+       char *(table[]))		/* Pointer to an array of string pointers
 				 * which are the valid commands.  
 				 * The end of
 				 * the table is indicated by a NULL string.
@@ -150,9 +149,7 @@ Lookup(str, table)
  */
 
 int
-LookupFull(name, table)
-    char *name;
-    char **table;
+LookupFull(char *name, char **table)
 {
     char **tp;
 
@@ -1292,10 +1289,7 @@ LefGetViaResistance(int layer, double *respervia)
  */
 
 int
-LefReadLayers(f, obstruct, lreturn)
-    FILE *f;
-    u_char obstruct;
-    int *lreturn;
+LefReadLayers(FILE *f, u_char obstruct, int *lreturn)
 {
     char *token;
     int curlayer = -1;
@@ -2007,13 +2001,7 @@ LefReadGeometry(GATE lefMacro, FILE *f, float oscale)
  */
 
 void
-LefReadPort(lefMacro, f, pinName, pinNum, pinDir, pinUse, pinArea, oscale)
-    GATE lefMacro;
-    FILE *f;
-    char *pinName;
-    int pinNum, pinDir, pinUse;
-    double pinArea;
-    float oscale;
+LefReadPort(GATE lefMacro, FILE *f, char *pinName, int pinNum, int pinDir, int pinUse, double pinArea, float oscale)
 {
     DSEG rectList, rlist;
 
@@ -2085,12 +2073,7 @@ enum lef_pin_keys {LEF_DIRECTION = 0, LEF_USE, LEF_PORT, LEF_CAPACITANCE,
 	LEF_SHAPE, LEF_NETEXPR, LEF_PIN_END};
 
 int
-LefReadPin(lefMacro, f, pinname, pinNum, oscale)
-   GATE lefMacro;
-   FILE *f;
-   char *pinname;
-   int pinNum;
-   float oscale;
+LefReadPin(GATE lefMacro, FILE *f, char *pinname, int pinNum, float oscale)
 {
     char *token;
     int keyword, subkey;
@@ -2266,10 +2249,9 @@ enum lef_macro_keys {LEF_CLASS = 0, LEF_SIZE, LEF_ORIGIN,
 	LEF_TIMING, LEF_FOREIGN, LEF_MACRO_END};
 
 void
-LefReadMacro(f, mname, oscale)
-    FILE *f;			/* LEF file being read	*/
-    char *mname;		/* name of the macro 	*/
-    float oscale;		/* scale factor to um, usually 1 */
+LefReadMacro(FILE *f,			/* LEF file being read	*/
+             char *mname,		/* name of the macro 	*/
+             float oscale)		/* scale factor to um, usually 1 */
 {
     GATE lefMacro, altMacro;
     char *token, tsave[128];
@@ -2656,11 +2638,10 @@ enum lef_layer_keys {LEF_LAYER_TYPE=0, LEF_LAYER_WIDTH,
 enum lef_spacing_keys {LEF_SPACING_RANGE=0, LEF_END_LAYER_SPACING};
 
 void
-LefReadLayerSection(f, lname, mode, lefl)
-    FILE *f;			/* LEF file being read	  */
-    char *lname;		/* name of the layer 	  */
-    int mode;			/* layer, via, or viarule */
-    LefList lefl;		/* pointer to layer info  */
+LefReadLayerSection(FILE *f,		/* LEF file being read	  */
+                    char *lname,	/* name of the layer 	  */
+                    int mode,		/* layer, via, or viarule */
+                    LefList lefl)	/* pointer to layer info  */
 {
     char *token, *tp;
     int keyword, typekey = -1, entries, i;
@@ -3672,8 +3653,7 @@ LefAssignLayerVias()
 /* See above for "enum lef_sections {...}" */
 
 int
-LefRead(inName)
-    char *inName;
+LefRead(char *inName)
 {
     FILE *f;
     char filename[256];

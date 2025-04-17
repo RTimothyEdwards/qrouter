@@ -14,8 +14,7 @@
 /*----------------------------------------------------------------------*/
 
 int
-qrouter_AppInit(interp)
-    Tcl_Interp *interp;
+qrouter_AppInit(Tcl_Interp *interp)
 {
     if (Tcl_Init(interp) == TCL_ERROR) {
 	return TCL_ERROR;
@@ -42,9 +41,7 @@ qrouter_AppInit(interp)
 /*----------------------------------------------------------------------*/
 
 int
-main(argc, argv)
-   int argc;
-   char **argv;
+main(int argc, char **argv)
 {
     Tk_Main(argc, argv, qrouter_AppInit);
     return 0;
