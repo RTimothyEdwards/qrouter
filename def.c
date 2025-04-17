@@ -990,10 +990,7 @@ enum def_orient {DEF_NORTH, DEF_SOUTH, DEF_EAST, DEF_WEST,
 	DEF_FLIPPED_WEST};
 
 static int
-DefReadLocation(gate, f, oscale)
-    GATE gate;
-    FILE *f;
-    float oscale;
+DefReadLocation(GATE gate, FILE *f, float oscale)
 {
     int keyword;
     char *token;
@@ -1170,7 +1167,7 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 
 		/* Get pin name */
 		token = LefNextToken(f, TRUE);
-		if (sscanf(token, "%2047s", pinname) != 1)
+		if (sscanf(token, "%1023s", pinname) != 1)
 		{
 		    LefError(DEF_ERROR, "Bad pin statement:  Need pin name\n");
 		    LefEndStatement(f);
@@ -1360,11 +1357,7 @@ enum def_vias_prop_keys {
 	DEF_VIAS_PROP_RECT = 0};
 
 static void
-DefReadVias(f, sname, oscale, total)
-    FILE *f;
-    char *sname;
-    float oscale;
-    int total;
+DefReadVias(FILE *f, char *sname, float oscale, int total)
 {
     char *token;
     char vianame[LEF_LINE_MAX];

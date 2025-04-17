@@ -111,12 +111,12 @@ static int		SimpleWidgetObjCmd _ANSI_ARGS_((ClientData clientData,
  */
 
 int
-Tk_SimpleObjCmd(clientData, interp, objc, objv)
-    ClientData clientData;	/* Main window associated with
+Tk_SimpleObjCmd(
+    ClientData clientData,	/* Main window associated with
 				 * interpreter. */
-    Tcl_Interp *interp;		/* Current interpreter. */
-    int objc;			/* Number of arguments. */
-    Tcl_Obj *CONST objv[];	/* Argument objects. */
+    Tcl_Interp *interp,		/* Current interpreter. */
+    int objc,			/* Number of arguments. */
+    Tcl_Obj *CONST objv[])	/* Argument objects. */
 {
     Tk_Window tkwin = (Tk_Window) clientData;
     Simple *simplePtr;
@@ -220,11 +220,11 @@ Tk_SimpleObjCmd(clientData, interp, objc, objv)
  */
 
 static int
-SimpleWidgetObjCmd(clientData, interp, objc, objv)
-    ClientData clientData;	/* Information about simple widget. */
-    Tcl_Interp *interp;		/* Current interpreter. */
-    int objc;			/* Number of arguments. */
-    Tcl_Obj *CONST objv[];	/* Argument objects. */
+SimpleWidgetObjCmd(
+    ClientData clientData,	/* Information about simple widget. */
+    Tcl_Interp *interp,		/* Current interpreter. */
+    int objc,			/* Number of arguments. */
+    Tcl_Obj *CONST objv[])	/* Argument objects. */
 {
     static char *simpleOptions[] = {
 	"cget", "configure", (char *) NULL
@@ -305,8 +305,7 @@ SimpleWidgetObjCmd(clientData, interp, objc, objv)
  */
 
 static void
-DestroySimple(memPtr)
-    char *memPtr;		/* Info about simple widget. */
+DestroySimple(char *memPtr)	/* Info about simple widget. */
 {
     register Simple *simplePtr = (Simple *) memPtr;
 
@@ -341,13 +340,13 @@ DestroySimple(memPtr)
  */
 
 static int
-ConfigureSimple(interp, simplePtr, objc, objv, flags)
-    Tcl_Interp *interp;		/* Used for error reporting. */
-    register Simple *simplePtr;	/* Information about widget;  may or may
+ConfigureSimple(
+    Tcl_Interp *interp,		/* Used for error reporting. */
+    register Simple *simplePtr,	/* Information about widget;  may or may
 				 * not already have values for some fields. */
-    int objc;			/* Number of valid entries in objv. */
-    Tcl_Obj *CONST objv[];	/* Arguments. */
-    int flags;			/* Flags to pass to Tk_ConfigureWidget. */
+    int objc,			/* Number of valid entries in objv. */
+    Tcl_Obj *CONST objv[],	/* Arguments. */
+    int flags)			/* Flags to pass to Tk_ConfigureWidget. */
 {
     
     if (Tk_ConfigureWidget(interp, simplePtr->tkwin, configSpecs,
@@ -385,9 +384,9 @@ ConfigureSimple(interp, simplePtr, objc, objv, flags)
  */
 
 static void
-SimpleEventProc(clientData, eventPtr)
-    ClientData clientData;	/* Information about window. */
-    register XEvent *eventPtr;	/* Information about event. */
+SimpleEventProc(
+    ClientData clientData,	/* Information about window. */
+    register XEvent *eventPtr)	/* Information about event. */
 {
     register Simple *simplePtr = (Simple *) clientData;
 
@@ -451,8 +450,8 @@ SimpleEventProc(clientData, eventPtr)
  */
 
 static void
-SimpleCmdDeletedProc(clientData)
-    ClientData clientData;	/* Pointer to widget record for widget. */
+SimpleCmdDeletedProc(
+    ClientData clientData)	/* Pointer to widget record for widget. */
 {
     Simple *simplePtr = (Simple *) clientData;
     Tk_Window tkwin = simplePtr->tkwin;
