@@ -551,7 +551,7 @@ Qrouter_Init(Tcl_Interp *interp)
    /* Remember the interpreter */
    qrouterinterp = interp;
 
-   if (Tcl_InitStubs(interp, "8.5", 0) == NULL) return TCL_ERROR;
+   if (Tcl_InitStubs(interp, TCL_VERSION, 0) == NULL) return TCL_ERROR;
 
    strcpy(command, "qrouter::");
    
@@ -562,7 +562,7 @@ Qrouter_Init(Tcl_Interp *interp)
 
    nullgvar = (char *)Tcl_GetVar(interp, "no_graphics_mode", TCL_GLOBAL_ONLY);
    if ((nullgvar == NULL) || !strcasecmp(nullgvar, "false")) {
-      if (Tk_InitStubs(interp, "8.5", 0) == NULL) return TCL_ERROR;
+      if (Tk_InitStubs(interp, TCL_VERSION, 0) == NULL) return TCL_ERROR;
       tktop = Tk_MainWindow(interp);
       batchmode = 0;
    }
