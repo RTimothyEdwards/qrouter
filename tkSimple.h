@@ -8,6 +8,6 @@
 #include <tk.h>
 
 int Tk_SimpleObjCmd(ClientData clientData, Tcl_Interp *interp,
-                    int objc, Tcl_Obj * CONST objv[]);
+                    int objc, Tcl_Obj * const objv[]);
 
 #endif /* _TKSIMPLEINT_H */

@@ -1134,7 +1134,7 @@ void remove_routes(ROUTE netroutes, u_char flagged)
 /* (OBSTRUCT_MASK) holds the reference count.			*/
 /*--------------------------------------------------------------*/
 
-void clear_drc_blockage(x, y, lay)
+void clear_drc_blockage(int x, int y, int lay)
 {
     int blockcount;
 
@@ -1149,7 +1149,7 @@ void clear_drc_blockage(x, y, lay)
 /*--------------------------------------------------------------*/
 /*--------------------------------------------------------------*/
 
-void set_drc_blockage(x, y, lay)
+void set_drc_blockage(int x, int y, int lay)
 {
     int blockcount, obsval;
 

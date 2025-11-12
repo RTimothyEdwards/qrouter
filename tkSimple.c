@@ -23,10 +23,6 @@
   #endif
 #endif
 
-#ifndef CONST84
-#define CONST84
-#endif
-
 /*
  * A data structure of the following type is kept for each
  * simple that currently exists for this process:
@@ -81,7 +77,7 @@ static Tk_ConfigSpec configSpecs[] = {
  */
 
 static int		ConfigureSimple _ANSI_ARGS_((Tcl_Interp *interp,
-			    Simple *simplePtr, int objc, Tcl_Obj *CONST objv[],
+			    Simple *simplePtr, int objc, Tcl_Obj *const objv[],
 			    int flags));
 static void		DestroySimple _ANSI_ARGS_((char *memPtr));
 static void		SimpleCmdDeletedProc _ANSI_ARGS_((
@@ -89,7 +85,7 @@ static void		SimpleCmdDeletedProc _ANSI_ARGS_((
 static void		SimpleEventProc _ANSI_ARGS_((ClientData clientData,
 			    XEvent *eventPtr));
 static int		SimpleWidgetObjCmd _ANSI_ARGS_((ClientData clientData,
-			    Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[]));
+			    Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]));
 
 
 /*
@@ -116,7 +112,7 @@ Tk_SimpleObjCmd(clientData, interp, objc, objv)
 				 * interpreter. */
     Tcl_Interp *interp;		/* Current interpreter. */
     int objc;			/* Number of arguments. */
-    Tcl_Obj *CONST objv[];	/* Argument objects. */
+    Tcl_Obj *const objv[];	/* Argument objects. */
 {
     Tk_Window tkwin = (Tk_Window) clientData;
     Simple *simplePtr;
@@ -224,7 +220,7 @@ SimpleWidgetObjCmd(clientData, interp, objc, objv)
     ClientData clientData;	/* Information about simple widget. */
     Tcl_Interp *interp;		/* Current interpreter. */
     int objc;			/* Number of arguments. */
-    Tcl_Obj *CONST objv[];	/* Argument objects. */
+    Tcl_Obj *const objv[];	/* Argument objects. */
 {
     static char *simpleOptions[] = {
 	"cget", "configure", (char *) NULL
@@ -242,7 +238,7 @@ SimpleWidgetObjCmd(clientData, interp, objc, objv)
 	return TCL_ERROR;
     }
     if (Tcl_GetIndexFromObj(interp, objv[1],
-		(CONST84 char **)simpleOptions, "option", 0,
+		(const char **)simpleOptions, "option", 0,
 		&index) != TCL_OK) {
 	return TCL_ERROR;
     }
@@ -346,12 +342,12 @@ ConfigureSimple(interp, simplePtr, objc, objv, flags)
     register Simple *simplePtr;	/* Information about widget;  may or may
 				 * not already have values for some fields. */
     int objc;			/* Number of valid entries in objv. */
-    Tcl_Obj *CONST objv[];	/* Arguments. */
+    Tcl_Obj *const objv[];	/* Arguments. */
     int flags;			/* Flags to pass to Tk_ConfigureWidget. */
 {
     
     if (Tk_ConfigureWidget(interp, simplePtr->tkwin, configSpecs,
-	    objc, (CONST84 char **) objv, (char *) simplePtr,
+	    objc, (const char **) objv, (char *) simplePtr,
 	    flags | TK_CONFIG_OBJS) != TCL_OK) {
 	return TCL_ERROR;
     }

@@ -21,7 +21,7 @@ void   draw_layout(void);
 int    GUI_init(Tcl_Interp *interp);
 void   expose(Tk_Window tkwind);
 int    redraw(ClientData clientData, Tcl_Interp *interp, int objc,
-              Tcl_Obj *CONST objv[]);
+              Tcl_Obj *const objv[]);
 int    recalc_spacing(void);
 void   resize(Tk_Window tkwind, int locwidth, int locheight);
 
