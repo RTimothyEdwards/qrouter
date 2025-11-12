@@ -320,14 +320,14 @@ void tcl_vprintf(FILE *f, const char *fmt, va_list args_in)
 
 void tcl_stdflush(FILE *f)
 {   
-   Tcl_SavedResult state;
+   Tcl_InterpState state;
    static char stdstr[] = "::flush stdxxx";
    char *stdptr = stdstr + 11;
     
-   Tcl_SaveResult(qrouterinterp, &state);
+   state = Tcl_SaveInterpState(qrouterinterp, TCL_OK);
    strncpy(stdptr, (f == stderr) ? "err" : "out", 3);
    Tcl_Eval(qrouterinterp, stdstr);
-   Tcl_RestoreResult(qrouterinterp, &state);
+   Tcl_RestoreInterpState(qrouterinterp, state);
 }
 
 /*----------------------------------------------------------------------*/
@@ -354,7 +354,7 @@ int QrouterTagCallback(Tcl_Interp *interp, int objc, Tcl_Obj *const objv[])
     char *postcmd, *substcmd, *newcmd, *sptr, *sres;
     char *croot = Tcl_GetString(objv[0]);
     Tcl_HashEntry *entry;
-    Tcl_SavedResult state;
+    Tcl_InterpState state;
     int reset = FALSE;
     int i, llen;
 
@@ -483,12 +483,12 @@ int QrouterTagCallback(Tcl_Interp *interp, int objc, Tcl_Obj *const objv[])
 	/* Fprintf(stderr, "Substituted tag callback is \"%s\"\n", substcmd); */
 	/* Flush(stderr); */
 
-	Tcl_SaveResult(interp, &state);
+	state = Tcl_SaveInterpState(interp, TCL_OK);
 	result = Tcl_Eval(interp, substcmd);
 	if ((result == TCL_OK) && (reset == FALSE))
-	    Tcl_RestoreResult(interp, &state);
+	    Tcl_RestoreInterpState(interp, state);
 	else
-	    Tcl_DiscardResult(&state);
+	    Tcl_DiscardInterpState(state);
 
 	Tcl_Free(substcmd);
     }
