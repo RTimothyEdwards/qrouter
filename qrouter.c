@@ -669,6 +669,10 @@ void apply_drc_blocks(int layer, double via_except, double route_except)
    // different geometries based on the permutation of rotations of
    // the top and bottom layers, so we only register blocking behavior
    // if all of the via types will generate spacing violations.
+   // To honor that worst-case semantics, the VIABLOCK selections below
+   // take the MAXIMUM via width across rotations, so the subsequent
+   // (sreq2 - EPS) > Pitch comparison fires whenever any rotation
+   // would violate the spacing.
 
    for (i = 0; i < Num_layers; i++) {
       if ((layer >= 0) && (i != layer)) continue;
@@ -679,22 +683,22 @@ void apply_drc_blocks(int layer, double via_except, double route_except)
       if (i < Num_layers - 1) {
          sreq2 = LefGetXYViaWidth(i, i, 0, 0) + sreq1;
          sreq2t = LefGetXYViaWidth(i, i, 0, 1) + sreq1;
-         if (sreq2t < sreq2) sreq2 = sreq2t;
+         if (sreq2t > sreq2) sreq2 = sreq2t;
          sreq2t = LefGetXYViaWidth(i, i, 0, 2) + sreq1;
-         if (sreq2t < sreq2) sreq2 = sreq2t;
+         if (sreq2t > sreq2) sreq2 = sreq2t;
          sreq2t = LefGetXYViaWidth(i, i, 0, 3) + sreq1;
-         if (sreq2t < sreq2) sreq2 = sreq2t;
+         if (sreq2t > sreq2) sreq2 = sreq2t;
 	 sreq2 -= via_except;
          if ((sreq2 - EPS) > PitchX) needblock[i] |= VIABLOCKX;
       }
       if (i != 0) {
 	 sreq2 = LefGetXYViaWidth(i - 1, i, 0, 0) + sreq1;
 	 sreq2t = LefGetXYViaWidth(i - 1, i, 0, 1) + sreq1;
-	 if (sreq2t < sreq2) sreq2 = sreq2t;
+	 if (sreq2t > sreq2) sreq2 = sreq2t;
 	 sreq2t = LefGetXYViaWidth(i - 1, i, 0, 2) + sreq1;
-	 if (sreq2t < sreq2) sreq2 = sreq2t;
+	 if (sreq2t > sreq2) sreq2 = sreq2t;
 	 sreq2t = LefGetXYViaWidth(i - 1, i, 0, 3) + sreq1;
-	 if (sreq2t < sreq2) sreq2 = sreq2t;
+	 if (sreq2t > sreq2) sreq2 = sreq2t;
 	 sreq2 -= via_except;
          if ((sreq2 - EPS) > PitchX) needblock[i] |= VIABLOCKX;
       }
@@ -702,22 +706,22 @@ void apply_drc_blocks(int layer, double via_except, double route_except)
       if (i < Num_layers - 1) {
          sreq2 = LefGetXYViaWidth(i, i, 1, 0) + sreq1;
          sreq2t = LefGetXYViaWidth(i, i, 1, 1) + sreq1;
-         if (sreq2t < sreq2) sreq2 = sreq2t;
+         if (sreq2t > sreq2) sreq2 = sreq2t;
          sreq2t = LefGetXYViaWidth(i, i, 1, 2) + sreq1;
-         if (sreq2t < sreq2) sreq2 = sreq2t;
+         if (sreq2t > sreq2) sreq2 = sreq2t;
          sreq2t = LefGetXYViaWidth(i, i, 1, 3) + sreq1;
-         if (sreq2t < sreq2) sreq2 = sreq2t;
+         if (sreq2t > sreq2) sreq2 = sreq2t;
 	 sreq2 -= via_except;
          if ((sreq2 - EPS) > PitchY) needblock[i] |= VIABLOCKY;
       }
       if (i != 0) {
 	 sreq2 = LefGetXYViaWidth(i - 1, i, 1, 0) + sreq1;
 	 sreq2t = LefGetXYViaWidth(i - 1, i, 1, 1) + sreq1;
-	 if (sreq2t < sreq2) sreq2 = sreq2t;
+	 if (sreq2t > sreq2) sreq2 = sreq2t;
 	 sreq2t = LefGetXYViaWidth(i - 1, i, 1, 2) + sreq1;
-	 if (sreq2t < sreq2) sreq2 = sreq2t;
+	 if (sreq2t > sreq2) sreq2 = sreq2t;
 	 sreq2t = LefGetXYViaWidth(i - 1, i, 1, 3) + sreq1;
-	 if (sreq2t < sreq2) sreq2 = sreq2t;
+	 if (sreq2t > sreq2) sreq2 = sreq2t;
 	 sreq2 -= via_except;
          if ((sreq2 - EPS) > PitchY) needblock[i] |= VIABLOCKY;
       }
