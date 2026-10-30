@@ -740,6 +740,7 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
     char *token;
     int keyword, subkey;
     int i, processed = 0;
+    int netcap = 0;
     int nodeidx;
     int fixed = 0;
     char instname[MAX_NAME_LEN], pinname[MAX_NAME_LEN];
@@ -791,6 +792,8 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 	for (i = Numnets; i < (Numnets + total); i++) Nlnets[i] = NULL;
     }
 
+    netcap = Numnets + total;
+
     while ((token = LefNextToken(f, TRUE)) != NULL)
     {
 	keyword = Lookup(token, net_keys);
@@ -811,6 +814,12 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 		net = DefFindNet(token);
 
 		if (net == NULL) {
+		    if (Numnets >= netcap) {
+			LefError(DEF_ERROR, "More nets in NETS section than "
+				"the declared count (%d)\n", total);
+			LefEndStatement(f);
+			break;
+		    }
 		    net = (NET)malloc(sizeof(struct net_));
 		    Nlnets[Numnets++] = net;
 		    net->netorder = 0;
@@ -858,9 +867,23 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 		    if (*token == '(')
 		    {
 			token = LefNextToken(f, TRUE);  /* get pin or gate */
+			if (strlen(token) >= MAX_NAME_LEN) {
+			    LefError(DEF_ERROR, "Instance name in net "
+				"connection exceeds %d characters\n",
+				MAX_NAME_LEN - 1);
+			    LefEndStatement(f);
+			    break;
+			}
 			strcpy(instname, token);
 			token = LefNextToken(f, TRUE);	/* get node name */
 
+			if (strlen(token) >= MAX_NAME_LEN) {
+			    LefError(DEF_ERROR, "Pin name in net "
+				"connection exceeds %d characters\n",
+				MAX_NAME_LEN - 1);
+			    LefEndStatement(f);
+			    break;
+			}
 			if (!strcasecmp(instname, "pin")) {
 			    strcpy(instname, token);
 			    strcpy(pinname, "pin");
@@ -1170,7 +1193,7 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 
 		/* Get pin name */
 		token = LefNextToken(f, TRUE);
-		if (sscanf(token, "%2047s", pinname) != 1)
+		if (sscanf(token, "%1023s", pinname) != 1)
 		{
 		    LefError(DEF_ERROR, "Bad pin statement:  Need pin name\n");
 		    LefEndStatement(f);
